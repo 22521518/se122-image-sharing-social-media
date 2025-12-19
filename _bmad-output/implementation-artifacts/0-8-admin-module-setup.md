@@ -1,6 +1,6 @@
 # Story 0.8: Admin Module Setup
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -18,13 +18,27 @@ So that system-wide management is isolated from user facing features.
 
 ## Tasks / Subtasks
 
-- [ ] Initialize `backend/src/admin` directory structure
-- [ ] Create `README.md` documenting Admin capabilities
-- [ ] Create `AGENTS.md` with dependency rules (Omnipotent Consumer)
+- [x] Initialize `backend/src/admin` directory structure
+- [x] Create `README.md` documenting Admin capabilities
+- [x] Create `AGENTS.md` with dependency rules (Omnipotent Consumer)
 
 ## Dev Notes
 - **Constraint:** Strict RBAC. All endpoints guarded with Role='Admin'.
 - **Reference:** `06-PROJECT-STRUCTURE.md` - Module Dependencies.
 
+## Dev Agent Record
+
+### Implementation Notes
+- Created `AdminModule` in `backend/v1_nestjs/src/admin`.
+- Established `README.md` and `AGENTS.md`.
+- Created placeholders for `entities`, `dto`, `controllers`, `services`.
+- Verified all files exist.
+
 ## File List
-- backend/src/admin/*
+- backend/v1_nestjs/src/admin/README.md
+- backend/v1_nestjs/src/admin/AGENTS.md
+- backend/v1_nestjs/src/admin/admin.module.ts
+- backend/v1_nestjs/src/admin/entities/.gitkeep
+- backend/v1_nestjs/src/admin/dto/.gitkeep
+- backend/v1_nestjs/src/admin/controllers/.gitkeep
+- backend/v1_nestjs/src/admin/services/.gitkeep

@@ -1,6 +1,6 @@
 # Story 0.3: Media Module Setup
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -18,14 +18,26 @@ So that file handling logic is centralized and decoupled from business logic.
 
 ## Tasks / Subtasks
 
-- [ ] Initialize `backend/src/media` directory structure
-- [ ] Create `README.md` documenting S3 Direct Upload & Sharp.js strategy
-- [ ] Create `AGENTS.md` with dependency rules (Service Provider pattern)
-- [ ] Setup `services/` folder placeholder
+- [x] Initialize `backend/src/media` directory structure
+- [x] Create `README.md` documenting S3 Direct Upload & Sharp.js strategy
+- [x] Create `AGENTS.md` with dependency rules (Service Provider pattern)
+- [x] Setup `services/` folder placeholder
 
 ## Dev Notes
 - **Constraint:** Pure utility module for file handling. No business logic.
 - **Reference:** `04-CORE-DECISIONS.md` - Decision 10 & 11 (Streaming to S3, Sharp.js).
 
+## Dev Agent Record
+
+### Implementation Notes
+- Created `MediaModule` in `backend/v1_nestjs/src/media`.
+- Established `README.md` with S3 and Sharp.js strategy details.
+- Established `AGENTS.md` with strict dependency rules.
+- Created placeholder directory for `services`.
+- Verified all files exist.
+
 ## File List
-- backend/src/media/*
+- backend/v1_nestjs/src/media/README.md
+- backend/v1_nestjs/src/media/AGENTS.md
+- backend/v1_nestjs/src/media/media.module.ts
+- backend/v1_nestjs/src/media/services/.gitkeep

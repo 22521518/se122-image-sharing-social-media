@@ -1,6 +1,6 @@
 # Story 0.2: Auth Module Setup
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -18,16 +18,30 @@ So that user management is isolated and secure.
 
 ## Tasks / Subtasks
 
-- [ ] Initialize `backend/src/auth` directory structure
-- [ ] Create `README.md` documenting JWT Access (15m) + Refresh (7d) strategy
-- [ ] Create `AGENTS.md` with dependency rules
-- [ ] Setup `dto/`, `guards/`, `strategies/` folders placeholders
-- [ ] Note: Actual Auth logic implementation is in Story 1.1, this is purely structural setup and documentation.
+- [x] Initialize `backend/src/auth` directory structure
+- [x] Create `README.md` documenting JWT Access (15m) + Refresh (7d) strategy
+- [x] Create `AGENTS.md` with dependency rules
+- [x] Setup `dto/`, `guards/`, `strategies/` folders placeholders
+- [x] Note: Actual Auth logic implementation is in Story 1.1, this is purely structural setup and documentation.
 
 ## Dev Notes
 - **Dependencies:** Imports `common`.
 - **Constraint:** Auth represents the Core. Other modules import Auth (for Guards), but Auth should generally not import them.
 - **Reference:** `06-PROJECT-STRUCTURE.md` - Decision 4.
 
+## Dev Agent Record
+
+### Implementation Notes
+- Created `AuthModule` in `backend/v1_nestjs/src/auth`.
+- Established `README.md` with JWT strategy details.
+- Established `AGENTS.md` with strict dependency rules.
+- Created placeholder directories for `dto`, `guards`, and `strategies`.
+- Verified all files exist.
+
 ## File List
-- backend/src/auth/*
+- backend/v1_nestjs/src/auth/README.md
+- backend/v1_nestjs/src/auth/AGENTS.md
+- backend/v1_nestjs/src/auth/auth.module.ts
+- backend/v1_nestjs/src/auth/dto/.gitkeep
+- backend/v1_nestjs/src/auth/guards/.gitkeep
+- backend/v1_nestjs/src/auth/strategies/.gitkeep

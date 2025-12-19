@@ -1,6 +1,6 @@
 # Story 0.1: Common Module Setup
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -20,17 +20,32 @@ So that other modules can reuse code without duplication or circular dependencie
 
 ## Tasks / Subtasks
 
-- [ ] Initialize `backend/src/common` directory structure
-- [ ] Create `README.md` with usage guidelines and architecture role
-- [ ] Create `AGENTS.md` with dependency rules (Common = Leaf Node)
-- [ ] Implement `GlobalExceptionFilter` (Standard error envelope)
-- [ ] Implement `ResponseInterceptor` (Standard success envelope)
-- [ ] Implement `ValidationPipe` (if custom logic needed, else standard NestJS)
+- [x] Initialize `backend/src/common` directory structure
+- [x] Create `README.md` with usage guidelines and architecture role
+- [x] Create `AGENTS.md` with dependency rules (Common = Leaf Node)
+- [x] Implement `GlobalExceptionFilter` (Standard error envelope)
+- [x] Implement `ResponseInterceptor` (Standard success envelope)
+- [x] Implement `ValidationPipe` (Standard NestJS ValidationPipe enabled globally in main.ts)
 
 ## Dev Notes
 - **Constraint:** Common module must NOT depend on any feature module.
 - **Reference:** `05-IMPLEMENTATION-PATTERNS.md`
 - **Location:** `d:\Code\SE122\se122-image-sharing-social-media\_bmad-output\architecture\05-IMPLEMENTATION-PATTERNS.md`
 
+## Dev Agent Record
+
+### Implementation Notes
+- Created `CommonModule` in `backend/v1_nestjs/src/common`.
+- Implemented `GlobalExceptionFilter` and `ResponseInterceptor` to standardise API responses.
+- Registered `CommonModule` in `AppModule`.
+- Enabled `ValidationPipe` globally in `main.ts` with whitelist/transform options.
+- Added usage documentation in `README.md` and agent rules in `AGENTS.md`.
+
 ## File List
-- backend/src/common/*
+- backend/v1_nestjs/src/common/common.module.ts
+- backend/v1_nestjs/src/common/filters/global-exception.filter.ts
+- backend/v1_nestjs/src/common/interceptors/response.interceptor.ts
+- backend/v1_nestjs/src/common/README.md
+- backend/v1_nestjs/src/common/AGENTS.md
+- backend/v1_nestjs/src/main.ts
+- backend/v1_nestjs/src/app.module.ts

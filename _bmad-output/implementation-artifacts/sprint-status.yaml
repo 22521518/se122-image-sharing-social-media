@@ -1,57 +1,56 @@
-# generated: 2025-12-19
-# project: se122-image-sharing-social-media
-# project_key: se122-image-sharing-social-media
-# tracking_system: file-system
-# story_location: _bmad-output/implementation-artifacts
+# ============================================
+# Sprint Status Tracking
+# ============================================
+# Generated: 2025-12-19
+# Project: se122-image-sharing-social-media
+# Tracking System: file-system
+# Story Location: _bmad-output/implementation-artifacts
 
-# STATUS DEFINITIONS:
+# STATUS DEFINITIONS
 # ==================
 # Epic Status:
 #   - backlog: Epic not yet started
 #   - in-progress: Epic actively being worked on
 #   - done: All stories in epic completed
 #
-# Epic Status Transitions:
-#   - backlog → in-progress: Automatically when first story is created (via create-story)
-#   - in-progress → done: Manually when all stories reach 'done' status
-#
 # Story Status:
 #   - backlog: Story only exists in epic file
-#   - ready-for-dev: Story file created in stories folder
+#   - ready-for-dev: Story file created, ready for development
 #   - in-progress: Developer actively working on implementation
-#   - review: Ready for code review (via Dev's code-review workflow)
-#   - done: Story completed
+#   - review: Implementation complete, ready for code review
+#   - done: Story completed and merged
 #
 # Retrospective Status:
 #   - optional: Can be completed but not required
 #   - done: Retrospective has been completed
-#
-# WORKFLOW NOTES:
-# ===============
+
+# WORKFLOW NOTES
+# ==============
 # - Epic transitions to 'in-progress' automatically when first story is created
 # - Stories can be worked in parallel if team capacity allows
-# - SM typically creates next story after previous one is 'done' to incorporate learnings
-# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - SM creates stories after previous ones are 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review workflow
+# - Use different LLM/fresh context for code reviews (recommended)
 
-generated: 2025-12-19
-project: se122-image-sharing-social-media
-project_key: se122-image-sharing-social-media
-tracking_system: file-system
-story_location: _bmad-output/implementation-artifacts
+# ============================================
+# Development Status
+# ============================================
 
 development_status:
+  # Epic 0: Project Architecture & Module Setup
   epic-0: in-progress
-  0-0-project-scaffolding: ready-for-dev
-  0-1-common-module-setup: ready-for-dev
-  0-2-auth-module-setup: ready-for-dev
-  0-3-media-module-setup: ready-for-dev
-  0-4-memories-module-setup: ready-for-dev
-  0-5-postcards-module-setup: ready-for-dev
-  0-6-social-module-setup: ready-for-dev
-  0-7-moderation-module-setup: ready-for-dev
-  0-8-admin-module-setup: ready-for-dev
+  0-0-project-scaffolding: review
+  0-1-common-module-setup: review
+  0-2-auth-module-setup: review
+  0-3-media-module-setup: review
+  0-4-memories-module-setup: review
+  0-5-postcards-module-setup: review
+  0-6-social-module-setup: review
+  0-7-moderation-module-setup: review
+  0-8-admin-module-setup: review
   epic-0-retrospective: optional
 
+  # Epic 1: Authentication & Profiles
   epic-1: in-progress
   1-1-user-registration-and-login-with-email-password: ready-for-dev
   1-2-3rd-party-authentication-google-oauth: backlog
@@ -59,6 +58,7 @@ development_status:
   1-4-privacy-and-account-settings: backlog
   epic-1-retrospective: optional
 
+  # Epic 2: Core Memory Capture & Living Map
   epic-2: backlog
   2-1-one-tap-voice-sticker-capture: backlog
   2-2-photo-upload-with-exif-location-extraction: backlog
@@ -67,18 +67,21 @@ development_status:
   2-4b-filmstrip-rendering: backlog
   epic-2-retrospective: optional
 
+  # Epic 3: Onboarding & Bulk Import
   epic-3: backlog
   3-1-emotional-onboarding-flow: backlog
   3-2-bulk-drop-wall-for-historical-import: backlog
   3-3-exif-clustering-and-batch-annotation: backlog
   epic-3-retrospective: optional
 
+  # Epic 4: Rediscovery & Time-Locked Postcards
   epic-4: backlog
   4-1-serendipitous-teleportation: backlog
   4-2-creating-time-locked-postcards: backlog
   4-3-postcard-unlock-and-delivery: backlog
   epic-4-retrospective: optional
 
+  # Epic 5: Social Posting, Feed & Discovery
   epic-5: backlog
   5-1-creating-rich-social-posts: backlog
   5-2-multi-image-upload-and-captions: backlog
@@ -86,18 +89,21 @@ development_status:
   5-4-explore-and-search: backlog
   epic-5-retrospective: optional
 
+  # Epic 6: Social Graph & Interactions
   epic-6: backlog
   6-1-following-and-unfollowing-users: backlog
   6-2-liking-posts-and-images: backlog
   6-3-commenting-on-posts: backlog
   epic-6-retrospective: optional
 
+  # Epic 7: Reporting & Content Moderation
   epic-7: backlog
   7-1-reporting-violations: backlog
   7-2-moderator-post-review: backlog
   7-3-moderator-comment-review: backlog
   epic-7-retrospective: optional
 
+  # Epic 8: Admin, Roles & Observability
   epic-8: backlog
   8-1-admin-user-and-role-management: backlog
   8-2-system-monitoring-and-statistics: backlog

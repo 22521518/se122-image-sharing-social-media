@@ -1,6 +1,6 @@
 # Story 0.6: Social Module Setup
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -18,14 +18,28 @@ So that social interactions are organized by subdomain.
 
 ## Tasks / Subtasks
 
-- [ ] Initialize `backend/src/social` directory structure
-- [ ] Create Subdirectories: `feed/`, `posts/`, `discovery/`, `profiles/`
-- [ ] Create `README.md` documenting the subdomain strategy
-- [ ] Create `AGENTS.md` with dependency rules (No Monolithic Service)
+- [x] Initialize `backend/src/social` directory structure
+- [x] Create Subdirectories: `feed/`, `posts/`, `discovery/`, `profiles/`
+- [x] Create `README.md` documenting the subdomain strategy
+- [x] Create `AGENTS.md` with dependency rules (No Monolithic Service)
 
 ## Dev Notes
 - **Structural Decision:** Decision 2 in `06-PROJECT-STRUCTURE.md` - Subdivided subdomains.
 - Note: Profile management (UC3) straddles Auth and Social. Profile data usually in Social, Auth data (creds) in Auth.
 
+## Dev Agent Record
+
+### Implementation Notes
+- Created `SocialModule` in `backend/v1_nestjs/src/social`.
+- Created subdirectories: `feed`, `posts`, `discovery`, `profiles`.
+- Established `README.md` and `AGENTS.md`.
+- Verified all files exist.
+
 ## File List
-- backend/src/social/*
+- backend/v1_nestjs/src/social/README.md
+- backend/v1_nestjs/src/social/AGENTS.md
+- backend/v1_nestjs/src/social/social.module.ts
+- backend/v1_nestjs/src/social/feed/.gitkeep
+- backend/v1_nestjs/src/social/posts/.gitkeep
+- backend/v1_nestjs/src/social/discovery/.gitkeep
+- backend/v1_nestjs/src/social/profiles/.gitkeep
