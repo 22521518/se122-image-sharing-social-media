@@ -44,9 +44,39 @@ workflows:
     started_at: 2025-12-19T00:00:00Z
     completed_at: 2025-12-19T00:00:00Z
     output_files:
-      - "_bmad-output/epics.md"
+      - "_bmad-output/epics-and-stories/epics.md"
       - "_bmad-output/epics-and-stories/platform-matrix_web-vs-mobile.md"
     notes: "Integrated Vietnamese requirements (UC1-UC18) with Life Mapped PRD. Generated 8 epics and 25+ user stories. Created bilingual platform matrix."
+  create-ux-design:
+    status: completed
+    started_at: 2025-12-19T10:00:00Z
+    completed_at: 2025-12-19T11:00:00Z
+    output_files:
+      - "_bmad-output/ux/ui/ux-design-specification.md"
+      - "_bmad-output/ux/ui/ux-color-themes.html"
+      - "_bmad-output/ux/ui/ux-design-directions.html"
+    notes: "Completed full 14-step UX design workflow for Life Mapped. Defined Locket metaphor, Voice Sticker ritual, and Modern Locket visual direction."
+  wireframe-generation:
+    status: completed
+    started_at: 2025-12-19T11:05:00Z
+    completed_at: 2025-12-19T11:10:00Z
+    output_files:
+      - "_bmad-output/ux/ui/wireframes.md"
+    notes: "Generated low-fidelity wireframes for Map, Wall, and Capture Ritual screens."
+  design-handoff:
+    status: completed
+    started_at: 2025-12-19T11:15:00Z
+    completed_at: 2025-12-19T11:20:00Z
+    output_files:
+      - "_bmad-output/ux/ui/design-handoff.md"
+    notes: "Created technical design handoff with CSS values, typography, and component specs for the Modern Locket direction."
+  implementation-readiness:
+    status: completed
+    started_at: 2025-12-19T11:25:00Z
+    completed_at: 2025-12-19T11:45:00Z
+    output_files:
+      - "_bmad-output/implementation-readiness-report-2025-12-19.md"
+    notes: "Validated PRD, Architecture, UX, and Epics. Identified UX scope lag for social features and missing project setup stories."
 notes:
   - Workflow artifacts initialized on user request.
   - New brainstorming session started and marked `in_progress`.

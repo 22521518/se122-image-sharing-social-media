@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Life Mapped - Design Directions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;600&family=EB+Garamond:ital,wght@0,400;0,700;1,400&family=Geist:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .glass {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      .glass-dark {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .shutter-flash {
+        animation: flash 0.2s ease-out;
+      }
+      @keyframes flash {
+        0% {
+          opacity: 0;
+        }
+        50% {
+          opacity: 0.8;
+          background: white;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-900 font-['Inter']">
+    <nav
+      class="p-6 border-b bg-white sticky top-0 z-50 flex justify-between items-center"
+    >
+      <h1 class="text-2xl font-bold text-slate-800">
+        Life Mapped
+        <span class="text-sm font-normal text-slate-500"
+          >Design Directions</span
+        >
+      </h1>
+      <div class="space-x-4">
+        <a href="#dir1" class="text-sm hover:text-blue-600"
+          >1. Vintage Journal</a
+        >
+        <a href="#dir2" class="text-sm hover:text-blue-600">2. Modern Locket</a>
+        <a href="#dir3" class="text-sm hover:text-blue-600"
+          >3. Watercolor Map</a
+        >
+        <a href="#dir4" class="text-sm hover:text-blue-600">4. Tactile Tool</a>
+      </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-8 space-y-24">
+      <!-- Direction 1 -->
+      <section id="dir1" class="space-y-8">
+        <div class="border-l-4 border-amber-600 pl-6">
+          <h2 class="text-3xl font-['Playfair_Display'] font-bold">
+            Direction 1: The Vintage Journal
+          </h2>
+          <p class="text-slate-600 mt-2">
+            Heavy on serifs, parchment textures, and warm gold accents. Feels
+            like a physical heirloom.
+          </p>
+        </div>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div
+            class="bg-[#F5F5DC] p-12 rounded-2xl shadow-xl border border-amber-200 min-h-[400px] flex flex-col justify-center items-center relative overflow-hidden"
+          >
+            <div
+              class="absolute inset-0 opacity-10 pointer-events-none"
+              style="
+                background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png');
+              "
+            ></div>
+            <div class="text-center space-y-6 relative z-10">
+              <h3 class="text-4xl font-['EB_Garamond'] italic text-amber-900">
+                Paris, 2024
+              </h3>
+              <div
+                class="w-24 h-24 rounded-full border-4 border-amber-600 flex items-center justify-center bg-white shadow-inner cursor-pointer hover:scale-105 transition-transform"
+              >
+                <span class="text-amber-600 text-3xl">🎙️</span>
+              </div>
+              <p class="font-['EB_Garamond'] text-xl text-amber-800">
+                "The rain on the Seine felt like a song..."
+              </p>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <h4 class="font-bold">Key Characteristics:</h4>
+            <ul class="list-disc list-inside space-y-2 text-slate-700">
+              <li>Typography: EB Garamond (Serif)</li>
+              <li>Colors: Parchment, Amber, Deep Ink</li>
+              <li>Metaphor: Hand-written travel diary</li>
+              <li>Vibe: Nostalgic, Warm, Timeless</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Direction 2 -->
+      <section id="dir2" class="space-y-8">
+        <div class="border-l-4 border-blue-600 pl-6">
+          <h2 class="text-3xl font-['Geist'] font-bold">
+            Direction 2: The Modern Locket
+          </h2>
+          <p class="text-slate-600 mt-2">
+            Clean glassmorphism, minimalist dark mode, and vibrant "Ink Blue"
+            highlights.
+          </p>
+        </div>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div
+            class="bg-slate-900 p-12 rounded-2xl shadow-2xl min-h-[400px] flex flex-col justify-center items-center relative overflow-hidden"
+          >
+            <div
+              class="absolute inset-0 bg-[url('https://api.mapbox.com/styles/v1/mapbox/dark-v10/static/-122.4194,37.7749,12/800x600?access_token=pk.eyJ1IjoiY29waWxvdCIsImEiOiJjbG93ZzR4ZzAwMDBnMmptZzR4ZzAwMDBuIn0.x')] bg-cover opacity-40"
+            ></div>
+            <div
+              class="glass-dark p-8 rounded-3xl text-center space-y-6 relative z-10 w-full max-w-xs"
+            >
+              <div class="flex justify-between items-center">
+                <span
+                  class="text-blue-400 text-xs font-bold tracking-widest uppercase"
+                  >San Francisco</span
+                >
+                <span class="text-slate-400 text-xs">12.19.25</span>
+              </div>
+              <div
+                class="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.5)] cursor-pointer hover:bg-blue-500 transition-colors"
+              >
+                <div class="w-8 h-8 bg-white rounded-sm"></div>
+              </div>
+              <div class="h-1 bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-400 w-2/3"></div>
+              </div>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <h4 class="font-bold">Key Characteristics:</h4>
+            <ul class="list-disc list-inside space-y-2 text-slate-700">
+              <li>Typography: Geist (Sans-serif)</li>
+              <li>Colors: Midnight, Electric Blue, Slate</li>
+              <li>Metaphor: High-tech digital vault</li>
+              <li>Vibe: Sleek, Secure, Premium</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Direction 3 -->
+      <section id="dir3" class="space-y-8">
+        <div class="border-l-4 border-emerald-600 pl-6">
+          <h2 class="text-3xl font-['Inter'] font-bold">
+            Direction 3: The Watercolor Map
+          </h2>
+          <p class="text-slate-600 mt-2">
+            Soft, artistic map layers with organic shapes and muted pastel
+            accents.
+          </p>
+        </div>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div
+            class="bg-emerald-50 p-12 rounded-2xl shadow-lg min-h-[400px] flex flex-col justify-center items-center relative overflow-hidden"
+          >
+            <div
+              class="absolute inset-0 opacity-20"
+              style="
+                background: radial-gradient(
+                    circle at 20% 30%,
+                    #6ee7b7 0%,
+                    transparent 50%
+                  ),
+                  radial-gradient(
+                    circle at 80% 70%,
+                    #93c5fd 0%,
+                    transparent 50%
+                  );
+                filter: blur(60px);
+              "
+            ></div>
+            <div
+              class="bg-white/80 backdrop-blur-md p-6 rounded-full shadow-sm border border-emerald-100 flex items-center space-x-4"
+            >
+              <div
+                class="w-12 h-12 rounded-full bg-emerald-200 flex items-center justify-center"
+              >
+                <span class="text-emerald-700">🌿</span>
+              </div>
+              <div class="pr-4">
+                <p class="font-semibold text-emerald-900">Kyoto Gardens</p>
+                <p class="text-xs text-emerald-600">3s Voice Sticker</p>
+              </div>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <h4 class="font-bold">Key Characteristics:</h4>
+            <ul class="list-disc list-inside space-y-2 text-slate-700">
+              <li>Typography: Inter (Sans-serif)</li>
+              <li>Colors: Sage, Sky, Soft Cream</li>
+              <li>Metaphor: Impressionist painting</li>
+              <li>Vibe: Calm, Artistic, Gentle</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Direction 4 -->
+      <section id="dir4" class="space-y-8">
+        <div class="border-l-4 border-slate-800 pl-6">
+          <h2 class="text-3xl font-bold">Direction 4: The Tactile Tool</h2>
+          <p class="text-slate-600 mt-2">
+            Focus on skeuomorphic-lite elements (buttons that look pressable) to
+            emphasize physicality.
+          </p>
+        </div>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div
+            class="bg-slate-200 p-12 rounded-2xl shadow-inner min-h-[400px] flex flex-col justify-center items-center"
+          >
+            <div
+              class="bg-slate-300 p-1 rounded-3xl shadow-xl border-t border-white"
+            >
+              <div
+                class="bg-slate-100 p-10 rounded-[22px] shadow-inner space-y-8"
+              >
+                <div
+                  class="w-32 h-32 rounded-full bg-gradient-to-b from-slate-50 to-slate-300 shadow-[0_10px_20px_rgba(0,0,0,0.1),inset_0_2px_5px_rgba(255,255,255,0.8)] flex items-center justify-center cursor-pointer active:scale-95 active:shadow-inner transition-all"
+                >
+                  <div
+                    class="w-12 h-12 rounded-full bg-red-500 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]"
+                  ></div>
+                </div>
+                <div class="flex justify-center space-x-2">
+                  <div class="w-2 h-2 rounded-full bg-slate-400"></div>
+                  <div
+                    class="w-2 h-2 rounded-full bg-red-500 animate-pulse"
+                  ></div>
+                  <div class="w-2 h-2 rounded-full bg-slate-400"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <h4 class="font-bold">Key Characteristics:</h4>
+            <ul class="list-disc list-inside space-y-2 text-slate-700">
+              <li>Typography: System Sans</li>
+              <li>Colors: Industrial Grays, Alert Red</li>
+              <li>Metaphor: Vintage tape recorder / Leica camera</li>
+              <li>Vibe: Tactile, Functional, Honest</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="bg-slate-900 text-white p-12 mt-24 text-center">
+      <p class="text-slate-400">Life Mapped UX Design Specification</p>
+      <p class="mt-2">Prepared for DELL • 2025</p>
+    </footer>
+  </body>
+</html>
