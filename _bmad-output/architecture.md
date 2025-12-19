@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 5]
+stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
 inputDocuments:
   - "./_bmad-output/project-prd_v1_2025-12-18T12-00-00Z.md"
   - "./_bmad-output/project-prd_v2_2025-12-19.md"
@@ -7,13 +7,52 @@ inputDocuments:
   - "./_bmad-output/user-stories_2025-12-19.md"
   - "./_bmad-output/data-spec_2025-12-19.md"
 workflowType: "architecture"
-lastStep: 5
+lastStep: 8
 project_name: "se122-image-sharing-social-media"
 user_name: "DELL"
 date: "2025-12-19"
+status: "COMPLETE - READY FOR IMPLEMENTATION"
 ---
 
-# Architecture Decision Document
+# Architecture Decision Document (Master Index)
+
+> **⚠️ DOCUMENT SPLIT FOR READABILITY**
+>
+> This architecture has been split into 10 focused documents for easier navigation and collaboration.
+>
+> **👉 START HERE:** [architecture/00-INDEX.md](architecture/00-INDEX.md)
+>
+> This master file is retained for reference. All detailed content is in the `/architecture/` folder.
+
+## Quick Navigation
+
+| Document                                                                        | Purpose                              |
+| ------------------------------------------------------------------------------- | ------------------------------------ |
+| **[00-INDEX.md](architecture/00-INDEX.md)**                                     | Navigation guide & document overview |
+| **[01-PROJECT-CONTEXT.md](architecture/01-PROJECT-CONTEXT.md)**                 | Requirements, constraints, concerns  |
+| **[02-PRODUCT-PRINCIPLES.md](architecture/02-PRODUCT-PRINCIPLES.md)**           | Cloud of Unknowing, Audio-First Rule |
+| **[03-STARTER-TEMPLATES.md](architecture/03-STARTER-TEMPLATES.md)**             | Expo + NestJS tech stack             |
+| **[04-CORE-DECISIONS.md](architecture/04-CORE-DECISIONS.md)**                   | All 18 architectural decisions       |
+| **[05-IMPLEMENTATION-PATTERNS.md](architecture/05-IMPLEMENTATION-PATTERNS.md)** | Coding patterns & consistency rules  |
+| **[06-PROJECT-STRUCTURE.md](architecture/06-PROJECT-STRUCTURE.md)**             | Module boundaries & layout           |
+| **[07-REQUIREMENTS-MAPPING.md](architecture/07-REQUIREMENTS-MAPPING.md)**       | UC1-18 → modules/endpoints           |
+| **[08-VALIDATION-RESULTS.md](architecture/08-VALIDATION-RESULTS.md)**           | Architecture validation ✅           |
+| **[09-QUICK-START.md](architecture/09-QUICK-START.md)**                         | Developer quick reference            |
+
+---
+
+## Status Summary
+
+✅ **Architecture Complete & Validated**
+
+- 18 Core Decisions: Locked
+- 18 Use Cases: All mapped
+- Implementation Patterns: Defined
+- Project Structure: Complete
+- No Critical Gaps: Identified
+- **Ready for Implementation**
+
+---
 
 _This document builds collaboratively through step-by-step discovery. Sections will be appended as we work through each architectural decision together._
 
@@ -1497,3 +1536,94 @@ describe("MemoriesController (integration)", () => {
 - Implementation patterns documented
 
 **Next phase:** Prepare user stories for implementation teams and AI agents
+
+---
+
+## Project Structure & Boundaries
+
+### Overview
+
+This section defines the complete physical project structure, module organization, and architectural boundaries. Decisions incorporate feedback from cross-functional review (Mary on domain modeling, Sally on developer experience, Murat on testing strategy, Victor on scalability).
+
+### Key Structural Decisions
+
+1. **Postcards as top-level module** (not nested under social)
+
+   - Rationale: Independent lifecycle, time-based unlock conditions, location triggers
+   - Domain-driven design treats postcards as a first-class bounded context
+   - Improves data integrity, test isolation, and long-term extensibility
+
+2. **Social module subdivided into clear subdomains** (feed, discovery, profiles)
+
+   - Avoids monolithic folder while respecting bounded context
+   - Reflects user mental models ("Where do I explore?" vs "What's in my feed?")
+
+3. **Event-driven architecture (selective, not global)**
+
+   - Core read/write paths remain synchronous and explicit
+   - Events used ONLY for side effects: notifications, analytics, audit logs
+   - Improves testability without adding async complexity
+
+4. **Scalability comments (not premature infrastructure)**
+   - Code comments mark future upgrade points (geo-sharding, Redis pub/sub, job queues)
+   - Signals intent without committing infrastructure complexity
+
+---
+
+### Module Dependencies (Updated)
+
+**No circular dependencies enforced:**
+
+`
+auth/
+↓
+memories/, postcards/, social/, moderation/
+↓
+media/ (used by memories, social)
+↓
+admin/ (depends on memories, social, moderation, auth)
+
+common/ (imported by all, never imports other modules)
+websocket/ (imported by all for real-time)
+`
+
+**Key structural change:** postcards/ promoted to top-level, equal prominence to memories/, social/, auth/.
+
+---
+
+### Requirements to Structure Mapping (Final)
+
+| UC #    | Use Case            | Backend Module                | Frontend Route        |
+| ------- | ------------------- | ----------------------------- | --------------------- |
+| UC1-3   | Auth & Profile      | auth/ + social/profiles/      | (auth)/ + profiles/me |
+| UC4-6   | Voice Sticker & Map | memories/                     | memories/             |
+| UC7-9   | Social & Discovery  | social/feed, posts, discovery | social/\*             |
+| UC10    | Teleport            | memories/                     | memories/teleport     |
+| UC11    | Postcards           | **postcards/** (TOP-LEVEL)    | social/postcards      |
+| UC12-14 | Moderation          | moderation/                   | admin/moderation      |
+| UC15-18 | Admin               | admin/                        | admin/\*              |
+
+---
+
+### Architectural Boundaries
+
+**API:** REST + WebSocket (notifications, real-time events)
+**Auth:** JWT + refresh tokens, RBAC (User/Moderator/Admin)
+**Caching:** node-cache (MVP) → Redis (future)
+**Events:** Side effects only (notifications, analytics, audit, real-time)
+**Dependencies:** Acyclic; auth → features → admin allowed
+**Testing:** Unit tests mock; integration tests use real DB
+
+---
+
+## Step 6 Complete ✅
+
+**Project structure finalized with:**
+
+✅ Postcards elevated to top-level (domain-driven)
+✅ Social subdivided into feed/discovery/profiles (developer ergonomics)
+✅ Event-driven patterns for side effects only (MVP velocity)
+✅ Scalability markers documented (no premature infrastructure)
+✅ All 18 use cases mapped to modules and routes
+
+**Next: Step 7 - Architecture Validation**
