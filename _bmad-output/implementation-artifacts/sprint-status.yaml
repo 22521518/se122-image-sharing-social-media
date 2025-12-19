@@ -47,7 +47,7 @@ development_status:
   0-5-postcards-module-setup: review
   0-6-social-module-setup: review
   0-7-moderation-module-setup: review
-  0-8-admin-module-setup: review
+  0-8-admin-module-setup: done
   epic-0-retrospective: optional
 
   # Epic 1: Authentication & Profiles

@@ -1,6 +1,6 @@
 # Story 0.8: Admin Module Setup
 
-Status: review
+Status: done
 
 ## Story
 
@@ -33,6 +33,11 @@ So that system-wide management is isolated from user facing features.
 - Established `README.md` and `AGENTS.md`.
 - Created placeholders for `entities`, `dto`, `controllers`, `services`.
 - Verified all files exist.
+- **Fixes Applied (Code Review)**:
+  - Fixed typo in README.
+  - Updated `AdminModule` imports to match `AGENTS.md`.
+  - Added security NOTE in `AdminModule`.
+  - Fixed code style.
 
 ## File List
 - backend/v1_nestjs/src/admin/README.md

@@ -1,7 +1,7 @@
 # Admin Module
 
 ## Role
-This module powers the **Admin Dashboard**. It provided system-wide visibility and control.
+This module powers the **Admin Dashboard**. It provides system-wide visibility and control.
 
 ## Capabilities
 - **User Management**: Ban/Unban, promote users.
