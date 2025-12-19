@@ -1,0 +1,22 @@
+{
+  "name": "se122-image-sharing-social-media",
+  "version": "1.0.0",
+  "description": "Image Sharing Social Media Platform",
+  "private": true,
+  "scripts": {
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces",
+    "build": "npm run build --workspaces"
+  },
+  "workspaces": [
+    "backend/v1_nestjs",
+    "frontend/cross-platform",
+    "frontend/web-console"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
+  }
+}

@@ -3,3 +3,9 @@
 # .claude
 # .github
 # .vscode
+# *.md
+# *.yaml
+# *.yml
+# *.csv
+# .xml
+.vscode
