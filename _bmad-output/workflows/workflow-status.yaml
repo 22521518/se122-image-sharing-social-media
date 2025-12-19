@@ -39,6 +39,14 @@ workflows:
     session_file: "./_bmad-output/analysis/brainstorming-session-2025-12-18T12-18-00Z.md"
     last_updated: 2025-12-18T12:18:00Z
     notes: "Creative Problem Solver session created to analyze likely user problems and mitigations for proposed features."
+  create-epics-and-stories:
+    status: completed
+    started_at: 2025-12-19T00:00:00Z
+    completed_at: 2025-12-19T00:00:00Z
+    output_files:
+      - "_bmad-output/epics.md"
+      - "_bmad-output/epics-and-stories/platform-matrix_web-vs-mobile.md"
+    notes: "Integrated Vietnamese requirements (UC1-UC18) with Life Mapped PRD. Generated 8 epics and 25+ user stories. Created bilingual platform matrix."
 notes:
   - Workflow artifacts initialized on user request.
   - New brainstorming session started and marked `in_progress`.
