@@ -146,9 +146,13 @@ backend/src/
 ├── websocket/         (Real-Time Notifications)
 └── common/            (Guards, Filters, Pipes)
 
-frontend/cross-platform/
-├── (auth)/            (Login, Register, Auth Flow)
-└── (app)/             (Memories, Social, Profiles)
+frontend/
+├── cross-platform/    (End-User App: UC1-UC11)
+│   ├── (auth)/        (Login, Register)
+│   └── (app)/         (Memories, Social)
+└── web-console/       (Admin/Mod Dashboard: UC12-UC18)
+    ├── src/           (Vite + React)
+    └── public/
 ```
 
 ---

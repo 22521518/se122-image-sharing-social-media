@@ -168,6 +168,138 @@ Give administrators control over user accounts, roles, and system health so the 
 
 **FRs covered:** FR28, FR29, FR30
 
+### Epic 0: Project Architecture & Module Setup
+
+Initialize the project structure, establishing the core modules with their specific agent guidelines and documentation to ensure developer agents follow architectural constraints from the start.
+
+**Rationale:** Before feature implementation, every module must exist with a clear boundary definition (`README.md`) and agent rules (`AGENTS.md`) to prevent "spaghetti code" and enforce the acyclic dependency graph defined in `06-PROJECT-STRUCTURE.md`.
+
+**Modules to Initialize:**
+1. `common/` (Shared utilities, guards, filters)
+2. `auth/` (Authentication & Users)
+3. `media/` (Media processing pipeline)
+4. `memories/` (Core domain)
+5. `postcards/` (Time-locked delivery)
+6. `social/` (Feed, profiles, discovery)
+7. `moderation/` (Safety tools)
+8. `admin/` (System management)
+
+## Epic 0: Project Architecture & Module Setup
+
+Initialize the project structure, establishing the core modules with their specific agent guidelines and documentation to ensure developer agents follow architectural constraints from the start.
+
+### Story 0.0: Project Scaffolding & CI/CD
+
+As a Lead Architect,
+I want to initialize the project repositories and base frameworks,
+So that the development team has a standardized environment to work in.
+
+**Acceptance Criteria:**
+1. **Given** a clean environment
+2. **When** I run the initialization scripts
+3. **Then** a Monorepo strategy (Turbo or simple folders) is established
+4. **And** the `frontend/cross-platform` (Expo) project is initialized
+5. **And** the `frontend/web-console` (Vite) project is initialized
+6. **And** the `backend` (NestJS) project is initialized
+7. **And** a basic CI pipeline (GitHub Actions) runs linting on PRs
+
+### Story 0.1: Common Module Setup
+
+As a Lead Architect,
+I want to initialize the `common` module with shared utilities and base guidelines,
+So that other modules can reuse code without duplication or circular dependencies.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/common` directory
+2. **When** I initialize the folder structure
+3. **Then** it must contain `README.md` defining what belongs here (Guards, Interceptors, Filters, Pipes)
+4. **And** it must contain `AGENTS.md` with strict rules: "NEVER import from other domain modules; Common is a leaf node in dependency graph."
+5. **And** I create the initial `GlobalExceptionFilter` and `ResponseInterceptor` as defined in `05-IMPLEMENTATION-PATTERNS.md`
+
+### Story 0.2: Auth Module Setup
+
+As a Lead Architect,
+I want to initialize the `auth` module with its structure and rules,
+So that user management is isolated and secure.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/auth` directory
+2. **When** I create the folder structure
+3. **Then** it must contain `README.md` describing the JWT flow and User entity ownership
+4. **And** it must contain `AGENTS.md` specifying: "Auth depends ONLY on Common. Do not import Memories or Social."
+
+### Story 0.3: Media Module Setup
+
+As a Lead Architect,
+I want to initialize the `media` module,
+So that file handling logic is centralized and decoupled from business logic.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/media` directory
+2. **When** I create the folder structure
+3. **Then** it must contain `README.md` documenting the S3 streaming and Sharp.js pipeline
+4. **And** it must contain `AGENTS.md` specifying: "Media is a service provider. It does not know about Users or Memories."
+
+### Story 0.4: Memories Module Setup
+
+As a Lead Architect,
+I want to initialize the `memories` module,
+So that the core domain logic has a dedicated home.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/memories` directory
+2. **When** I create the folder structure
+3. **Then** it must contain `README.md` defining the Memory entity and PostGIS requirements
+4. **And** it must contain `AGENTS.md` specifying: "Memories depends on Auth and Media. It is the source of truth for the Map."
+
+### Story 0.5: Postcards Module Setup
+
+As a Lead Architect,
+I want to initialize the `postcards` module as a top-level domain,
+So that time-locked logic is not buried within social features.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/postcards` directory
+2. **When** I create the folder structure
+3. **Then** it must contain `README.md` explaining the "Locked" vs "Unlocked" state machine
+4. **And** it must contain `AGENTS.md` specifying: "Postcards depends on Auth and Media. Independent of Memories module."
+
+### Story 0.6: Social Module Setup
+
+As a Lead Architect,
+I want to initialize the `social` module with subdomains for feed and discovery,
+So that social interactions are organized by subdomain.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/social` directory
+2. **When** I create the folder structure with `feed`, `posts`, and `discovery` subdirectories
+3. **Then** it must contain `README.md` explaining the subdomain split
+4. **And** it must contain `AGENTS.md` specifying: "Social depends on Auth and Media. Avoid circular deps with Memories (refer by ID only if possible)."
+
+### Story 0.7: Moderation Module Setup
+
+As a Lead Architect,
+I want to initialize the `moderation` module,
+So that safety tools are centralized.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/moderation` directory
+2. **When** I create the folder structure
+3. **Then** it must contain `README.md` documenting the reporting workflow
+4. **And** it must contain `AGENTS.md` specifying: "Moderation consumes events from other modules. It has Moderator-only guards."
+
+### Story 0.8: Admin Module Setup
+
+As a Lead Architect,
+I want to initialize the `admin` module,
+So that system-wide management is isolated from user facing features.
+
+**Acceptance Criteria:**
+1. **Given** the backend `src/admin` directory
+2. **When** I create the folder structure
+3. **Then** it must contain `README.md` documenting RBAC requirements (Role='Admin')
+4. **And** it must contain `AGENTS.md` specifying: "Admin has highest privilege. Can import any module service for monitoring."
+
 ## Epic 1: Authentication & Profiles
 
 Enable users to create secure accounts, log in, and manage their basic profile and privacy settings so they have a trusted personal space for memories and social activity.
@@ -220,8 +352,14 @@ So that I have full control over my data.
 **Acceptance Criteria:**
 
 **Given** I am logged in
-**When** I set my default privacy (Private/Friends/Public) or choose to delete my account
-**Then** future memories respect the new default, and account deletion permanently removes all my data and media (Data Sovereignty)
+**When** I set my default privacy (Private/Friends/Public)
+**Then** future memories respect the new default
+
+**Given** I choose to delete my account
+**When** I confirm the destructive action
+**Then** the system performs a "Soft Delete" on database records (setting `deleted_at` timestamp)
+**And** schedules a "Hard Delete" job for S3 assets (images/audio) after 30 days
+**And** creates an audit log entry for the deletion request
 
 ## Epic 2: Core Memory Capture & Map
 
@@ -266,18 +404,33 @@ So that I can record a memory that is purely emotional or atmospheric.
 **Then** a new pin is created at that coordinate
 **And** if no photo is provided, the system generates a beautiful abstract placeholder based on my selected "feeling" and the time of day
 
-### Story 2.4: Living Map and Memory Filmstrip
+### Story 2.4a: Map Viewport Logic
 
 As a user exploring my history,
-I want to see my memories as pins on a map and browse them via a filmstrip,
-So that I can see how my life has unfolded in a specific area.
+I want to see my memories as pins on a map that update as I move,
+So that I can find memories relevant to where I am looking.
 
 **Acceptance Criteria:**
 
 **Given** I am panning or zooming the map
-**When** the map view changes
-**Then** the "Memory Filmstrip" updates dynamically to show thumbnails of memories within the visible bounding box
-**And** clicking a filmstrip item centers the map on that specific pin and plays its Voice Sticker
+**When** the map movement stops (debounce)
+**Then** the system calculates the visible bounding box (NE/SW corners)
+**And** requests memories within that box from the backend (`GET /memories/map?bbox=...`)
+**And** renders pins for the returned memories at their precise GPS coordinates
+
+### Story 2.4b: Filmstrip Rendering
+
+As a user browsing the map,
+I want to see a filmstrip of thumbnails for the visible pins,
+So that I can preview the visual content without clicking every pin.
+
+**Acceptance Criteria:**
+
+**Given** the Map Viewport Logic (Story 2.4a) has updated the list of visible memories
+**When** the memory list changes
+**Then** the "Memory Filmstrip" updates dynamically to show thumbnails of those memories
+**And** clicking a filmstrip item centers the map on that specific pin and triggers its Voice Sticker
+**And** the filmstrip handles cases with large numbers of pins (e.g., virtualization or pagination)
 
 ## Epic 3: Onboarding & Bulk Import
 

@@ -19,7 +19,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `auth/`
 - **Endpoint:** `POST /auth/register`
-- **Frontend:** `(auth)/register.tsx`
+- **Frontend:** `frontend/cross-platform/app/(auth)/register.tsx`
 - **DTO:** `CreateUserDto` (email, password, name)
 - **Response:** User object + accessToken + refreshToken (HttpOnly cookie)
 - **Validation:** Email uniqueness, password strength
@@ -29,7 +29,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `auth/`
 - **Endpoint:** `POST /auth/login`
-- **Frontend:** `(auth)/login.tsx`
+- **Frontend:** `frontend/cross-platform/app/(auth)/login.tsx`
 - **DTO:** `LoginDto` (email, password)
 - **Response:** User object + accessToken + refreshToken (HttpOnly cookie)
 - **Authentication:** JWT validation
@@ -42,7 +42,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
   - `GET /auth/profile` (get current user)
   - `PATCH /auth/profile` (update profile: name, avatar, privacy)
   - `GET /social/profiles/:userId` (public profile view)
-- **Frontend:** `(app)/profiles/me.tsx` + `(app)/profiles/[userId].tsx`
+- **Frontend:** `frontend/cross-platform/app/(app)/profiles/me.tsx` + `frontend/cross-platform/app/(app)/profiles/[userId].tsx`
 - **DTO:** `UpdateProfileDto` (name, avatar, bio, privacy)
 - **RBAC:** User can only edit own profile
 - **Database:** Users table (name, avatar, created_at, updated_at)
@@ -55,7 +55,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `memories/`
 - **Endpoint:** `POST /memories` + `POST /memories/:id/voice`
-- **Frontend:** `(app)/memories/capture.tsx`
+- **Frontend:** `frontend/cross-platform/app/(app)/memories/capture.tsx`
 - **DTO:** `CreateMemoryDto` (photo, voiceBlob) → `AddVoiceDto` (audio)
 - **Process:**
   1. Upload photo (optional) via `memories/upload`
@@ -70,7 +70,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `memories/`
 - **Endpoint:** `GET /memories/map?bbox=...`
-- **Frontend:** `(app)/memories/index.tsx` (Living Map component)
+- **Frontend:** `frontend/cross-platform/app/(app)/memories/index.tsx` (Living Map component)
 - **Query:** Bounding box search via PostGIS `ST_DWithin`
 - **Caching:** Viewport cached for 5 min (node-cache)
 - **Response:** Array of memory pins with location, thumbnail, voice preview
@@ -81,7 +81,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `memories/`
 - **Endpoint:** `POST /memories/bulk-import`
-- **Frontend:** `(app)/memories/bulk-import.tsx`
+- **Frontend:** `frontend/cross-platform/app/(app)/memories/bulk-import.tsx`
 - **Process:**
   1. User selects photos from device
   2. Extract EXIF geolocation via `expo-media-library`
@@ -100,7 +100,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `memories/`
 - **Endpoint:** `GET /memories/teleport`
-- **Frontend:** `(app)/memories/teleport.tsx`
+- **Frontend:** `frontend/cross-platform/app/(app)/memories/teleport.tsx`
 - **Process:**
   1. Select random non-repeating memory
   2. Animate map to location (0.2s shutter effect)
@@ -117,7 +117,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
   - `POST /postcards` (create)
   - `GET /postcards` (list sent/received)
   - `POST /postcards/:id/unlock` (unlock if condition met)
-- **Frontend:** `(app)/postcards/index.tsx` + `(app)/postcards/[id].tsx`
+- **Frontend:** `frontend/cross-platform/app/(app)/postcards/index.tsx` + `frontend/cross-platform/app/(app)/postcards/[id].tsx`
 - **DTO:** `CreatePostcardDto` (recipientId, unlockCondition, message, media)
 - **Unlock Conditions:**
   - Time-based: `unlockAt` timestamp
@@ -134,7 +134,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `social/feed/`
 - **Endpoint:** `GET /social/feed?page=1&limit=20`
-- **Frontend:** `(app)/social/feed.tsx`
+- **Frontend:** `frontend/cross-platform/app/(app)/social/feed.tsx`
 - **Query:** Posts from followed users + recommended, paginated
 - **Caching:** Feed cached for 1 min per user
 - **Response:** Array of post objects with author, media, engagement counts
@@ -147,7 +147,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 - **Endpoints:**
   - `GET /social/search?q=...` (posts, users, hashtags)
   - `GET /social/explore` (trending posts)
-- **Frontend:** `(app)/social/explore.tsx`
+- **Frontend:** `frontend/cross-platform/app/(app)/social/explore.tsx`
 - **Query:** Full-text search on post caption + hashtags, or trending algorithm
 - **Response:** Mixed results (posts + users) with relevance ranking
 - **RBAC:** Search respects post privacy
@@ -164,7 +164,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
   - `POST /social/posts/:id/like` (like)
   - `POST /social/posts/:id/comment` (comment)
   - `POST /social/follow/:userId` (follow)
-- **Frontend:** Multiple screens in `(app)/social/`
+- **Frontend:** Multiple screens in `frontend/cross-platform/app/(app)/social/`
 - **DTO:** `CreatePostDto` (caption, media[], privacy), `CommentDto`, `FollowDto`
 - **RBAC:**
   - User can edit/delete own posts
@@ -181,7 +181,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `moderation/`
 - **Endpoint:** `POST /reports` + `GET /reports` (user's own reports)
-- **Frontend:** Report button on posts, comments, profiles
+- **Frontend:** Report button in `frontend/cross-platform/` (User) + Review List in `frontend/web-console/src/pages/reports` (Admin)
 - **DTO:** `CreateReportDto` (targetType, targetId, reason, context)
 - **RBAC:** Any user can report
 - **Queue:** Reports go into queue for moderator review
@@ -191,7 +191,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `moderation/`
 - **Endpoint:** `GET /admin/reports?status=pending`
-- **Frontend:** `admin/moderation.tsx`
+- **Frontend:** `frontend/web-console/src/pages/moderation/index.tsx`
 - **Query:** List reports by status (pending, reviewed, resolved)
 - **RBAC:** Moderator only
 - **Response:** Report with full context (post, author, reporter, history)
@@ -201,7 +201,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `moderation/`
 - **Endpoint:** `PATCH /admin/reports/:id` (action: hide, delete, restore, dismiss)
-- **Frontend:** Moderation queue interface
+- **Frontend:** `frontend/web-console/src/pages/moderation/queue.tsx`
 - **DTO:** `ModerateReportDto` (action, reason, notes)
 - **RBAC:** Moderator only
 - **Side Effects:**
@@ -220,7 +220,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 - **Endpoints:**
   - `GET /admin/users?page=1&limit=50` (list all users)
   - `PATCH /admin/users/:id` (update role, status)
-- **Frontend:** `admin/users.tsx`
+- **Frontend:** `frontend/web-console/src/pages/users/index.tsx`
 - **RBAC:** Admin only
 - **Actions:** Promote to moderator, demote, suspend, delete account
 - **Database:** users table (role, status, updated_at)
@@ -229,7 +229,7 @@ All 18 Vietnamese use cases mapped to backend modules, API endpoints, frontend r
 
 - **Module:** `admin/`
 - **Endpoint:** `GET /admin/monitoring`
-- **Frontend:** `admin/monitoring.tsx` (dashboard)
+- **Frontend:** `frontend/web-console/src/pages/monitoring/dashboard.tsx`
 - **Metrics:**
   - User count, active users
   - Memory count, storage used

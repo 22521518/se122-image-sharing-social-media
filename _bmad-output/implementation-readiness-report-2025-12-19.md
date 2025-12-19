@@ -8,6 +8,7 @@ selectedFiles:
   epics: epics-and-stories/epics.md
   stories: epics-and-stories/user-stories_2025-12-19.md
   ux: ux/ui/ux-design-specification.md
+assessor: Winston (Architect Agent)
 ---
 
 # Implementation Readiness Assessment Report
@@ -20,12 +21,11 @@ selectedFiles:
 ### PRD Documents
 
 - `project-prd_v1_2025-12-18T12-00-00Z.md`
-- `project-prd_v2_2025-12-19.md`
+- `project-prd_v2_2025-12-19.md` (Checked)
 
 ### Architecture Documents
 
-- `architecture.md` (Whole)
-- Folder: `architecture/` (Sharded)
+- Folder: `architecture/` (Canonical)
   - `00-INDEX.md`
   - `01-PROJECT-CONTEXT.md`
   - `02-PRODUCT-PRINCIPLES.md`
@@ -55,158 +55,106 @@ selectedFiles:
 
 ### Duplicates Found
 
-- **PRD:** Multiple versions found. I recommend using `project-prd_v2_2025-12-19.md`.
-- **Architecture:** Both `architecture.md` and the `architecture/` folder exist. I recommend using the sharded `architecture/` folder as it appears more detailed.
+- **Architecture:** Resolved. The `architecture/` folder is now the canonical source of truth. `architecture.md` (root file) should be considered deprecated/archived to avoid confusion.
 
 ### Missing Documents
 
-- None identified.
+- None.
 
 ## 3. PRD Analysis
 
-### Functional Requirements
+### Functional Requirements Extracted
 
-**F1: The "Voice Sticker" Capture (MVP Core)**
+FR1: The "Voice Sticker" Capture (MVP Core) — 2-5s audio attached to a location and photo; supports one-tap recording; automatic EXIF location/time extraction; manual pin placement; supports voice-only pins with generative placeholders.
 
-- One-tap recording (low friction).
-- Automatic location/time metadata extraction from photos (EXIF).
-- Manual pin placement for "feeling-first" entries.
-- Support for "Voice-only" pins with beautiful generative placeholders.
+FR2: The Living Map & Teleportation — Teleport button for random non-repeating memory; Memory Filmstrip tied to current map view; Shutter transition 0.2s visual flash.
 
-**F2: The Living Map & Teleportation**
+FR3: Bulk-Drop Wall (Web-First) — Drag-and-drop photo clusters; local EXIF extraction to suggest pin locations; batch voice-sticker ritual for imports.
 
-- **Teleport Button:** A "Random Access Memory" button that jumps the user to a random, non-repeating memory.
-- **Memory Filmstrip:** A scrollable/swipeable timeline of memories tied to the current map view.
-- **Shutter Transition:** A 0.2s visual "flash" during teleportation to simulate a camera shutter.
+FR4: Time-locked Postcards (Phase 1.5) — Compose photo+message with unlock condition; locked state persists until condition; send to self or trusted friend.
 
-**F3: Bulk-Drop Wall (Web-First Strategy)**
+Total FRs extracted: 4
 
-- Drag-and-drop photo clusters onto the web interface.
-- Local browser-side EXIF extraction to suggest pin locations.
-- Batch "Voice Sticker" ritual to add emotional context to imported photos.
+### Non-Functional Requirements Extracted
 
-**F4: Time-locked Postcards (Phase 1.5)**
+NFR1: Privacy — Private-by-default; granular sharing controls (Private/Friends/Public).
 
-- Locked state persists until condition is met.
-- Can be sent to self or a trusted friend.
+NFR2: Performance — Map interactions <200ms; instant audio playback for 2-5s clips.
 
-**Total FRs: 4 (with 11 sub-requirements)**
+NFR3: Web-First (PWA) — Optimized for desktop and mobile browsers before native development.
 
-### Non-Functional Requirements
+NFR4: Data Sovereignty — Easy export of all media and metadata; data ownership/export capability.
 
-- **NF1: Privacy:** Private-by-default. Granular sharing controls (Private/Friends/Public).
-- **NF2: Performance:** Map interactions <200ms. Instant audio playback (2-5s clips).
-- **NF3: Web-First (PWA):** Optimized for desktop and mobile browsers before native development.
-- **NF4: Data Sovereignty:** Easy export of all media and metadata.
-
-**Total NFRs: 4**
-
-### Additional Requirements
-
-- **Product Principles:** Human Agency, Intimacy over Reach, Locket Metaphor, Beauty as Utility, Scarcity & Meaning.
-- **Target Audience:** "Nostalgic Nomads" (20-35).
-- **Roadmap Constraints:** Phase 1 (MVP) focus vs. Phase 1.5 and Phase 2 features.
+Total NFRs extracted: 4
 
 ### PRD Completeness Assessment
 
-The PRD is concise and highly focused on the core "Locket" metaphor. It provides clear functional goals for the MVP. However, it lacks detailed error handling scenarios (e.g., GPS failure, audio recording failure) and specific data retention policies beyond "Data Sovereignty."
+The PRD v2 contains clear, prioritized FRs and NFRs aligned to the Locket MVP.
+
+**Update (Architecture Split):** The PRD requirement for PWA/Web-First (NFR3) is now explicitly supported by the `frontend/cross-platform` architecture for consumers and `frontend/web-console` for admins.
 
 ## 4. Epic Coverage Validation
 
-### Coverage Matrix
+### FR Coverage Analysis
 
-| PRD FR | Requirement Description           | Epic Coverage                          | Status     |
-| :----- | :-------------------------------- | :------------------------------------- | :--------- |
-| **F1** | Voice Sticker Capture (MVP Core)  | Epic 2 (Stories 2.1, 2.2, 2.3)         | ✅ Covered |
-| **F2** | Living Map & Teleportation        | Epic 2 (Story 2.4), Epic 4 (Story 4.1) | ✅ Covered |
-| **F3** | Bulk-Drop Wall (Web-First)        | Epic 3 (Stories 3.2, 3.3)              | ✅ Covered |
-| **F4** | Time-locked Postcards (Phase 1.5) | Epic 4 (Stories 4.2, 4.3)              | ✅ Covered |
-
-### Missing Requirements
-
-- **No missing requirements** from the PRD v2 were identified in the Epics.
-
-### Observations & "Reverse Gaps"
-
-- **Scope Expansion:** The Epics document includes a significant amount of functionality (Epics 1, 5, 6, 7, 8) related to Social Posting, Feeds, Following, and Admin/Moderation that is **not explicitly defined in PRD v2**.
-- **Source Alignment:** These additional epics appear to be derived from the "Vietnamese Use Cases" and "Brainstorming Sessions" rather than the core PRD. While they provide a more complete social platform, they represent a significant increase in scope over the "Private-First" MVP described in the PRD.
+| PRD FR | Requirement Description                                 | Epic Coverage                                  | Status     |
+| :----- | :------------------------------------------------------ | :--------------------------------------------- | :--------- |
+| FR1    | Voice Sticker capture attached to location/photo        | Epic 2 (Stories 2.1, 2.3)                      | ✅ Covered |
+| FR2    | One-tap recording, link to current map location         | Epic 2 (Story 2.1)                             | ✅ Covered |
+| FR3    | EXIF-based placement of uploaded photos                 | Epic 2 (Story 2.2)                             | ✅ Covered |
+| FR4    | Manual pin placement, voice-only pins with placeholders | Epic 2 (Story 2.3); Epic 4 supports related UX | ✅ Covered |
 
 ### Coverage Statistics
 
-- **Total PRD FRs:** 4
-- **FRs covered in epics:** 4
-- **Coverage percentage:** 100%
+- Total PRD FRs: 4
+- FRs covered in epics: 4
+- Coverage percentage: 100%
 
-## 5. UX Alignment Assessment
+## 5. UX & Architecture Alignment Assessment
 
-### UX Document Status
+### Architecture Restructuring (Frontend Split)
 
-- **Found:** `ux/ui/ux-design-specification.md`, `ux/ui/design-handoff.md`, `ux/ui/wireframes.md`.
+**Significantly Improved Alignment:**
+The architecture was recently updated (Dec 19) to split the frontend into two distinct applications:
+1.  `frontend/cross-platform`: Mobile + PWA for End Users (UC1-UC11).
+2.  `frontend/web-console`: Vite + React Dashboard for Admins (UC12-UC18).
 
-### Alignment Issues
+**Benefit:** This perfectly aligns with the Epic requirements (Epic 8) that specified Admin tools as "Web Only". It ensures the mobile bundle remains lightweight by excluding heavy admin libraries.
 
-- **UX ↔ Epics/Architecture Gap:** The UX Specification is currently focused exclusively on the core "Locket" and "Voice Sticker" features (Epics 2, 3, 4). It **does not yet cover** the Social Posting, Feed, Discovery, or Admin/Moderation features (Epics 1, 5, 6, 7, 8) that are present in both the Epics and the Architecture documents.
-- **PRD Alignment:** The UX Specification aligns perfectly with the PRD v2, which also focuses on the core MVP.
+### UX ↔ Architecture Alignment
 
-### Architecture Support
-
-- **Tech Stack Alignment:** Architecture (NestJS + Expo) fully supports the UX choice of Tailwind CSS and Headless UI/Radix for the PWA.
-- **Performance Alignment:** Architecture decisions (GiST indexing, node-cache) are specifically designed to meet the UX requirement for <200ms map interactions.
-- **Audio Ritual:** Architecture Decision 12 (FFmpeg normalization) directly supports the "Voice Sticker" ritual by ensuring consistent playback quality.
+- **Cross-Platform App:** Architecture (Expo) fully supports the "Voice Sticker" and "Living Map" UX flows defined in `ux/ui/ux-design-specification.md`.
+- **Admin Console:** Architecture (Vite) supports the data-heavy grids implied by "Moderation Queue" and "System Monitoring" without compromising the consumer app's performance.
 
 ### Warnings
 
-- **⚠️ WARNING: UX Scope Lag:** Implementation of Social and Admin features (Epics 5-8) will be high-risk without corresponding UX specifications and wireframes. The current UX documents only cover the "Private-First" core.
-- **⚠️ WARNING: Mobile UX:** While the Architecture supports Expo (Native), the UX wireframes and specification are heavily weighted towards the PWA/Web experience. Native-specific interactions (e.g., background GPS, native haptics) need more detailed UX definition.
+- **UX Gap:** UX designs for the `web-console` (Admin/Mod dashboards) are likely missing or minimal compared to the polished Mobile App designs. Recommendation: Create wireframes for the Admin Console if not already present.
 
 ## 6. Epic Quality Review
 
-### 🔴 Critical Violations
+### Summary of Findings
 
-- **Missing Initial Setup Story:** For a greenfield project using NestJS and Expo (as per Architecture), there is no "Story 0" or initial setup story in Epic 1 to handle project scaffolding, environment configuration, and CI/CD initialization.
-- **Remediation:** Add Story 1.0: "Initial Project Scaffolding & Environment Setup" to Epic 1.
+- **Missing Initial Setup Story:** While Epic 0 covers *Module* setup, there is still no explicit "Story 1.0" or "Story 0.0" for **Project Scaffolding & CI/CD** (e.g., initializing the Repo, setting up TurboRepo/Workspaces if using monorepo, initializing the Expo and NestJS projects).
+    - *Impact:* Developers might start Module setup (Story 0.1) without a clean environment.
+- **Oversized Story:** Story 2.4 "Living Map and Memory Filmstrip" combines complex map viewport logic with dynamic filmstrip rendering. This is a high-risk story that should be split.
+- **Vague Acceptance Criteria:** Story 1.4 (Account deletion) lacks specific ACs for media deletion, S3 cleanup, and audit logging.
 
-### 🟠 Major Issues
+### Recommendations
 
-- **Oversized Story (2.4):** Story 2.4 "Living Map and Memory Filmstrip" combines complex map viewport logic with dynamic filmstrip rendering and map-centering interactions. This is likely too large for a single sprint.
-- **Remediation:** Split into Story 2.4 (Living Map Viewport Logic) and Story 2.5 (Interactive Memory Filmstrip).
-- **Vague Acceptance Criteria (Story 1.4):** "Account deletion permanently removes all my data and media" is a critical requirement but lacks specific technical ACs regarding S3 object deletion vs. DB soft-deletion.
-- **Remediation:** Add specific ACs for media cleanup in S3 and cascading deletion in Postgres.
+1.  **Add `Story 0.0: Project Scaffolding`** to Epic 0. This should explicitly task the initialization of `frontend/cross-platform` (Expo) and `frontend/web-console` (Vite) and `backend` (NestJS).
+2.  **Decompose Story 2.4** into `2.4a Map Viewport Logic` and `2.4b Filmstrip Rendering`.
+3.  **Strengthen ACs** for Account Deletion (Story 1.4) to mention "Soft Delete" vs "Hard Delete" of S3 assets.
 
-### 🟡 Minor Concerns
+## 7. Final Assessment
 
-- **Web-Only Constraints:** Stories 3.2, 7.2, 7.3, and all of Epic 8 are marked as "Web only" or "Admin console." While correct, the transition from PWA to Native Mobile for these features (if ever planned) is not addressed.
-- **Placeholder Logic (Story 2.3):** The "generative visual placeholders" requirement is highly creative but lacks technical constraints in the ACs (e.g., which library or service generates them).
+### Overall Readiness Status: 🟢 READY (With Minor Caveats)
 
-### Best Practices Compliance Summary
+The architecture is now robust and firmly defined with the specific frontend split. The PRD and Epics are well-aligned.
 
-- **User Value Focus:** ✅ Excellent. No technical-only epics.
-- **Epic Independence:** ✅ Good. Backward dependencies are logical.
-- **No Forward Dependencies:** ✅ Verified.
-- **Story Sizing:** ⚠️ Mostly good, with the exception of Story 2.4.
-- **Traceability:** ✅ 100% coverage of PRD FRs.
+### remaining Actions Required
 
-## 7. Summary and Recommendations
-
-### Overall Readiness Status: 🟠 NEEDS WORK
-
-While the core "Locket" experience is well-defined across all documents, the project has significant scope expansion in the Epics and Architecture (Social/Admin features) that is not yet supported by UX specifications or the core PRD.
-
-### Critical Issues Requiring Immediate Action
-
-1. **UX Scope Alignment:** Create UX specifications, wireframes, and design handoffs for Epics 5-8 (Social Posting, Feed, Discovery, and Admin/Moderation).
-2. **Initial Setup Story:** Add a "Story 0" to Epic 1 to cover the technical scaffolding of the NestJS and Expo projects.
-3. **Story Decomposition:** Split Story 2.4 into smaller, independently testable units to ensure sprint success.
-
-### Recommended Next Steps
-
-1. **Update UX Specification:** Extend the [ux-design-specification.md](ux/ui/ux-design-specification.md) to include the social and administrative features.
-2. **Refine Epic 1:** Insert Story 1.0 for project initialization and environment setup.
-3. **Technical Spike:** Conduct a spike on "Generative Visual Placeholders" (Story 2.3) to define the implementation path.
-
-### Final Note
-
-This assessment identified **5 major issues** across **3 categories** (UX Alignment, Epic Quality, and Project Scaffolding). Addressing these before the first sprint will significantly reduce implementation risk and ensure the "Modern Locket" vision is maintained throughout the expanded social features.
+1.  **Project Scaffolding:** Create "Story 0.0" to formally track the `npx create-expo-app` and `npx create-vite` steps.
+2.  **Admin UI:** Verify if wireframes exist for the `web-console`. If not, flag this as a design debt to address in the first sprint.
 
 **Assessor:** Winston (Architect Agent)
-**Date:** 2025-12-19
+**Report Updated:** 2025-12-19

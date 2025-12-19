@@ -122,8 +122,8 @@ nest new life-mapped-backend --strict
 
 | Layer                     | Technology             | Version        | Decision Rationale                                                            |
 | ------------------------- | ---------------------- | -------------- | ----------------------------------------------------------------------------- |
-| **Frontend (Client)**     | Expo + React Native    | 54.x / 0.81.x  | Cross-platform with web export; Voice & camera APIs; file-based routing       |
-| **Frontend (Web)**        | Expo Web Export        | 54.x           | Shared codebase; no separate Next.js needed; Expo handles web compilation     |
+| **Frontend (Client)**     | Expo + React Native    | 54.x / 0.81.x  | Cross-platform for UC1-UC11; Voice & camera APIs; file-based routing          |
+| **Frontend (Console)**    | Vite + React           | ^5.x / ^18.x   | Dedicated admin dashboard (UC12-UC18); lightweight, standard web stack        |
 | **Backend (HTTP)**        | NestJS + Express       | 11.x           | TypeScript-first; modular; Guards for RBAC; DTO validation                    |
 | **Backend (Optional)**    | Fastify adapter        | ~11.x          | Drop-in replacement for Express if performance optimization needed later      |
 | **Database**              | PostgreSQL + PostGIS   | 15.x+          | Spatial queries for map; PostGIS extension for bounding-box & nearby searches |
@@ -139,10 +139,11 @@ nest new life-mapped-backend --strict
 
 ✅ **Frontend:**
 
-- Universal cross-platform codebase (single source of truth for UI logic)
+- Universal cross-platform codebase `frontend/cross-platform` for UC1-UC11
 - File-based routing with native and web support
 - Native OS APIs for camera, audio, geolocation (via Expo SDK)
 - React Native StyleSheet for platform-specific styling
+- **Web Console:** Separate `frontend/web-console` (Vite+React) for Admin/Mod tools
 
 ✅ **Backend:**
 

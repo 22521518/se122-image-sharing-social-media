@@ -34,7 +34,14 @@ This section defines the complete physical project structure, module organizatio
 
 4. **Scalability comments (not premature infrastructure)**
    - Code comments mark future upgrade points (geo-sharding, Redis pub/sub, job queues)
+4. **Scalability comments (not premature infrastructure)**
+   - Code comments mark future upgrade points (geo-sharding, Redis pub/sub, job queues)
    - Signals intent without committing infrastructure complexity
+
+5. **Dual Frontend Architecture**
+   - **frontend/cross-platform**: Consumer app (Mobile + PWA) for UC1-UC11
+   - **frontend/web-console**: Admin & Moderation Dashboard (React + Vite) for UC12-UC18
+   - Separation of concerns: keeps consumer bundle small, allows rich-client admin tools
 
 ---
 
@@ -63,26 +70,26 @@ websocket/ (imported by all for real-time events)
 
 All 18 Vietnamese use cases (UC1-UC18) mapped to modules and API routes:
 
-| UC # | Use Case            | Backend Module    | Frontend Route    | RBAC       |
-| ---- | ------------------- | ----------------- | ----------------- | ---------- |
-| UC1  | Register            | auth/             | (auth)/register   | Public     |
-| UC2  | Login               | auth/             | (auth)/login      | Public     |
-| UC3  | Profile Management  | auth/ + social/   | (app)/profiles/me | User+      |
-| UC4  | Voice Capture       | memories/         | (app)/memories    | User+      |
-| UC5  | Map View            | memories/         | (app)/memories    | User+      |
-| UC6  | EXIF Processing     | memories/         | (app)/memories    | User+      |
-| UC7  | Feed Discovery      | social/feed/      | (app)/social/feed | User+      |
-| UC8  | Search              | social/discovery/ | (app)/social/exp  | User+      |
-| UC9  | Social Interactions | social/posts/     | (app)/social/     | User+      |
-| UC10 | Teleport            | memories/         | (app)/memories    | User+      |
-| UC11 | Time-Locked Posts   | postcards/        | (app)/postcards   | User+      |
-| UC12 | Content Reporting   | moderation/       | (app)/\*/report   | User+      |
-| UC13 | Moderator Review    | moderation/       | admin/moderation  | Moderator+ |
-| UC14 | Content Moderation  | moderation/       | admin/moderation  | Moderator+ |
-| UC15 | User Management     | admin/            | admin/users       | Admin      |
-| UC16 | System Monitoring   | admin/            | admin/monitoring  | Admin      |
-| UC17 | Export Data         | admin/            | (app)/\*/export   | User+      |
-| UC18 | Delete Account      | admin/            | (app)/settings    | User       |
+| UC # | Use Case            | Backend Module    | Frontend App            | RBAC       |
+| ---- | ------------------- | ----------------- | ----------------------- | ---------- |
+| UC1  | Register            | auth/             | cross-platform/(auth)   | Public     |
+| UC2  | Login               | auth/             | cross-platform/(auth)   | Public     |
+| UC3  | Profile Management  | auth/ + social/   | cross-platform/(app)    | User+      |
+| UC4  | Voice Capture       | memories/         | cross-platform/(app)    | User+      |
+| UC5  | Map View            | memories/         | cross-platform/(app)    | User+      |
+| UC6  | EXIF Processing     | memories/         | cross-platform/(app)    | User+      |
+| UC7  | Feed Discovery      | social/feed/      | cross-platform/(app)    | User+      |
+| UC8  | Search              | social/discovery/ | cross-platform/(app)    | User+      |
+| UC9  | Social Interactions | social/posts/     | cross-platform/(app)    | User+      |
+| UC10 | Teleport            | memories/         | cross-platform/(app)    | User+      |
+| UC11 | Time-Locked Posts   | postcards/        | cross-platform/(app)    | User+      |
+| UC12 | Content Reporting   | moderation/       | web-console/reports     | User+      |
+| UC13 | Moderator Review    | moderation/       | web-console/moderation  | Moderator+ |
+| UC14 | Content Moderation  | moderation/       | web-console/moderation  | Moderator+ |
+| UC15 | User Management     | admin/            | web-console/users       | Admin      |
+| UC16 | System Monitoring   | admin/            | web-console/monitoring  | Admin      |
+| UC17 | Export Data         | admin/            | cross-platform/settings | User+      |
+| UC18 | Delete Account      | admin/            | cross-platform/settings | User       |
 
 ---
 
@@ -138,6 +145,7 @@ All 18 Vietnamese use cases (UC1-UC18) mapped to modules and API routes:
 ✅ Scalability comments documented (no premature infrastructure)  
 ✅ All 18 use cases mapped to modules and routes  
 ✅ RBAC rules clearly defined  
+✅ Dual Frontend Strategy (Consumer vs Admin)
 ✅ No circular dependencies
 
 **Next: Validation & Implementation Handoff**
