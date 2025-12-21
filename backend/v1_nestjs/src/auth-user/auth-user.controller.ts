@@ -98,7 +98,7 @@ export class AuthUserController {
 
     const redirectUrl = isMobile
       ? `${baseUrl}?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}` // Mobile needs it in Deep Link
-      : `${baseUrl}?accessToken=${tokens.accessToken}`; // Web uses cookie, keep URL clean
+      : `${baseUrl}#accessToken=${tokens.accessToken}`; // Web uses hash to prevent server log leakage
 
     return res.redirect(redirectUrl);
   }
