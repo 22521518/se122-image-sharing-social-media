@@ -304,6 +304,49 @@ describe('MemoriesService', () => {
       expect(result).toEqual(mockPhotoMemory);
     });
 
+    it('should use EXIF timestamp as createdAt when provided', async () => {
+      const exifTime = '2023:12:25 14:30:00';
+      const expectedDate = new Date('2023-12-25T14:30:00');
+      const dtoWithTime = { ...validPhotoDto, timestamp: exifTime };
+
+      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.memory.create.mockResolvedValue({
+        ...mockPhotoMemory,
+        createdAt: expectedDate
+      });
+
+      await service.createPhotoMemory('user-uuid-123', mockImageFile, dtoWithTime);
+
+      expect(prisma.memory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            createdAt: expectedDate,
+          }),
+        }),
+      );
+    });
+
+    it('should ignore invalid EXIF timestamp', async () => {
+      const invalidTime = 'invalid-date-string';
+      const dtoWithInvalidTime = { ...validPhotoDto, timestamp: invalidTime };
+
+      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.memory.create.mockResolvedValue(mockPhotoMemory);
+
+      await service.createPhotoMemory('user-uuid-123', mockImageFile, dtoWithInvalidTime);
+
+      // Should be called without createdAt (or undefined)
+      expect(prisma.memory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            createdAt: undefined,
+          }),
+        }),
+      );
+    });
+
     it('should throw error if no image file is provided', async () => {
       await expect(
         service.createPhotoMemory('user-uuid-123', undefined as any, validPhotoDto),

@@ -157,6 +157,21 @@ export class MemoriesService {
       privacy = user?.defaultPrivacy || PrivacyLevel.private;
     }
 
+    // Parse timestamp if provided
+    let createdAt: Date | undefined;
+    if (dto.timestamp) {
+      // EXIF format is usually "YYYY:MM:DD HH:MM:SS"
+      // Convert to ISO format "YYYY-MM-DDTHH:MM:SS" for parsing
+      const isoString = dto.timestamp.replace(/^(\d{4}):(\d{2}):(\d{2}) /, '$1-$2-$3T');
+      const parsedDate = new Date(isoString);
+
+      if (!isNaN(parsedDate.getTime())) {
+        createdAt = parsedDate;
+      } else {
+        this.logger.warn(`Invalid EXIF timestamp format: ${dto.timestamp}`);
+      }
+    }
+
     // Create memory record
     const memory = await this.prisma.memory.create({
       data: {
@@ -167,6 +182,7 @@ export class MemoriesService {
         longitude: dto.longitude,
         privacy,
         title: dto.title,
+        createdAt, // Use parsed timestamp or default to now()
       },
     });
 
