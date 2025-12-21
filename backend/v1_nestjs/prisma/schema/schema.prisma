@@ -41,6 +41,7 @@ model User {
 
   @@map("users")
   refreshTokens   RefreshToken[]
+  memories        Memory[]
 }
 
 model RefreshToken {
@@ -54,4 +55,30 @@ model RefreshToken {
 
   @@map("refresh_tokens")
   @@index([userId])
+}
+
+enum MemoryType {
+  voice
+  photo
+  mixed
+}
+
+model Memory {
+  id          String       @id @default(uuid())
+  userId      String       @map("user_id")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        MemoryType   @default(voice)
+  mediaUrl    String       @map("media_url") // Cloudinary URL for audio/image
+  duration    Float?       // Duration in seconds (for voice)
+  latitude    Float        // GPS latitude
+  longitude   Float        // GPS longitude
+  privacy     PrivacyLevel @default(private)
+  title       String?      // Optional title/caption
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  deletedAt   DateTime?    @map("deleted_at")
+
+  @@map("memories")
+  @@index([userId])
+  @@index([latitude, longitude])
 }
