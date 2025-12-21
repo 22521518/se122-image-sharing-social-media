@@ -1,17 +1,24 @@
-import { Controller, Get, Patch, Body, UseGuards, Req, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Patch, Body, UseGuards, Req, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpdateSettingsDto } from './dto/update-profile.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth-core/guards/jwt-auth.guard';
 import { User } from '@prisma/client';
+import { AuditService, AuditAction } from '../audit/audit.service';
+import { MediaService } from '../media/services/media.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly auditService: AuditService,
+    private readonly mediaService: MediaService,
+  ) { }
 
   @Get('profile')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -33,13 +40,28 @@ export class UsersController {
   }
 
   @Patch('profile')
+  @UseInterceptors(FileInterceptor('file')) // Matches 'file' field in form-data
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Update user profile' })
   @ApiResponse({ status: 200, description: 'Profile successfully updated.' })
   async updateProfile(
     @Req() req: Request & { user: User },
     @Body() dto: UpdateProfileDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    const updated = await this.usersService.update(req.user.id, dto);
+    let avatarUrl = dto.avatarUrl;
+
+    if (file) {
+      // Upload new avatar
+      avatarUrl = await this.mediaService.uploadFile(file, 'avatars');
+
+      // Delete old avatar if exists and different
+      if (req.user.avatarUrl) {
+        await this.mediaService.deleteFile(req.user.avatarUrl);
+      }
+    }
+
+    const updated = await this.usersService.update(req.user.id, { ...dto, avatarUrl });
     if (!updated) {
       return null;
     }
@@ -56,6 +78,9 @@ export class UsersController {
   @ApiOperation({ summary: 'Remove user avatar' })
   @ApiResponse({ status: 200, description: 'Avatar successfully removed.' })
   async removeAvatar(@Req() req: Request & { user: User }) {
+    if (req.user.avatarUrl) {
+      await this.mediaService.deleteFile(req.user.avatarUrl);
+    }
     const updated = await this.usersService.update(req.user.id, { avatarUrl: undefined });
     return { message: 'Avatar removed', avatarUrl: updated?.avatarUrl || null };
   }
@@ -95,7 +120,18 @@ export class UsersController {
   @ApiOperation({ summary: 'Delete user account (soft delete)' })
   @ApiResponse({ status: 200, description: 'Account scheduled for deletion.' })
   async deleteAccount(@Req() req: Request & { user: User }) {
+    // 1. Soft delete user
     await this.usersService.softDelete(req.user.id);
+
+    // 2. Revoke all sessions (delete refresh tokens)
+    await this.usersService.deleteRefreshTokensForUser(req.user.id);
+
+    // 3. Audit log
+    this.auditService.log(AuditAction.USER_DELETE, req.user.id, {
+      reason: 'USER_INITIATED_DELETE',
+      email: req.user.email,
+    });
+
     return {
       message: 'Account scheduled for deletion. You have 30 days to reactivate by logging in.',
     };

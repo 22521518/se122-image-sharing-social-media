@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-} from 'typeorm';
+} from 'TypeORM or Prisma (preferable)';
 
 export enum PrivacyLevel {
   PRIVATE = 'private',

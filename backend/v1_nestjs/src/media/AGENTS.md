@@ -8,3 +8,4 @@
 
 ## Architecture
 - `MediaService` should be generic. Method signatures should use generic keys or file objects, not "UserAvatar" or "MemoryPhoto".
+- **Storage Abstraction**: Currently implemented using Cloudinary. If switching providers, ensure method signatures (`uploadFile`, `deleteFile`) remain consistent.

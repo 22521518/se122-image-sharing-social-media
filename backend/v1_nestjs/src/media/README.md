@@ -1,16 +1,25 @@
 # Media Module
 
 ## Role
-This module acts as a **Service Provider** for file handling. It centralizes logical for file uploads, processing, and management, decoupled from business domains (like User or Memory).
+This module acts as a **Service Provider** for file handling. It centralizes logic for file uploads, processing, and management, decoupled from business domains (like User or Memory).
 
 ## Strategy
-1.  **Direct Upload to S3**: We generate Presigned URLs for clients to upload large files directly to AWS S3 (or MinIO), bypassing our backend server for bandwidth efficiency.
-2.  **Sharp.js Pipeline**: For image optimization (resize, format conversion), we use Sharp.js. This may run in an AWS Lambda function (triggered by S3 events) or a background worker, depending on deployment scale. For the MVP, it might be a direct service call or a queue consumer.
+1.  **Cloudinary Integration**: We use Cloudinary for media storage, optimization, and delivery.
+2.  **Streaming Uploads**: Files are streamed directly from memory (Multer buffer) to Cloudinary using `upload_stream`. No local temporary files are stored.
+3.  **Automatic Optimization**: Cloudinary handles resizing, format conversion, and CDN delivery automatically via transformation parameters or default settings.
 
 ## Dependencies
+- **Cloudinary SDK**: `cloudinary` npm package.
+- **Streamifier**: For converting buffers to streams.
 - **CommonModule**: For shared utilities.
-- **AWS SDK / S3 Client**: For interacting with object storage.
-- **Sharp**: For image processing.
+
+## Environment Variables
+Required in `.env`:
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
 
 ## Exports
-- **MediaService**: Provides methods like `getPresignedUrl(key: string)`, `processImage(key: string)`.
+- **MediaService**:
+  - `uploadFile(file: Express.Multer.File, folder: string): Promise<string>` - Returns the secure CDN URL.
+  - `deleteFile(fileUrl: string): Promise<void>` - Deletes the file by extracting public ID from URL.

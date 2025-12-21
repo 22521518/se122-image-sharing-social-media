@@ -24,11 +24,19 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional({
     example: 'https://example.com/avatar.jpg',
-    description: 'URL to the user avatar',
+    description: 'URL to the user avatar (optional, used if not uploading file)',
   })
   @IsOptional()
   @IsUrl()
   avatarUrl?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'binary',
+    description: 'Avatar image file',
+  })
+  @IsOptional()
+  file?: any;
 }
 
 export class UpdateSettingsDto {

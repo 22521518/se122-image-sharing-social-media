@@ -67,5 +67,22 @@ export class UsersService {
       data: { deletedAt: null },
     });
   }
+
+  // Refresh Token Operations
+  async createRefreshToken(data: { userId: string; token: string; expiresAt: Date }): Promise<any> {
+    return this.prisma.refreshToken.create({
+      data: {
+        token: data.token,
+        userId: data.userId,
+        expiresAt: data.expiresAt,
+      },
+    });
+  }
+
+  async deleteRefreshTokensForUser(userId: string): Promise<void> {
+    await this.prisma.refreshToken.deleteMany({
+      where: { userId },
+    });
+  }
 }
 

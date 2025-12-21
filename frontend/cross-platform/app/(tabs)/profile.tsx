@@ -1,0 +1,408 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  Image,
+} from 'react-native';
+import { router } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+interface Profile {
+  id: string;
+  email: string;
+  name: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+}
+
+export default function ProfileScreen() {
+  const { user, accessToken, logout, isLoading: authLoading } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [name, setName] = useState('');
+  const [bio, setBio] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Load profile function with proper error handling
+  const loadProfile = useCallback(async (token: string) => {
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      console.log('Fetching profile from:', `${API_BASE_URL}/api/users/profile`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log('Profile response status:', response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Profile data received:', result);
+        
+        // API returns { success, data, meta }
+        const data = result.data || result;
+        console.log('Actual profile:', data);
+        
+        setProfile(data);
+        setName(data.name || '');
+        setBio(data.bio || '');
+      } else {
+        const errorText = await response.text();
+        console.error('Profile load failed:', response.status, errorText);
+        setError(`Failed to load profile: ${response.status}`);
+      }
+    } catch (err) {
+      console.error('Profile fetch error:', err);
+      setError('Network error: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Effect to load profile when auth is ready
+  useEffect(() => {
+    console.log('Auth state changed:', { 
+      authLoading, 
+      hasToken: !!accessToken,
+      hasProfile: !!profile 
+    });
+
+    // Wait for auth to finish loading
+    if (authLoading) {
+      return;
+    }
+
+    // If no token, stop loading
+    if (!accessToken) {
+      console.log('No access token available');
+      setIsLoading(false);
+      return;
+    }
+
+    // Load profile with valid token
+    loadProfile(accessToken);
+  }, [authLoading, accessToken, loadProfile]);
+
+  const handleSave = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!accessToken) {
+      setError('Not authenticated');
+      return;
+    }
+
+    if (name && (name.length < 2 || name.length > 50)) {
+      setError('Display name must be between 2 and 50 characters');
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ 
+          name: name || undefined, 
+          bio: bio || undefined 
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // API returns { success, data, meta }
+        const data = result.data || result;
+        
+        setProfile(data);
+        setSuccess('Profile updated successfully!');
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        const err = await response.json().catch(() => ({ message: 'Failed to update profile' }));
+        setError(err.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      setError('Failed to update profile: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace('/(auth)/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  // Loading state
+  if (isLoading || authLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  // Not logged in
+  if (!accessToken) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Please log in to view your profile</Text>
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => router.replace('/(auth)/login')}
+        >
+          <Text style={styles.buttonText}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Profile</Text>
+
+        {/* Avatar */}
+        <View style={styles.avatarContainer}>
+          {profile?.avatarUrl ? (
+            <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>
+                {profile?.name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || '?'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Email */}
+        <Text style={styles.email}>{profile?.email || 'No email'}</Text>
+
+        {/* Error/Success Messages */}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {success ? <Text style={styles.success}>{success}</Text> : null}
+
+        {/* Display Name Input */}
+        <Text style={styles.label}>Display Name</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your display name"
+          placeholderTextColor="#888"
+          value={name}
+          onChangeText={setName}
+          maxLength={50}
+          editable={!isSaving}
+        />
+
+        {/* Bio Input */}
+        <Text style={styles.label}>Bio</Text>
+        <TextInput
+          style={[styles.input, styles.bioInput]}
+          placeholder="Tell us about yourself"
+          placeholderTextColor="#888"
+          value={bio}
+          onChangeText={setBio}
+          multiline
+          numberOfLines={4}
+          editable={!isSaving}
+        />
+
+        {/* Save Button */}
+        <TouchableOpacity
+          style={[styles.button, isSaving && styles.buttonDisabled]}
+          onPress={handleSave}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Save Changes</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Log Out</Text>
+        </TouchableOpacity>
+
+        {/* Debug Info (only in development) */}
+        {__DEV__ && (
+          <View style={styles.debugContainer}>
+            <Text style={styles.debugText}>
+              Debug Info:{'\n'}
+              Auth Loading: {String(authLoading)}{'\n'}
+              Has Token: {String(!!accessToken)}{'\n'}
+              Has Profile: {String(!!profile)}{'\n'}
+              Profile Email: {profile?.email || 'N/A'}
+            </Text>
+          </View>
+        )}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0f0f0f',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0f0f0f',
+    padding: 24,
+  },
+  loadingText: {
+    color: '#888',
+    marginTop: 12,
+    fontSize: 14,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  content: {
+    padding: 24,
+    paddingTop: 60,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 24,
+  },
+  avatarContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  email: {
+    fontSize: 16,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  input: {
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#fff',
+    marginBottom: 16,
+  },
+  bioInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  button: {
+    backgroundColor: '#6366f1',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logoutButton: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  logoutButtonText: {
+    color: '#ef4444',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  error: {
+    color: '#ef4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  success: {
+    color: '#22c55e',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  debugContainer: {
+    marginTop: 32,
+    padding: 12,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  debugText: {
+    color: '#888',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+});
