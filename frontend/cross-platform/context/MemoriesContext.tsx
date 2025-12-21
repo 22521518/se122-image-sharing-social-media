@@ -4,16 +4,27 @@ import { useAuth } from './AuthContext';
 import { Platform } from 'react-native';
 
 // Types
+import { Feeling } from '../components/FeelingSelector';
+
+export interface PlaceholderMetadata {
+  gradientId: string;
+  feeling: Feeling;
+  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
+  capturedAt?: string;
+}
+
 export interface Memory {
   id: string;
   userId: string;
-  type: 'voice' | 'photo' | 'mixed';
-  mediaUrl: string;
+  type: 'voice' | 'photo' | 'mixed' | 'text_only';
+  mediaUrl: string | null;
   duration?: number;
   latitude: number;
   longitude: number;
   privacy: 'private' | 'friends' | 'public';
   title?: string;
+  feeling?: Feeling;
+  placeholderMetadata?: PlaceholderMetadata;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,6 +47,13 @@ interface MemoriesContextType {
     latitude: number;
     longitude: number;
     title?: string;
+  }) => Promise<Memory | null>;
+  uploadFeelingPin: (data: {
+    latitude: number;
+    longitude: number;
+    feeling: Feeling;
+    title?: string;
+    voiceUri?: string;
   }) => Promise<Memory | null>;
   fetchMemories: () => Promise<void>;
   deleteMemory: (id: string) => Promise<boolean>;
@@ -213,12 +231,75 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     }
   }, [accessToken]);
 
+  const uploadFeelingPin = useCallback(async (data: {
+    latitude: number;
+    longitude: number;
+    feeling: Feeling;
+    title?: string;
+    voiceUri?: string;
+  }): Promise<Memory | null> => {
+    if (!accessToken) {
+      setError('Not authenticated');
+      return null;
+    }
+
+    setUploadState('uploading');
+    setError(null);
+
+    try {
+      const formData = new FormData();
+
+      // Add optional voice file
+      if (data.voiceUri) {
+        if (Platform.OS === 'web') {
+          const response = await fetch(data.voiceUri);
+          const blob = await response.blob();
+          formData.append('file', blob, 'recording.m4a');
+        } else {
+          formData.append('file', {
+            uri: data.voiceUri,
+            type: 'audio/m4a',
+            name: 'recording.m4a',
+          } as any);
+        }
+      }
+
+      formData.append('latitude', data.latitude.toString());
+      formData.append('longitude', data.longitude.toString());
+      formData.append('feeling', data.feeling);
+      if (data.title) {
+        formData.append('title', data.title);
+      }
+
+      const memory = await ApiService.uploadFormData<Memory>(
+        '/api/memories/feeling-pin',
+        formData,
+        accessToken
+      );
+
+      // Add to local state
+      setMemories(prev => [memory, ...prev]);
+      setUploadState('success');
+
+      // Reset to idle after a short delay
+      setTimeout(() => setUploadState('idle'), 2000);
+
+      return memory;
+    } catch (err: any) {
+      console.error('Failed to upload feeling pin:', err);
+      setError(err.message || 'Failed to create memory');
+      setUploadState('error');
+      return null;
+    }
+  }, [accessToken]);
+
   const value: MemoriesContextType = {
     memories,
     uploadState,
     error,
     uploadVoiceMemory,
     uploadPhotoMemory,
+    uploadFeelingPin,
     fetchMemories,
     deleteMemory,
     setUploadState,

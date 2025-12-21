@@ -143,12 +143,12 @@ describe('MemoriesService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw error if duration exceeds 5.5 seconds', async () => {
-      const invalidDto = { ...validDto, duration: 6 };
+    it('should throw error if duration exceeds 6 seconds', async () => {
+      const invalidDto = { ...validDto, duration: 7 };
 
       await expect(
         service.createVoiceMemory('user-uuid-123', mockFile, invalidDto),
-      ).rejects.toThrow('Audio duration must be between 1 and 5.5 seconds');
+      ).rejects.toThrow('Audio duration must be between 1 and 6 seconds');
     });
 
     it('should throw error if duration is less than 1 second', async () => {
@@ -156,7 +156,7 @@ describe('MemoriesService', () => {
 
       await expect(
         service.createVoiceMemory('user-uuid-123', mockFile, invalidDto),
-      ).rejects.toThrow('Audio duration must be between 1 and 5.5 seconds');
+      ).rejects.toThrow('Audio duration must be between 1 and 6 seconds');
     });
 
     it('should use user default privacy when not specified', async () => {

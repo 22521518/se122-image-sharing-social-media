@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Alert, Image, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useMemories } from '../context/MemoriesContext';
@@ -21,8 +21,7 @@ interface PhotoPickerProps {
 
 export function PhotoPicker({ onPhotoSelected, onError }: PhotoPickerProps) {
   const { uploadState } = useMemories();
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
-  const [photoExif, setPhotoExif] = useState<ExifData | null>(null);
+
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
@@ -126,8 +125,7 @@ export function PhotoPicker({ onPhotoSelected, onError }: PhotoPickerProps) {
       const exifData = extractExifData(asset.exif);
       const hasLocation = !!(exifData?.latitude && exifData?.longitude);
 
-      setSelectedPhoto(asset.uri);
-      setPhotoExif(exifData);
+
 
       onPhotoSelected({
         uri: asset.uri,
@@ -148,46 +146,21 @@ export function PhotoPicker({ onPhotoSelected, onError }: PhotoPickerProps) {
     }
   }, [uploadState, hasPermission, permissionError, requestPermission, extractExifData, onPhotoSelected, onError]);
 
-  const clearSelection = useCallback(() => {
-    setSelectedPhoto(null);
-    setPhotoExif(null);
-  }, []);
+
 
   return (
     <View style={styles.container}>
       {/* Photo Preview */}
-      {selectedPhoto ? (
-        <View style={styles.previewContainer}>
-          <Image source={{ uri: selectedPhoto }} style={styles.preview} />
-          <TouchableOpacity style={styles.clearButton} onPress={clearSelection}>
-            <Ionicons name="close-circle" size={28} color="#FF3B30" />
-          </TouchableOpacity>
-          <View style={styles.exifBadge}>
-            {photoExif?.latitude ? (
-              <View style={styles.locationBadge}>
-                <Ionicons name="location" size={14} color="#34C759" />
-                <Text style={styles.badgeText}>Location found</Text>
-              </View>
-            ) : (
-              <View style={[styles.locationBadge, styles.noLocationBadge]}>
-                <Ionicons name="location-outline" size={14} color="#FF9500" />
-                <Text style={[styles.badgeText, { color: '#FF9500' }]}>No location</Text>
-              </View>
-            )}
-          </View>
+      <TouchableOpacity
+        style={styles.pickButton}
+        onPress={pickImage}
+        activeOpacity={0.8}
+      >
+        <View style={styles.pickButtonInner}>
+          <Ionicons name="image-outline" size={32} color="#FFFFFF" />
+          <Text style={styles.pickButtonText}>Choose Photo</Text>
         </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.pickButton}
-          onPress={pickImage}
-          activeOpacity={0.8}
-        >
-          <View style={styles.pickButtonInner}>
-            <Ionicons name="image-outline" size={32} color="#FFFFFF" />
-            <Text style={styles.pickButtonText}>Choose Photo</Text>
-          </View>
-        </TouchableOpacity>
-      )}
+      </TouchableOpacity>
 
       {/* Permission error */}
       {permissionError && (
@@ -198,7 +171,7 @@ export function PhotoPicker({ onPhotoSelected, onError }: PhotoPickerProps) {
       )}
 
       {/* Instructions */}
-      {!selectedPhoto && !permissionError && (
+      {!permissionError && (
         <Text style={styles.instructionText}>
           Photos with EXIF GPS data will be auto-placed on the map
         </Text>
@@ -235,47 +208,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '500',
   },
-  previewContainer: {
-    position: 'relative',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  preview: {
-    width: 200,
-    height: 200,
-    borderRadius: 12,
-  },
-  clearButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14,
-  },
-  exifBadge: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
-  },
-  locationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  noLocationBadge: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-  },
-  badgeText: {
-    fontSize: 12,
-    color: '#34C759',
-    marginLeft: 4,
-    fontWeight: '500',
-  },
+
   errorContainer: {
     marginTop: 12,
     padding: 12,

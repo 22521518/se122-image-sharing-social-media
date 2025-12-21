@@ -15,7 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { MemoriesService } from '../services/memories.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto } from '../dto';
 import {
   ApiTags,
   ApiOperation,
@@ -157,6 +157,70 @@ export class MemoriesController {
     @Body() dto: CreatePhotoMemoryDto,
   ) {
     return this.memoriesService.createPhotoMemory(req.user.id, file, dto);
+  }
+
+  @Post('feeling-pin')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create feeling-first pin',
+    description: 'Create a memory pin with emotional tagging. No photo required - clients render beautiful abstract placeholders based on feeling and time of day. Optionally attach a voice note.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Feeling pin with emotional tag and optional voice file',
+    schema: {
+      type: 'object',
+      required: ['latitude', 'longitude', 'feeling'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional audio file (AAC, MP3, OGG, WebM, WAV) - max 5MB',
+        },
+        latitude: {
+          type: 'number',
+          example: 10.762622,
+          description: 'GPS latitude (-90 to 90)',
+        },
+        longitude: {
+          type: 'number',
+          example: 106.660172,
+          description: 'GPS longitude (-180 to 180)',
+        },
+        feeling: {
+          type: 'string',
+          enum: ['JOY', 'MELANCHOLY', 'ENERGETIC', 'CALM', 'INSPIRED'],
+          example: 'JOY',
+          description: 'Emotional state when capturing this moment',
+        },
+        title: {
+          type: 'string',
+          example: 'A peaceful moment by the river',
+          description: 'Optional title/caption',
+        },
+        privacy: {
+          type: 'string',
+          enum: ['private', 'friends', 'public'],
+          example: 'private',
+          description: 'Privacy level',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Feeling pin created with placeholderMetadata for client rendering' })
+  @ApiResponse({ status: 400, description: 'Invalid feeling or location' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB max for optional audio
+    },
+  }))
+  async createFeelingPin(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() dto: CreateFeelingPinDto,
+  ) {
+    return this.memoriesService.createFeelingPin(req.user.id, dto, file);
   }
 
   @Get()

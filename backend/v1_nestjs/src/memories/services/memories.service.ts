@@ -1,8 +1,50 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService } from '../../media/services/media.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto } from '../dto';
-import { MemoryType, PrivacyLevel } from '@prisma/client';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto } from '../dto';
+import { MemoryType, PrivacyLevel, Feeling } from '@prisma/client';
+
+// Gradient ID mappings for feeling + time of day combinations
+const GRADIENT_MAPPINGS: Record<Feeling, Record<'morning' | 'afternoon' | 'evening' | 'night', string>> = {
+  JOY: {
+    morning: 'SUNRISE_GOLD',
+    afternoon: 'SUNNY_YELLOW',
+    evening: 'WARM_SUNSET',
+    night: 'STARLIGHT_GOLD',
+  },
+  MELANCHOLY: {
+    morning: 'MISTY_BLUE',
+    afternoon: 'RAINY_GRAY',
+    evening: 'TWILIGHT_PURPLE',
+    night: 'MIDNIGHT_BLUE',
+  },
+  ENERGETIC: {
+    morning: 'DAWN_ORANGE',
+    afternoon: 'VIBRANT_RED',
+    evening: 'ELECTRIC_PINK',
+    night: 'NEON_PURPLE',
+  },
+  CALM: {
+    morning: 'SOFT_MINT',
+    afternoon: 'OCEAN_BLUE',
+    evening: 'LAVENDER_SKY',
+    night: 'DEEP_TEAL',
+  },
+  INSPIRED: {
+    morning: 'AURORA_GREEN',
+    afternoon: 'COSMIC_PURPLE',
+    evening: 'SUNSET_ORANGE',
+    night: 'GALAXY_VIOLET',
+  },
+};
+
+function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
 
 @Injectable()
 export class MemoriesService {
@@ -242,6 +284,73 @@ export class MemoriesService {
     this.logger.log(`Deleted memory ${id} for user ${userId}`);
 
     return { success: true };
+  }
+
+  /**
+   * Create a feeling-first pin (text_only or voice_only with no photo).
+   * Generates placeholderMetadata for client-side rendering of beautiful abstract visuals.
+   * NO server-side image generation - purely metadata-driven approach.
+   */
+  async createFeelingPin(
+    userId: string,
+    dto: CreateFeelingPinDto,
+    file?: Express.Multer.File,
+  ) {
+    // Determine memory type based on file presence
+    let type: MemoryType = MemoryType.text_only;
+    let mediaUrl: string | null = null;
+    let duration: number | undefined;
+
+    // If audio file is provided, upload it
+    if (file) {
+      this.logger.debug(`Received file with mimetype: ${file.mimetype}`);
+      if (this.isValidAudioType(file.mimetype)) {
+        type = MemoryType.voice;
+        mediaUrl = await this.mediaService.uploadFile(file, 'memories/voice');
+        // Duration could be extracted from file or passed separately in future
+      }
+    }
+
+    // Get user's default privacy setting if not specified
+    let privacy = dto.privacy;
+    if (!privacy) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { defaultPrivacy: true },
+      });
+      privacy = user?.defaultPrivacy || PrivacyLevel.private;
+    }
+
+    // Generate placeholder metadata for client-side rendering
+    const timeOfDay = getTimeOfDay();
+    const gradientId = GRADIENT_MAPPINGS[dto.feeling][timeOfDay];
+
+    const placeholderMetadata = {
+      gradientId,
+      feeling: dto.feeling,
+      timeOfDay,
+      capturedAt: new Date().toISOString(),
+    };
+
+    // Create memory record
+    const memory = await this.prisma.memory.create({
+      data: {
+        userId,
+        type,
+        mediaUrl,
+        duration,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        privacy,
+        title: dto.title,
+        feeling: dto.feeling,
+        placeholderMetadata,
+      },
+    });
+
+    this.logger.log(`Created feeling pin ${memory.id} (${dto.feeling}) for user ${userId}`);
+
+    return memory;
   }
 }
 

@@ -61,22 +61,34 @@ enum MemoryType {
   voice
   photo
   mixed
+  text_only  // Pin with no media, just feeling/caption
+}
+
+// Feeling enum for emotional tagging of memories
+enum Feeling {
+  JOY
+  MELANCHOLY
+  ENERGETIC
+  CALM
+  INSPIRED
 }
 
 model Memory {
-  id          String       @id @default(uuid())
-  userId      String       @map("user_id")
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        MemoryType   @default(voice)
-  mediaUrl    String       @map("media_url") // Cloudinary URL for audio/image
-  duration    Float?       // Duration in seconds (for voice)
-  latitude    Float        // GPS latitude
-  longitude   Float        // GPS longitude
-  privacy     PrivacyLevel @default(private)
-  title       String?      // Optional title/caption
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  deletedAt   DateTime?    @map("deleted_at")
+  id                  String       @id @default(uuid())
+  userId              String       @map("user_id")
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                MemoryType   @default(voice)
+  mediaUrl            String?      @map("media_url") // Cloudinary URL for audio/image (optional for text_only)
+  duration            Float?       // Duration in seconds (for voice)
+  latitude            Float        // GPS latitude
+  longitude           Float        // GPS longitude
+  privacy             PrivacyLevel @default(private)
+  title               String?      // Optional title/caption
+  feeling             Feeling?     // User's emotional state when capturing
+  placeholderMetadata Json?        @map("placeholder_metadata") // { gradientId, feeling, timeOfDay } for client rendering
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+  deletedAt           DateTime?    @map("deleted_at")
 
   @@map("memories")
   @@index([userId])

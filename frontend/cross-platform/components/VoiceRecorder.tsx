@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, StyleSheet, Animated, TouchableOpacity, Text, Alert, Platform } from 'react-native';
+import { View, StyleSheet, Animated, TouchableOpacity, Text, Alert, Platform, ActivityIndicator } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ const MAX_DURATION_MS = 5000; // 5 seconds max
 export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderProps) {
   const { uploadState } = useMemories();
   const [isRecording, setIsRecording] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [hasPermissions, setHasPermissions] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
@@ -122,12 +123,14 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
 
     // Set mutex lock
     isStartingRef.current = true;
+    setIsInitializing(true);
 
     try {
       // Get location first
       const location = await getCurrentLocation();
       if (!location) {
         onError?.('Could not get your location. Please ensure location services are enabled.');
+        setIsInitializing(false);
         return;
       }
       locationRef.current = location;
@@ -179,6 +182,7 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
       // START
       await recording.startAsync();
       recordingRef.current = recording;
+      setIsInitializing(false);
       setIsRecording(true);
       setRecordingDuration(0);
 
@@ -204,8 +208,10 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
         } catch (e) { /* ignore */ }
         recordingRef.current = null;
       }
+      setIsInitializing(false);
       setIsRecording(false);
     } finally {
+      setIsInitializing(false); 
       isStartingRef.current = false; // Release mutex
     }
   };
@@ -343,19 +349,25 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
         onPressOut={handlePressOut}
         activeOpacity={0.8}
         style={styles.buttonWrapper}
+        disabled={isInitializing}
       >
         <Animated.View
           style={[
             styles.recordButton,
             isRecording && styles.recordingButton,
+            isInitializing && styles.initializingButton,
             { transform: [{ scale: pulseAnim }] },
           ]}
         >
-          <Ionicons
-            name={isRecording ? 'mic' : 'mic-outline'}
-            size={32}
-            color="#FFFFFF"
-          />
+          {isInitializing ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Ionicons
+              name={isRecording ? 'mic' : 'mic-outline'}
+              size={32}
+              color="#FFFFFF"
+            />
+          )}
         </Animated.View>
       </TouchableOpacity>
 
@@ -400,6 +412,9 @@ const styles = StyleSheet.create({
   },
   recordingButton: {
     backgroundColor: '#FF3B30',
+  },
+  initializingButton: {
+    backgroundColor: '#FF8888',
   },
   timerContainer: {
     flexDirection: 'row',
