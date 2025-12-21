@@ -3,6 +3,7 @@ import { View, StyleSheet, Animated, TouchableOpacity, Text, Alert, Platform } f
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import { useMemories } from '../context/MemoriesContext';
 
 interface VoiceRecorderProps {
   onRecordingComplete: (data: {
@@ -17,6 +18,7 @@ interface VoiceRecorderProps {
 const MAX_DURATION_MS = 5000; // 5 seconds max
 
 export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderProps) {
+  const { uploadState } = useMemories();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [hasPermissions, setHasPermissions] = useState(false);
@@ -26,6 +28,8 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const isStartingRef = useRef(false); // Mutex to prevent double-tap
+  const isStoppingRef = useRef(false); // Mutex to prevent double-stop
 
   // Request permissions on mount
   useEffect(() => {
@@ -103,18 +107,21 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
       return;
     }
 
-    // Prevent multiple parallel starts
-    if (isRecording || recordingRef.current) {
-      // If we think we are recording, try to cleanup first
-      try {
-        if (recordingRef.current) {
-          await recordingRef.current.stopAndUnloadAsync();
-        }
-      } catch (e) {
-        console.warn('Cleanup error during start:', e);
-      }
-      recordingRef.current = null;
+    // Prevent multiple parallel starts (double-tap protection)
+    if (isRecording || recordingRef.current || isStartingRef.current) {
+      console.log('Already recording or starting, ignoring double-tap');
+      return;
     }
+
+    // Prevent recording while uploading
+    if (uploadState === 'uploading') {
+      console.log('Upload in progress, cannot start new recording');
+      onError?.('Please wait for the current upload to finish');
+      return;
+    }
+
+    // Set mutex lock
+    isStartingRef.current = true;
 
     try {
       // Get location first
@@ -134,6 +141,14 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
       // Start recording with optimized settings for voice
       const recording = new Audio.Recording();
       
+      // Set up native-level status monitoring for auto-stop
+      recording.setOnRecordingStatusUpdate((status) => {
+        if (status.isRecording && status.durationMillis && status.durationMillis >= MAX_DURATION_MS) {
+          // Native-level auto-stop as backup to JS timer
+          stopRecording();
+        }
+      });
+
       // PREPARE
       await recording.prepareToRecordAsync({
         android: {
@@ -190,16 +205,29 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
         recordingRef.current = null;
       }
       setIsRecording(false);
+    } finally {
+      isStartingRef.current = false; // Release mutex
     }
   };
 
   const stopRecording = async () => {
+    // Prevent double-stop
+    if (isStoppingRef.current) {
+      console.log('Already stopping, ignoring');
+      return;
+    }
+    
+    // Capture the current recording instance to avoid race conditions
+    const recording = recordingRef.current;
+    
     // If we don't have a recording ref, we can't stop anything.
-    // However, we should ensure UI is reset.
-    if (!recordingRef.current) {
+    if (!recording) {
       setIsRecording(false);
       return;
     }
+
+    // Set mutex lock
+    isStoppingRef.current = true;
 
     try {
       // Clear timer
@@ -209,23 +237,23 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
       }
 
     let durationMillis = 0;
-    // try { removed redundant try
+    
       // Get status to check recording state and duration
       try {
-        const status = await recordingRef.current.getStatusAsync();
+        const status = await recording.getStatusAsync();
         durationMillis = status.durationMillis || 0;
         
         // Stop and unload if currently recording
         if (status.isRecording) {
-          await recordingRef.current.stopAndUnloadAsync();
+          await recording.stopAndUnloadAsync();
         } else {
           // If not recording but loaded, ensure it's unloaded
-          await recordingRef.current.stopAndUnloadAsync();
+          await recording.stopAndUnloadAsync();
         }
       } catch (e) {
         // Fallback: If getStatus fails, try to stop/unload blindly to ensure cleanup
         console.warn('Error getting status or stopping:', e);
-        try { await recordingRef.current.stopAndUnloadAsync(); } catch (ign) {}
+        try { await recording.stopAndUnloadAsync(); } catch (ign) {}
       }
 
       // Reset audio mode
@@ -234,7 +262,7 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
       });
 
       // Get URI
-      const uri = recordingRef.current.getURI();
+      const uri = recording.getURI();
       
       setIsRecording(false);
 
@@ -251,7 +279,10 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
         onError?.(`Recording too short (${durationSeconds.toFixed(1)}s). Hold for at least 1 second.`);
       }
 
-      recordingRef.current = null;
+      // Only nullify if it's still the same recording (though unlikely to change if we handle start correctly)
+      if (recordingRef.current === recording) {
+        recordingRef.current = null;
+      }
       locationRef.current = null;
       setRecordingDuration(0);
 
@@ -259,8 +290,12 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
       console.error('Recording stop error:', error);
       setIsRecording(false);
       // Ensure cleanup
-      recordingRef.current = null;
+      if (recordingRef.current === recording) {
+        recordingRef.current = null;
+      }
       onError?.('Failed to save recording');
+    } finally {
+      isStoppingRef.current = false; // Release mutex
     }
   };
 

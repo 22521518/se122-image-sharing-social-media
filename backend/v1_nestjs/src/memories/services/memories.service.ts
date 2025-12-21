@@ -28,7 +28,7 @@ export class MemoriesService {
 
   // Duration limits in seconds
   private readonly MIN_DURATION = 1;
-  private readonly MAX_DURATION = 5;
+  private readonly MAX_DURATION = 5.5; // 0.5s buffer for JS event loop jitter
 
   constructor(
     private readonly prisma: PrismaService,
