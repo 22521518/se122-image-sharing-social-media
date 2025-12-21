@@ -9,6 +9,7 @@ import { AuthAdminModule } from './auth-admin/auth-admin.module';
 import { UsersModule } from './users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { WebsocketModule } from './websocket/websocket.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     AuthUserModule,  // End-user auth (cross-platform: mobile + web)
     AuthAdminModule, // Admin/Mod auth (web-console only)
     SchedulerModule,
+    WebsocketModule,
   ],
   controllers: [AppController],
   providers: [AppService],

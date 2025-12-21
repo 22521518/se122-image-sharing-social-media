@@ -19,13 +19,22 @@ export class AuthUserController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User successfully registered.' })
   @ApiBody({ type: RegisterDto })
-  async register(@Body() dto: RegisterDto) {
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const tokens = await this.authService.register(dto.email, dto.password);
-    // Return both tokens - client stores appropriately based on platform
-    // Mobile: AsyncStorage, Web: localStorage or memory
+
+    // Set Refresh Token as HttpOnly Cookie
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     return {
       accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
     };
   }
 
@@ -34,11 +43,22 @@ export class AuthUserController {
   @ApiOperation({ summary: 'Login user' })
   @ApiResponse({ status: 200, description: 'User successfully logged in.' })
   @ApiBody({ type: LoginDto })
-  async login(@Body() dto: LoginDto) {
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const tokens = await this.authService.login(dto.email, dto.password);
+
+    // Set Refresh Token as HttpOnly Cookie
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     return {
       accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
     };
   }
 
@@ -68,7 +88,18 @@ export class AuthUserController {
       ? process.env.MOBILE_DEEP_LINK_URL || 'lifemapped://auth/callback'
       : process.env.WEB_FRONTEND_URL || 'http://localhost:8081/auth/callback';
 
-    const redirectUrl = `${baseUrl}?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`;
+    // Always set HttpOnly cookie for Web (and generic support)
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    const redirectUrl = isMobile
+      ? `${baseUrl}?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}` // Mobile needs it in Deep Link
+      : `${baseUrl}?accessToken=${tokens.accessToken}`; // Web uses cookie, keep URL clean
+
     return res.redirect(redirectUrl);
   }
 

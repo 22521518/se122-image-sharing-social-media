@@ -82,6 +82,18 @@ export class AuthUserService {
   }
 
   async loginWithGoogle(user: User): Promise<AuthTokens> {
+    // Reactivation logic for soft-deleted accounts
+    if (user.deletedAt) {
+      const daysSinceDeleted = Math.floor(
+        (Date.now() - new Date(user.deletedAt).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysSinceDeleted <= 30) {
+        await this.authCore.restoreUser(user.id);
+      } else {
+        throw new UnauthorizedException('Account has been permanently deleted');
+      }
+    }
+
     const tokens = this.authCore.generateTokens({ sub: user.id, email: user.email });
     await this.authCore.storeRefreshToken(user.id, tokens.refreshToken);
     return tokens;

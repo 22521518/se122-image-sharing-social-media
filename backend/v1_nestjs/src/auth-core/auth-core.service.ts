@@ -85,7 +85,11 @@ export class AuthCoreService {
    * Validate user by token payload
    */
   async validateUser(payload: TokenPayload) {
-    return this.usersService.findById(payload.sub);
+    const user = await this.usersService.findById(payload.sub);
+    if (user && user.deletedAt) {
+      return null; // Reject soft-deleted users (JWT strategy will throw Unauthorized)
+    }
+    return user;
   }
 
   /**

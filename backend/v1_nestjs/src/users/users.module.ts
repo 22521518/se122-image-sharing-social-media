@@ -5,12 +5,14 @@ import { UsersController } from './users.controller';
 import { AuthCoreModule } from '../auth-core/auth-core.module';
 
 import { AuditModule } from '../audit/audit.module';
+import { MediaModule } from '../media/media.module';
 
 @Module({
   imports: [
     PrismaModule,
     forwardRef(() => AuthCoreModule),
     AuditModule,
+    MediaModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],
