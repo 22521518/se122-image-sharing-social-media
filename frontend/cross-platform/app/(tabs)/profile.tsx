@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -24,7 +23,7 @@ interface Profile {
 }
 
 export default function ProfileScreen() {
-  const { user, accessToken, logout } = useAuth();
+  const { user, accessToken, logout, isLoading: authLoading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -33,33 +32,78 @@ export default function ProfileScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  // Load profile function with proper error handling
+  const loadProfile = useCallback(async (token: string) => {
+    setIsLoading(true);
+    setError('');
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/users/profile`, {
+      console.log('Fetching profile from:', `${API_BASE_URL}/api/users/profile`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
       });
+
+      console.log('Profile response status:', response.status);
+
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        console.log('Profile data received:', result);
+        
+        // API returns { success, data, meta }
+        const data = result.data || result;
+        console.log('Actual profile:', data);
+        
         setProfile(data);
         setName(data.name || '');
         setBio(data.bio || '');
+      } else {
+        const errorText = await response.text();
+        console.error('Profile load failed:', response.status, errorText);
+        setError(`Failed to load profile: ${response.status}`);
       }
     } catch (err) {
-      setError('Failed to load profile');
+      console.error('Profile fetch error:', err);
+      setError('Network error: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Effect to load profile when auth is ready
+  useEffect(() => {
+    console.log('Auth state changed:', { 
+      authLoading, 
+      hasToken: !!accessToken,
+      hasProfile: !!profile 
+    });
+
+    // Wait for auth to finish loading
+    if (authLoading) {
+      return;
+    }
+
+    // If no token, stop loading
+    if (!accessToken) {
+      console.log('No access token available');
+      setIsLoading(false);
+      return;
+    }
+
+    // Load profile with valid token
+    loadProfile(accessToken);
+  }, [authLoading, accessToken, loadProfile]);
 
   const handleSave = async () => {
     setError('');
     setSuccess('');
+
+    if (!accessToken) {
+      setError('Not authenticated');
+      return;
+    }
 
     if (name && (name.length < 2 || name.length > 50)) {
       setError('Display name must be between 2 and 50 characters');
@@ -67,40 +111,73 @@ export default function ProfileScreen() {
     }
 
     setIsSaving(true);
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/users/profile`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ name: name || undefined, bio: bio || undefined }),
+        body: JSON.stringify({ 
+          name: name || undefined, 
+          bio: bio || undefined 
+        }),
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        
+        // API returns { success, data, meta }
+        const data = result.data || result;
+        
         setProfile(data);
         setSuccess('Profile updated successfully!');
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(''), 3000);
       } else {
-        const err = await response.json();
+        const err = await response.json().catch(() => ({ message: 'Failed to update profile' }));
         setError(err.message || 'Failed to update profile');
       }
     } catch (err) {
-      setError('Failed to update profile');
+      console.error('Save error:', err);
+      setError('Failed to update profile: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)/login');
+    try {
+      await logout();
+      router.replace('/(auth)/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
   };
 
-  if (isLoading) {
+  // Loading state
+  if (isLoading || authLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  // Not logged in
+  if (!accessToken) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Please log in to view your profile</Text>
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => router.replace('/(auth)/login')}
+        >
+          <Text style={styles.buttonText}>Go to Login</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -110,6 +187,7 @@ export default function ProfileScreen() {
       <View style={styles.content}>
         <Text style={styles.title}>Profile</Text>
 
+        {/* Avatar */}
         <View style={styles.avatarContainer}>
           {profile?.avatarUrl ? (
             <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
@@ -122,11 +200,14 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <Text style={styles.email}>{profile?.email}</Text>
+        {/* Email */}
+        <Text style={styles.email}>{profile?.email || 'No email'}</Text>
 
+        {/* Error/Success Messages */}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {success ? <Text style={styles.success}>{success}</Text> : null}
 
+        {/* Display Name Input */}
         <Text style={styles.label}>Display Name</Text>
         <TextInput
           style={styles.input}
@@ -135,8 +216,10 @@ export default function ProfileScreen() {
           value={name}
           onChangeText={setName}
           maxLength={50}
+          editable={!isSaving}
         />
 
+        {/* Bio Input */}
         <Text style={styles.label}>Bio</Text>
         <TextInput
           style={[styles.input, styles.bioInput]}
@@ -146,8 +229,10 @@ export default function ProfileScreen() {
           onChangeText={setBio}
           multiline
           numberOfLines={4}
+          editable={!isSaving}
         />
 
+        {/* Save Button */}
         <TouchableOpacity
           style={[styles.button, isSaving && styles.buttonDisabled]}
           onPress={handleSave}
@@ -160,9 +245,23 @@ export default function ProfileScreen() {
           )}
         </TouchableOpacity>
 
+        {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Log Out</Text>
         </TouchableOpacity>
+
+        {/* Debug Info (only in development) */}
+        {__DEV__ && (
+          <View style={styles.debugContainer}>
+            <Text style={styles.debugText}>
+              Debug Info:{'\n'}
+              Auth Loading: {String(authLoading)}{'\n'}
+              Has Token: {String(!!accessToken)}{'\n'}
+              Has Profile: {String(!!profile)}{'\n'}
+              Profile Email: {profile?.email || 'N/A'}
+            </Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -178,6 +277,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0f0f0f',
+    padding: 24,
+  },
+  loadingText: {
+    color: '#888',
+    marginTop: 12,
+    fontSize: 14,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
   },
   content: {
     padding: 24,
@@ -221,6 +332,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     marginBottom: 8,
+    marginTop: 8,
   },
   input: {
     backgroundColor: '#1a1a1a',
@@ -279,5 +391,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
     textAlign: 'center',
+  },
+  debugContainer: {
+    marginTop: 32,
+    padding: 12,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  debugText: {
+    color: '#888',
+    fontSize: 12,
+    fontFamily: 'monospace',
   },
 });

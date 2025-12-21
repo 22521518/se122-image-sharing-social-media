@@ -16,6 +16,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const data = await ApiService.post<LoginRequestDto, AuthTokensDto>(
-      '/auth/login',
+      '/api/auth/login',
       { email, password }
     );
 
@@ -75,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string) => {
     const data = await ApiService.post<RegisterRequestDto, AuthTokensDto>(
-      '/auth/register',
+      '/api/auth/register',
       { email, password }
     );
 
@@ -95,8 +96,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  // Reload auth state from storage (used after OAuth callback)
+  const refreshAuth = async () => {
+    setIsLoading(true); // Set loading to true before reloading
+    await loadStoredAuth();
+  };
+
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, accessToken, isLoading, login, register, logout, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );

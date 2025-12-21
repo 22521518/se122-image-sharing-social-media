@@ -20,7 +20,7 @@ interface Settings {
 }
 
 export default function SettingsScreen() {
-  const { accessToken, logout } = useAuth();
+  const { accessToken, logout, isLoading: authLoading } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -29,12 +29,17 @@ export default function SettingsScreen() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+    // Wait for auth to finish loading and have a valid token
+    if (!authLoading && accessToken) {
+      loadSettings();
+    } else if (!authLoading && !accessToken) {
+      setIsLoading(false);
+    }
+  }, [authLoading, accessToken]);
 
   const loadSettings = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/settings`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/settings`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -56,7 +61,7 @@ export default function SettingsScreen() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/users/settings`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/settings`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +98,7 @@ export default function SettingsScreen() {
   const deleteAccount = async () => {
     setIsDeleting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/users/account`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/account`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${accessToken}`,

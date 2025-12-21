@@ -47,7 +47,8 @@ export default function LoginScreen() {
     try {
       // For mobile, pass state=mobile to trigger deep link redirect
       const state = Platform.OS === 'web' ? 'web' : 'mobile';
-      const googleAuthUrl = `${API_BASE_URL}/auth/login/google?state=${state}`;
+      // Backend route is /api/auth/google (not /auth/login/google)
+      const googleAuthUrl = `${API_BASE_URL}/api/auth/google?state=${state}`;
       
       if (Platform.OS === 'web') {
         // Web: redirect in same window

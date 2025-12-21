@@ -9,7 +9,7 @@
 
 import { ApiResponse, ApiErrorDto, unwrapApiResponse } from '../types/api.types';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 export class ApiService {
   private static getHeaders(token?: string | null): HeadersInit {
