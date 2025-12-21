@@ -57,4 +57,17 @@ export class CreateFeelingPinDto {
   @IsOptional()
   @IsEnum(PrivacyLevel)
   privacy?: PrivacyLevel;
+
+  @ApiPropertyOptional({
+    description: 'Duration in seconds (for optional voice attachment, 1-6s)',
+    example: 3.5,
+    minimum: 1,
+    maximum: 6,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(6)
+  duration?: number;
 }

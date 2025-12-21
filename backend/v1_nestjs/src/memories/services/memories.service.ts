@@ -81,7 +81,7 @@ export class MemoriesService {
 
   // Duration limits in seconds (for voice)
   private readonly MIN_DURATION = 1;
-  private readonly MAX_DURATION = 6; // 0.5s buffer for JS event loop jitter
+  private readonly MAX_DURATION = 6.5; // 0.5s buffer for JS event loop jitter
 
   constructor(
     private readonly prisma: PrismaService,
@@ -307,7 +307,8 @@ export class MemoriesService {
       if (this.isValidAudioType(file.mimetype)) {
         type = MemoryType.voice;
         mediaUrl = await this.mediaService.uploadFile(file, 'memories/voice');
-        // Duration could be extracted from file or passed separately in future
+        // Duration validation (if duration is provided in future)
+        // Note: Duration extraction from file metadata could be added here
       }
     }
 

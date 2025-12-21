@@ -212,7 +212,7 @@ export class MemoriesController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @UseInterceptors(FileInterceptor('file', {
     limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB max for optional audio
+      fileSize: 10 * 1024 * 1024, // 10MB max for optional audio
     },
   }))
   async createFeelingPin(

@@ -76,7 +76,8 @@ export function MemoryCard({
   compact = false,
 }: MemoryCardProps) {
   // Determine if this needs placeholder rendering
-  const needsPlaceholder = (type === 'text_only' || type === 'voice') && !mediaUrl;
+  // Only text_only memories should use placeholders (voice memories always have mediaUrl for audio)
+  const needsPlaceholder = type === 'text_only' && !mediaUrl;
   
   // Get gradient colors
   const getGradientColors = (): [string, string, string] => {
@@ -119,13 +120,6 @@ export function MemoryCard({
                   size={compact ? 24 : 32} 
                   color="#FFFFFF" 
                 />
-              </View>
-            )}
-            
-            {/* Voice indicator */}
-            {type === 'voice' && (
-              <View style={styles.voiceIndicator}>
-                <Ionicons name="mic" size={16} color="#FFFFFF" />
               </View>
             )}
           </LinearGradient>
