@@ -18,6 +18,12 @@ enum PrivacyLevel {
   public
 }
 
+enum UserRole {
+  user
+  moderator
+  admin
+}
+
 model User {
   id              String       @id @default(uuid())
   email           String       @unique
@@ -27,10 +33,25 @@ model User {
   avatarUrl       String?      @map("avatar_url")
   googleId        String?      @unique @map("google_id")
   defaultPrivacy  PrivacyLevel @default(private) @map("default_privacy")
+  role            UserRole     @default(user)
   privacySettings Json?        @map("privacy_settings")
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
   deletedAt       DateTime?    @map("deleted_at")
 
   @@map("users")
+  refreshTokens   RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique // Hashed token
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+  @@index([userId])
 }

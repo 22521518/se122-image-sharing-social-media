@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { User, PrivacyLevel } from '@prisma/client';
+import { User, PrivacyLevel, UserRole } from '@prisma/client';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -22,6 +22,7 @@ describe('UsersService', () => {
     avatarUrl: null,
     googleId: null,
     defaultPrivacy: 'private' as PrivacyLevel,
+    role: 'user' as UserRole,
     privacySettings: {},
     createdAt: new Date(),
     updatedAt: new Date(),

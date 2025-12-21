@@ -3,15 +3,19 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { Request } from 'express';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpdateSettingsDto } from './dto/update-profile.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth-core/guards/jwt-auth.guard';
 import { User } from '@prisma/client';
+import { AuditService, AuditAction } from '../audit/audit.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly auditService: AuditService,
+  ) { }
 
   @Get('profile')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -95,7 +99,18 @@ export class UsersController {
   @ApiOperation({ summary: 'Delete user account (soft delete)' })
   @ApiResponse({ status: 200, description: 'Account scheduled for deletion.' })
   async deleteAccount(@Req() req: Request & { user: User }) {
+    // 1. Soft delete user
     await this.usersService.softDelete(req.user.id);
+
+    // 2. Revoke all sessions (delete refresh tokens)
+    await this.usersService.deleteRefreshTokensForUser(req.user.id);
+
+    // 3. Audit log
+    this.auditService.log(AuditAction.USER_DELETE, req.user.id, {
+      reason: 'USER_INITIATED_DELETE',
+      email: req.user.email,
+    });
+
     return {
       message: 'Account scheduled for deletion. You have 30 days to reactivate by logging in.',
     };

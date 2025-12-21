@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CommonModule } from '../common/common.module';
-import { AuthModule } from '../auth/auth.module';
+import { AuthCoreModule } from '../auth-core/auth-core.module';
 import { MediaModule } from '../media/media.module';
 import { MemoriesModule } from '../memories/memories.module';
 import { SocialModule } from '../social/social.module';
@@ -10,7 +10,7 @@ import { ModerationModule } from '../moderation/moderation.module';
 @Module({
   imports: [
     CommonModule,
-    AuthModule,
+    AuthCoreModule,
     MediaModule,
     MemoriesModule,
     SocialModule,
