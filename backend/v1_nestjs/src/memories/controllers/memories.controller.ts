@@ -15,27 +15,74 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { MemoriesService } from '../services/memories.service';
-import { CreateVoiceMemoryDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto } from '../dto';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 
+@ApiTags('Memories')
+@ApiBearerAuth()
 @Controller('memories')
 @UseGuards(JwtAuthGuard)
 export class MemoriesController {
   constructor(private readonly memoriesService: MemoriesService) { }
 
-  /**
-   * Create a new voice memory (Voice Sticker)
-   * POST /memories/voice
-   * 
-   * Accepts multipart/form-data with:
-   * - file: Audio file (AAC, MP3, OGG, WebM, WAV)
-   * - latitude: GPS latitude (-90 to 90)
-   * - longitude: GPS longitude (-180 to 180)
-   * - duration: Optional duration in seconds (1-5)
-   * - title: Optional title/caption
-   * - privacy: Optional privacy level (private, friends, public)
-   */
   @Post('voice')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create voice memory (Voice Sticker)',
+    description: 'Upload an audio file with location to create a voice memory pin on the map.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Voice memory upload with audio file and location',
+    schema: {
+      type: 'object',
+      required: ['file', 'latitude', 'longitude'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Audio file (AAC, MP3, OGG, WebM, WAV) - max 5MB',
+        },
+        latitude: {
+          type: 'number',
+          example: 10.762622,
+          description: 'GPS latitude (-90 to 90)',
+        },
+        longitude: {
+          type: 'number',
+          example: 106.660172,
+          description: 'GPS longitude (-180 to 180)',
+        },
+        duration: {
+          type: 'number',
+          example: 3.5,
+          description: 'Duration in seconds (1-5)',
+        },
+        title: {
+          type: 'string',
+          example: 'Morning thoughts',
+          description: 'Optional title/caption',
+        },
+        privacy: {
+          type: 'string',
+          enum: ['private', 'friends', 'public'],
+          example: 'private',
+          description: 'Privacy level',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Voice memory created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid audio format or duration' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @UseInterceptors(FileInterceptor('file', {
     limits: {
       fileSize: 5 * 1024 * 1024, // 5MB max for audio
@@ -49,30 +96,103 @@ export class MemoriesController {
     return this.memoriesService.createVoiceMemory(req.user.id, file, dto);
   }
 
-  /**
-   * Get all memories for the authenticated user
-   * GET /memories
-   */
+  @Post('photo')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create photo memory',
+    description: 'Upload a photo with location (from EXIF or device) to create a photo memory pin.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Photo memory upload with image file and location',
+    schema: {
+      type: 'object',
+      required: ['file', 'latitude', 'longitude'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file (JPEG, PNG, WebP, GIF, HEIC) - max 10MB',
+        },
+        latitude: {
+          type: 'number',
+          example: 10.762622,
+          description: 'GPS latitude from EXIF or device (-90 to 90)',
+        },
+        longitude: {
+          type: 'number',
+          example: 106.660172,
+          description: 'GPS longitude from EXIF or device (-180 to 180)',
+        },
+        title: {
+          type: 'string',
+          example: 'Sunset at the beach',
+          description: 'Optional title/caption',
+        },
+        privacy: {
+          type: 'string',
+          enum: ['private', 'friends', 'public'],
+          example: 'private',
+          description: 'Privacy level',
+        },
+        timestamp: {
+          type: 'string',
+          example: '2025:12:21 14:30:00',
+          description: 'EXIF DateTimeOriginal',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Photo memory created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid image format' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max for photos
+    },
+  }))
+  async createPhotoMemory(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: CreatePhotoMemoryDto,
+  ) {
+    return this.memoriesService.createPhotoMemory(req.user.id, file, dto);
+  }
+
   @Get()
+  @ApiOperation({
+    summary: 'Get all memories',
+    description: 'Retrieve all memories for the authenticated user.',
+  })
+  @ApiResponse({ status: 200, description: 'List of memories' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMyMemories(@Request() req: any) {
     return this.memoriesService.getMemoriesByUser(req.user.id);
   }
 
-  /**
-   * Get a specific memory by ID
-   * GET /memories/:id
-   */
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get memory by ID',
+    description: 'Retrieve a specific memory by its ID.',
+  })
+  @ApiParam({ name: 'id', description: 'Memory UUID', example: '123e4567-e89b-12d3-a456-426614174000' })
+  @ApiResponse({ status: 200, description: 'Memory details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Memory not found' })
   async getMemory(@Request() req: any, @Param('id') id: string) {
     return this.memoriesService.getMemoryById(id, req.user.id);
   }
 
-  /**
-   * Delete a memory by ID (soft delete)
-   * DELETE /memories/:id
-   */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete memory',
+    description: 'Soft delete a memory by its ID. The memory can be restored within 30 days.',
+  })
+  @ApiParam({ name: 'id', description: 'Memory UUID', example: '123e4567-e89b-12d3-a456-426614174000' })
+  @ApiResponse({ status: 200, description: 'Memory deleted successfully' })
+  @ApiResponse({ status: 400, description: 'Memory not found or already deleted' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async deleteMemory(@Request() req: any, @Param('id') id: string) {
     return this.memoriesService.deleteMemory(id, req.user.id);
   }

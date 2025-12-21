@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService } from '../../media/services/media.service';
-import { CreateVoiceMemoryDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto } from '../dto';
 import { MemoryType, PrivacyLevel } from '@prisma/client';
 
 @Injectable()
@@ -26,9 +26,20 @@ export class MemoriesService {
     'application/octet-stream', // Fallback for unknown types
   ];
 
-  // Duration limits in seconds
+  // Allowed image formats
+  private readonly ALLOWED_IMAGE_TYPES = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/heic',
+    'image/heif',
+  ];
+
+  // Duration limits in seconds (for voice)
   private readonly MIN_DURATION = 1;
-  private readonly MAX_DURATION = 5.5; // 0.5s buffer for JS event loop jitter
+  private readonly MAX_DURATION = 6; // 0.5s buffer for JS event loop jitter
 
   constructor(
     private readonly prisma: PrismaService,
@@ -44,6 +55,14 @@ export class MemoriesService {
     return this.ALLOWED_AUDIO_TYPES.some(type =>
       mimetype.startsWith(type) || mimetype.startsWith('audio/')
     );
+  }
+
+  private isValidImageType(mimetype: string): boolean {
+    if (this.ALLOWED_IMAGE_TYPES.includes(mimetype.toLowerCase())) {
+      return true;
+    }
+    // Accept any image/* type for flexibility
+    return mimetype.startsWith('image/');
   }
 
   async createVoiceMemory(
@@ -106,6 +125,56 @@ export class MemoriesService {
     return memory;
   }
 
+  async createPhotoMemory(
+    userId: string,
+    file: Express.Multer.File,
+    dto: CreatePhotoMemoryDto,
+  ) {
+    // Validate file is provided
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    // Validate file type
+    this.logger.debug(`Received image with mimetype: ${file.mimetype}`);
+    if (!this.isValidImageType(file.mimetype)) {
+      throw new BadRequestException(
+        `Invalid image format (${file.mimetype}). Allowed formats: JPEG, PNG, WebP, GIF, HEIC`,
+      );
+    }
+
+    // Upload to Cloudinary (photos folder)
+    this.logger.log(`Uploading photo memory for user ${userId}`);
+    const mediaUrl = await this.mediaService.uploadFile(file, 'memories/photos');
+
+    // Get user's default privacy setting if not specified
+    let privacy = dto.privacy;
+    if (!privacy) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { defaultPrivacy: true },
+      });
+      privacy = user?.defaultPrivacy || PrivacyLevel.private;
+    }
+
+    // Create memory record
+    const memory = await this.prisma.memory.create({
+      data: {
+        userId,
+        type: MemoryType.photo,
+        mediaUrl,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        privacy,
+        title: dto.title,
+      },
+    });
+
+    this.logger.log(`Created photo memory ${memory.id} for user ${userId}`);
+
+    return memory;
+  }
+
   async getMemoriesByUser(userId: string) {
     return this.prisma.memory.findMany({
       where: {
@@ -159,3 +228,4 @@ export class MemoriesService {
     return { success: true };
   }
 }
+

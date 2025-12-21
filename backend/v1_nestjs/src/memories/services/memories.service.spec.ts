@@ -143,12 +143,12 @@ describe('MemoriesService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw error if duration exceeds 5 seconds', async () => {
+    it('should throw error if duration exceeds 5.5 seconds', async () => {
       const invalidDto = { ...validDto, duration: 6 };
 
       await expect(
         service.createVoiceMemory('user-uuid-123', mockFile, invalidDto),
-      ).rejects.toThrow('Audio duration must be between 1 and 5 seconds');
+      ).rejects.toThrow('Audio duration must be between 1 and 5.5 seconds');
     });
 
     it('should throw error if duration is less than 1 second', async () => {
@@ -156,7 +156,7 @@ describe('MemoriesService', () => {
 
       await expect(
         service.createVoiceMemory('user-uuid-123', mockFile, invalidDto),
-      ).rejects.toThrow('Audio duration must be between 1 and 5 seconds');
+      ).rejects.toThrow('Audio duration must be between 1 and 5.5 seconds');
     });
 
     it('should use user default privacy when not specified', async () => {
@@ -245,6 +245,118 @@ describe('MemoriesService', () => {
       await expect(
         service.deleteMemory('memory-uuid-123', 'different-user'),
       ).rejects.toThrow('Memory not found or already deleted');
+    });
+  });
+
+  describe('createPhotoMemory', () => {
+    const mockImageFile: Express.Multer.File = {
+      fieldname: 'file',
+      originalname: 'photo.jpg',
+      encoding: '7bit',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from('test image content'),
+      size: 54321,
+      stream: undefined as any,
+      destination: '',
+      filename: '',
+      path: '',
+    };
+
+    const validPhotoDto = {
+      latitude: 10.762622,
+      longitude: 106.660172,
+    };
+
+    const mockPhotoMemory: Partial<Memory> = {
+      id: 'photo-memory-uuid-123',
+      userId: 'user-uuid-123',
+      type: MemoryType.photo,
+      mediaUrl: 'https://cloudinary.com/test-photo.jpg',
+      duration: null,
+      latitude: 10.762622,
+      longitude: 106.660172,
+      privacy: PrivacyLevel.private,
+      title: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    };
+
+    it('should create a photo memory successfully', async () => {
+      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.memory.create.mockResolvedValue(mockPhotoMemory);
+
+      const result = await service.createPhotoMemory('user-uuid-123', mockImageFile, validPhotoDto);
+
+      expect(mediaService.uploadFile).toHaveBeenCalledWith(mockImageFile, 'memories/photos');
+      expect(prisma.memory.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-uuid-123',
+          type: MemoryType.photo,
+          mediaUrl: 'https://cloudinary.com/test-photo.jpg',
+          latitude: 10.762622,
+          longitude: 106.660172,
+          privacy: PrivacyLevel.private,
+          title: undefined,
+        },
+      });
+      expect(result).toEqual(mockPhotoMemory);
+    });
+
+    it('should throw error if no image file is provided', async () => {
+      await expect(
+        service.createPhotoMemory('user-uuid-123', undefined as any, validPhotoDto),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createPhotoMemory('user-uuid-123', undefined as any, validPhotoDto),
+      ).rejects.toThrow('Image file is required');
+    });
+
+    it('should throw error if file type is invalid', async () => {
+      const invalidFile = { ...mockImageFile, mimetype: 'video/mp4' };
+
+      await expect(
+        service.createPhotoMemory('user-uuid-123', invalidFile as any, validPhotoDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should accept PNG images', async () => {
+      const pngFile = { ...mockImageFile, mimetype: 'image/png' };
+      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.png');
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.memory.create.mockResolvedValue({ ...mockPhotoMemory, mediaUrl: 'https://cloudinary.com/test-photo.png' });
+
+      await expect(
+        service.createPhotoMemory('user-uuid-123', pngFile as any, validPhotoDto),
+      ).resolves.toBeTruthy();
+    });
+
+    it('should accept WebP images', async () => {
+      const webpFile = { ...mockImageFile, mimetype: 'image/webp' };
+      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.webp');
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.memory.create.mockResolvedValue({ ...mockPhotoMemory, mediaUrl: 'https://cloudinary.com/test-photo.webp' });
+
+      await expect(
+        service.createPhotoMemory('user-uuid-123', webpFile as any, validPhotoDto),
+      ).resolves.toBeTruthy();
+    });
+
+    it('should use user default privacy when not specified', async () => {
+      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      prisma.user.findUnique.mockResolvedValue({ ...mockUser, defaultPrivacy: PrivacyLevel.public });
+      prisma.memory.create.mockResolvedValue({ ...mockPhotoMemory, privacy: PrivacyLevel.public });
+
+      await service.createPhotoMemory('user-uuid-123', mockImageFile, validPhotoDto);
+
+      expect(prisma.memory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            privacy: PrivacyLevel.public,
+          }),
+        }),
+      );
     });
   });
 });

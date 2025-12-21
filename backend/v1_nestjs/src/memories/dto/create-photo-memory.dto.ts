@@ -1,9 +1,9 @@
-import { IsNumber, IsOptional, IsString, Min, Max, IsEnum } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsEnum, Min, Max } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { PrivacyLevel } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class CreateVoiceMemoryDto {
+export class CreatePhotoMemoryDto {
   @ApiProperty({
     description: 'GPS latitude coordinate (-90 to 90)',
     example: 10.762622,
@@ -29,21 +29,8 @@ export class CreateVoiceMemoryDto {
   longitude: number;
 
   @ApiPropertyOptional({
-    description: 'Duration of the voice recording in seconds (1-5)',
-    example: 3.5,
-    minimum: 1,
-    maximum: 5,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  @Max(5)
-  duration?: number;
-
-  @ApiPropertyOptional({
-    description: 'Optional title or caption for the voice memory',
-    example: 'Morning thoughts',
+    description: 'Optional title or caption for the photo memory',
+    example: 'Sunset at the beach',
   })
   @IsOptional()
   @IsString()
@@ -58,4 +45,12 @@ export class CreateVoiceMemoryDto {
   @IsOptional()
   @IsEnum(PrivacyLevel)
   privacy?: PrivacyLevel;
+
+  @ApiPropertyOptional({
+    description: 'EXIF DateTimeOriginal from the photo',
+    example: '2025:12:21 14:30:00',
+  })
+  @IsOptional()
+  @IsString()
+  timestamp?: string;
 }
