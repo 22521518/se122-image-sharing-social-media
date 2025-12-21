@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = "postgresql://postgres:postgres@localhost:5432/image_sharing?schema=public"
+// }
+
+datasource db {
+  provider = "sqlite"
+}
+
+
+enum PrivacyLevel {
+  private
+  friends
+  public
+}
+
+model User {
+  id              String       @id @default(uuid())
+  email           String       @unique
+  passwordHash    String?      @map("password_hash")
+  name            String?
+  bio             String?
+  avatarUrl       String?      @map("avatar_url")
+  googleId        String?      @unique @map("google_id")
+  defaultPrivacy  PrivacyLevel @default(private) @map("default_privacy")
+  privacySettings Json?        @map("privacy_settings")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
+
+  @@map("users")
+}
