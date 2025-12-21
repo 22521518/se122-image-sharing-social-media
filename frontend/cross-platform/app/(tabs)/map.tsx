@@ -1,12 +1,23 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, Text, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, TouchableOpacity, Alert, Platform, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
+import { PhotoPicker } from '@/components/PhotoPicker';
 import { useMemories, Memory, MemoryUploadState } from '@/context/MemoriesContext';
 import { useAuth } from '@/context/AuthContext';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
+
+type CaptureMode = 'voice' | 'photo';
+
+interface PendingUpload {
+  uri: string;
+  latitude: number;
+  longitude: number;
+  locationSource: 'exif' | 'device';
+}
 
 // Placeholder for a simple map representation
 function MapPlaceholder({ memories }: { memories: Memory[] }) {
@@ -16,14 +27,18 @@ function MapPlaceholder({ memories }: { memories: Memory[] }) {
         🗺️ Map View Coming Soon
       </ThemedText>
       <ThemedText style={styles.mapPinCount}>
-        {memories.length} voice sticker{memories.length !== 1 ? 's' : ''} placed
+        {memories.length} memor{memories.length !== 1 ? 'ies' : 'y'} placed
       </ThemedText>
       {/* Show pins as a simple list for now */}
       {memories.length > 0 && (
         <ScrollView style={styles.pinList} horizontal showsHorizontalScrollIndicator={false}>
           {memories.map((memory) => (
             <View key={memory.id} style={styles.pinItem}>
-              <Ionicons name="mic" size={16} color="#FF6B6B" />
+              <Ionicons 
+                name={memory.type === 'voice' ? 'mic' : 'image'} 
+                size={16} 
+                color={memory.type === 'voice' ? '#FF6B6B' : '#5856D6'} 
+              />
               <Text style={styles.pinCoords}>
                 {memory.latitude.toFixed(4)}, {memory.longitude.toFixed(4)}
               </Text>
@@ -56,11 +71,35 @@ function UploadStatus({ state }: { state: MemoryUploadState }) {
   );
 }
 
+// Capture mode toggle
+function CaptureModeToggle({ mode, onModeChange }: { mode: CaptureMode; onModeChange: (mode: CaptureMode) => void }) {
+  return (
+    <View style={styles.modeToggle}>
+      <TouchableOpacity 
+        style={[styles.modeButton, mode === 'voice' && styles.modeButtonActive]}
+        onPress={() => onModeChange('voice')}
+      >
+        <Ionicons name="mic" size={20} color={mode === 'voice' ? '#FFFFFF' : '#666'} />
+        <Text style={[styles.modeButtonText, mode === 'voice' && styles.modeButtonTextActive]}>Voice</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[styles.modeButton, mode === 'photo' && styles.modeButtonActive]}
+        onPress={() => onModeChange('photo')}
+      >
+        <Ionicons name="image" size={20} color={mode === 'photo' ? '#FFFFFF' : '#666'} />
+        <Text style={[styles.modeButtonText, mode === 'photo' && styles.modeButtonTextActive]}>Photo</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function MapScreen() {
   const { accessToken, user } = useAuth();
   const isAuthenticated = !!accessToken;
-  const { memories, uploadState, error, uploadVoiceMemory, setUploadState, clearError } = useMemories();
+  const { memories, uploadState, error, uploadVoiceMemory, uploadPhotoMemory, setUploadState, clearError } = useMemories();
   const [lastRecordingLocation, setLastRecordingLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('voice');
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
 
   const handleRecordingComplete = useCallback(async (data: {
     uri: string;
@@ -78,13 +117,78 @@ export default function MapScreen() {
     });
 
     if (memory) {
-      // Successfully uploaded - could animate the pin appearing on map here
       console.log('Voice sticker saved:', memory.id);
     }
   }, [uploadVoiceMemory]);
 
+  const handlePhotoSelected = useCallback(async (data: {
+    uri: string;
+    exif: { latitude?: number; longitude?: number; timestamp?: string } | null;
+    hasLocation: boolean;
+  }) => {
+    let latitude: number;
+    let longitude: number;
+    let locationSource: 'exif' | 'device';
+
+    if (data.hasLocation && data.exif?.latitude && data.exif?.longitude) {
+      latitude = data.exif.latitude;
+      longitude = data.exif.longitude;
+      locationSource = 'exif';
+    } else {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Location permission is needed to place photos on the map.');
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        latitude = location.coords.latitude;
+        longitude = location.coords.longitude;
+        locationSource = 'device';
+      } catch (err) {
+        console.error('Failed to get device location:', err);
+        Alert.alert('Location Error', 'Could not get your current location. Please try again.');
+        return;
+      }
+    }
+
+    // Set pending upload to show confirmation modal
+    setPendingUpload({
+      uri: data.uri,
+      latitude,
+      longitude,
+      locationSource,
+    });
+  }, []);
+
+  const handleConfirmUpload = useCallback(async () => {
+    if (!pendingUpload) return;
+
+    const { uri, latitude, longitude } = pendingUpload;
+    setPendingUpload(null);
+    
+    setLastRecordingLocation({ lat: latitude, lng: longitude });
+    
+    const memory = await uploadPhotoMemory({
+      uri,
+      latitude,
+      longitude,
+    });
+
+    if (memory) {
+      console.log('Photo memory saved:', memory.id);
+    }
+  }, [pendingUpload, uploadPhotoMemory]);
+
+  const handleCancelUpload = useCallback(() => {
+    setPendingUpload(null);
+  }, []);
+
   const handleRecordingError = useCallback((errorMessage: string) => {
-    Alert.alert('Recording Error', errorMessage);
+    Alert.alert('Error', errorMessage);
   }, []);
 
   const handleRecordingStart = useCallback(() => {
@@ -99,7 +203,7 @@ export default function MapScreen() {
         <ThemedView style={styles.centeredContent}>
           <Ionicons name="map-outline" size={64} color="#666" />
           <ThemedText style={styles.loginPrompt}>
-            Log in to start capturing voice stickers
+            Log in to start capturing memories
           </ThemedText>
         </ThemedView>
       </SafeAreaView>
@@ -126,12 +230,22 @@ export default function MapScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Voice recorder FAB */}
-      <View style={styles.recorderContainer}>
-        <VoiceRecorder
-          onRecordingComplete={handleRecordingComplete}
-          onError={handleRecordingError}
-        />
+      {/* Capture mode toggle */}
+      <CaptureModeToggle mode={captureMode} onModeChange={setCaptureMode} />
+
+      {/* Capture UI based on mode */}
+      <View style={styles.captureContainer}>
+        {captureMode === 'voice' ? (
+          <VoiceRecorder
+            onRecordingComplete={handleRecordingComplete}
+            onError={handleRecordingError}
+          />
+        ) : (
+          <PhotoPicker
+            onPhotoSelected={handlePhotoSelected}
+            onError={handleRecordingError}
+          />
+        )}
       </View>
 
       {/* Last recorded location indicator */}
@@ -143,6 +257,64 @@ export default function MapScreen() {
           </Text>
         </View>
       )}
+
+      {/* Upload Confirmation Modal */}
+      <Modal
+        visible={!!pendingUpload}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelUpload}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Upload</Text>
+            
+            {pendingUpload && (
+              <>
+                <Image 
+                  source={{ uri: pendingUpload.uri }} 
+                  style={styles.modalPreview}
+                  resizeMode="cover"
+                />
+                
+                <View style={styles.modalLocationInfo}>
+                  <Ionicons 
+                    name={pendingUpload.locationSource === 'exif' ? 'image' : 'navigate'} 
+                    size={20} 
+                    color="#5856D6" 
+                  />
+                  <Text style={styles.modalLocationText}>
+                    {pendingUpload.locationSource === 'exif' 
+                      ? 'Location from photo EXIF' 
+                      : 'Using device location'}
+                  </Text>
+                </View>
+                
+                <Text style={styles.modalCoords}>
+                  📍 {pendingUpload.latitude.toFixed(4)}, {pendingUpload.longitude.toFixed(4)}
+                </Text>
+              </>
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={handleCancelUpload}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleConfirmUpload}
+              >
+                <Ionicons name="cloud-upload" size={18} color="#FFFFFF" />
+                <Text style={styles.modalButtonConfirmText}>Upload</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -208,12 +380,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
-  recorderContainer: {
-    position: 'absolute',
-    bottom: 40,
-    left: 0,
-    right: 0,
+  modeToggle: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    gap: 12,
+  },
+  modeButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: '#F0F0F0',
+    gap: 8,
+  },
+  modeButtonActive: {
+    backgroundColor: '#5856D6',
+  },
+  modeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  modeButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  captureContainer: {
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    minHeight: 180,
   },
   uploadStatus: {
     flexDirection: 'row',
@@ -259,7 +459,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     position: 'absolute',
-    bottom: 130,
+    bottom: 200,
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.9)',
     paddingHorizontal: 12,
@@ -270,5 +470,79 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 11,
     color: '#666',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+  },
+  modalPreview: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  modalLocationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  modalLocationText: {
+    fontSize: 14,
+    color: '#5856D6',
+    fontWeight: '500',
+  },
+  modalCoords: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F0F0F0',
+  },
+  modalButtonCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#5856D6',
+  },
+  modalButtonConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

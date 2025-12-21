@@ -31,6 +31,12 @@ interface MemoriesContextType {
     longitude: number;
     title?: string;
   }) => Promise<Memory | null>;
+  uploadPhotoMemory: (data: {
+    uri: string;
+    latitude: number;
+    longitude: number;
+    title?: string;
+  }) => Promise<Memory | null>;
   fetchMemories: () => Promise<void>;
   deleteMemory: (id: string) => Promise<boolean>;
   setUploadState: (state: MemoryUploadState) => void;
@@ -128,6 +134,71 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     }
   }, [accessToken]);
 
+  const uploadPhotoMemory = useCallback(async (data: {
+    uri: string;
+    latitude: number;
+    longitude: number;
+    title?: string;
+  }): Promise<Memory | null> => {
+    if (!accessToken) {
+      setError('Not authenticated');
+      return null;
+    }
+
+    setUploadState('uploading');
+    setError(null);
+
+    try {
+      // Create FormData
+      const formData = new FormData();
+      
+      // Handle file differently for web vs native
+      if (Platform.OS === 'web') {
+        // For web, fetch the blob from the URI
+        const response = await fetch(data.uri);
+        const blob = await response.blob();
+        formData.append('file', blob, 'photo.jpg');
+      } else {
+        // For React Native, use the file URI directly
+        // Get file extension from URI
+        const ext = data.uri.split('.').pop()?.toLowerCase() || 'jpg';
+        const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+        
+        formData.append('file', {
+          uri: data.uri,
+          type: mimeType,
+          name: `photo.${ext}`,
+        } as any);
+      }
+
+      formData.append('latitude', data.latitude.toString());
+      formData.append('longitude', data.longitude.toString());
+      if (data.title) {
+        formData.append('title', data.title);
+      }
+
+      const memory = await ApiService.uploadFormData<Memory>(
+        '/api/memories/photo',
+        formData,
+        accessToken
+      );
+
+      // Add to local state
+      setMemories(prev => [memory, ...prev]);
+      setUploadState('success');
+
+      // Reset to idle after a short delay
+      setTimeout(() => setUploadState('idle'), 2000);
+
+      return memory;
+    } catch (err: any) {
+      console.error('Failed to upload photo memory:', err);
+      setError(err.message || 'Failed to upload photo');
+      setUploadState('error');
+      return null;
+    }
+  }, [accessToken]);
+
   const deleteMemory = useCallback(async (id: string): Promise<boolean> => {
     if (!accessToken) return false;
 
@@ -147,6 +218,7 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     uploadState,
     error,
     uploadVoiceMemory,
+    uploadPhotoMemory,
     fetchMemories,
     deleteMemory,
     setUploadState,
@@ -167,3 +239,4 @@ export function useMemories() {
   }
   return context;
 }
+
