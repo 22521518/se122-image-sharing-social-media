@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
@@ -21,7 +21,20 @@ export default function AuthCallbackScreen() {
 
   const handleCallback = async () => {
     try {
-      const { accessToken, refreshToken } = params;
+      let { accessToken, refreshToken } = params;
+
+      // Web Security: Extract token from Hash Fragment if present (avoids server logs)
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash) {
+        const hash = window.location.hash.substring(1); // Remove leading '#'
+        const urlParams = new URLSearchParams(hash);
+        if (urlParams.has('accessToken')) {
+          accessToken = urlParams.get('accessToken')!;
+        }
+        // Refresh token is usually in cookie for Web, but check hash just in case
+        if (urlParams.has('refreshToken')) {
+          refreshToken = urlParams.get('refreshToken')!;
+        }
+      }
 
       if (!accessToken) {
         setError('No access token received from authentication');
