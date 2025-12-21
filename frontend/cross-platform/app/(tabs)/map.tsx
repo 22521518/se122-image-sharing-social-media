@@ -289,12 +289,54 @@ export default function MapScreen() {
       <View style={[styles.mainContent, isWideScreen && styles.mainContentWide]}>
         {/* Left/Top: Map + Memories List */}
         <View style={[styles.mapSection, isWideScreen && styles.mapSectionWide]}>
-          {/* Map placeholder */}
-          <View style={styles.mapPlaceholder}>
+          {/* Map placeholder with long-press simulation */}
+          <Pressable 
+            style={styles.mapPlaceholder}
+            onLongPress={(event) => {
+              // Simulate coordinate extraction from touch position
+              // In real map: coordinates would come from map's coordinate system
+              // Here: we calculate relative position and convert to lat/lng range
+              const { locationX, locationY } = event.nativeEvent;
+              const mapWidth = 400; // approximate placeholder width
+              const mapHeight = 180; // placeholder height
+              
+              // Simulate world coordinates (example: Vietnam region)
+              // Lat range: 8°N to 23°N, Lng range: 102°E to 110°E
+              const baseLat = 10.762622; // Ho Chi Minh City base
+              const baseLng = 106.660172;
+              const latRange = 15; // degrees
+              const lngRange = 8; // degrees
+              
+              // Calculate offset based on touch position (normalized to -0.5 to 0.5)
+              const latOffset = ((locationY / mapHeight) - 0.5) * latRange * -1; // invert Y
+              const lngOffset = ((locationX / mapWidth) - 0.5) * lngRange;
+              
+              const simulatedLat = baseLat + latOffset;
+              const simulatedLng = baseLng + lngOffset;
+              
+              // Clamp to valid ranges
+              const latitude = Math.max(-90, Math.min(90, simulatedLat));
+              const longitude = Math.max(-180, Math.min(180, simulatedLng));
+              
+              setManualPinLocation({ latitude, longitude });
+              setSelectedFeeling(null);
+              setPinTitle('');
+              setActivePanel('feeling-pin');
+            }}
+            delayLongPress={500}
+          >
             <Text style={styles.mapPlaceholderEmoji}>🗺️</Text>
-            <Text style={styles.mapPlaceholderText}>Map View Coming Soon</Text>
+            <Text style={styles.mapPlaceholderText}>Map View (Long-press to drop pin)</Text>
             <Text style={styles.mapPinCount}>{memories.length} memories placed</Text>
-          </View>
+            
+            {/* Show temporary pin marker when location is selected */}
+            {manualPinLocation && activePanel === 'feeling-pin' && (
+              <View style={styles.tempPinMarker}>
+                <Ionicons name="location" size={32} color="#FF3B30" />
+                <Text style={styles.tempPinLabel}>New Pin</Text>
+              </View>
+            )}
+          </Pressable>
 
           {/* Memories list */}
           <ScrollView style={styles.memoriesList} showsVerticalScrollIndicator={false}>
@@ -422,12 +464,16 @@ export default function MapScreen() {
                 )}
                 {captureMode === 'feeling' && (
                   <View style={styles.feelingCaptureArea}>
+                    <Ionicons name="hand-left" size={48} color="#5856D6" />
                     <Text style={styles.feelingCaptureText}>
-                      Drop a pin at your current location with an emotional tag
+                      Long-press anywhere on the map above to drop a pin with an emotional tag
+                    </Text>
+                    <Text style={styles.feelingCaptureHint}>
+                      💡 Tip: Hold your finger on the map for half a second
                     </Text>
                     <TouchableOpacity style={styles.dropPinButton} onPress={handleDropFeelingPin}>
                       <Ionicons name="add-circle" size={24} color="#FFF" />
-                      <Text style={styles.dropPinButtonText}>Drop Feeling Pin</Text>
+                      <Text style={styles.dropPinButtonText}>Drop Right Here</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -642,6 +688,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
+  feelingCaptureHint: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
   dropPinButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -765,5 +818,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#5856D6',
     fontWeight: '600',
+  },
+  // Temporary pin marker
+  tempPinMarker: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -16 }, { translateY: -32 }],
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  tempPinLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FF3B30',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: -4,
   },
 });
