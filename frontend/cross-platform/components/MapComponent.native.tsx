@@ -1,15 +1,11 @@
 /**
- * MapComponent - Native platform implementation
+ * MapComponent - Native platform implementation using MapLibre
  *
- * NOTE: react-native-maps requires native build configuration.
- * For Expo Go, we show a placeholder. For dev builds, we show actual maps.
- *
- * To enable real maps:
- * 1. Run: npx expo prebuild
- * 2. Build: npx expo run:android or npx expo run:ios
+ * Uses @maplibre/maplibre-react-native with OpenStreetMap tiles.
+ * No API key required for basic OSM raster tiles.
  */
 
-import React, { useEffect } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,30 +13,15 @@ import {
   ActivityIndicator,
   StyleProp,
   ViewStyle,
-  TouchableOpacity,
-  Alert,
-  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import MapLibreGL, { MapViewRef, CameraRef } from '@maplibre/maplibre-react-native';
 import { Memory } from '@/context/MemoriesContext';
 import { Feeling } from './FeelingSelector';
 import { MapRegion } from '@/hooks/useMapViewport';
 
-// Try to import react-native-maps, but gracefully handle if unavailable
-let MapView: any = null;
-let Marker: any = null;
-let hasNativeMaps = false;
-
-try {
-  const RNMaps = require('react-native-maps');
-  MapView = RNMaps.default;
-  Marker = RNMaps.Marker;
-  hasNativeMaps = true;
-} catch {
-  // react-native-maps not available (e.g., running in Expo Go)
-  hasNativeMaps = false;
-}
+// Initialize MapLibre (required before using any components)
+MapLibreGL.setAccessToken(null);
 
 interface MapComponentProps {
   initialRegion: MapRegion;
@@ -85,163 +66,102 @@ function getMemoryIcon(memory: Memory): keyof typeof Ionicons.glyphMap {
   return 'location';
 }
 
-// Placeholder component for when native maps aren't available
-function MapPlaceholder({
+// Free OSM Raster Tile Style URL
+const OSM_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+
+export function MapComponent({
+  initialRegion,
+  onRegionChangeComplete,
+  onLongPress,
   memories,
   manualPinLocation,
   showTempPin,
   isLoading,
-  onLongPress,
-  onRegionChangeComplete,
-  initialRegion,
   containerStyle,
 }: MapComponentProps) {
-  // Trigger initial fetch
-  useEffect(() => {
-    onRegionChangeComplete(initialRegion);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const mapRef = useRef<MapViewRef>(null);
+  const cameraRef = useRef<CameraRef>(null);
 
-  // Simulate dropping a pin at current location
-  const handleDropPin = async () => {
+  const handleRegionChange = async () => {
+    if (!mapRef.current) return;
+    
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please enable location permissions');
-        return;
-      }
-      const location = await Location.getCurrentPositionAsync({});
-      onLongPress({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+      const center = await mapRef.current.getCenter();
+      const zoom = await mapRef.current.getZoom();
+      
+      // Convert zoom to lat/long deltas (approximate)
+      const latDelta = 360 / Math.pow(2, zoom + 1);
+      const lonDelta = 360 / Math.pow(2, zoom + 1);
+      
+      onRegionChangeComplete({
+        latitude: center[1],
+        longitude: center[0],
+        latitudeDelta: latDelta,
+        longitudeDelta: lonDelta,
       });
-    } catch {
-      Alert.alert('Error', 'Could not get current location');
+    } catch (e) {
+      console.warn('Failed to get map region:', e);
     }
   };
 
-  return (
-    <View style={[styles.mapContainer, containerStyle]} pointerEvents="box-none">
-      <Pressable style={styles.mapPlaceholder} onLongPress={handleDropPin}>
-        <Ionicons name="map" size={48} color="#5856D6" />
-        <Text style={styles.mapTitle}>Map View</Text>
-        <Text style={styles.mapSubtitle}>{memories.length} memories nearby</Text>
-
-        {/* Memory dots preview */}
-        {memories.length > 0 && (
-          <View style={styles.dotsContainer}>
-            {memories.slice(0, 8).map((memory) => (
-              <View
-                key={memory.id}
-                style={[styles.dot, { backgroundColor: getMemoryColor(memory) }]}
-              />
-            ))}
-            {memories.length > 8 && <Text style={styles.moreText}>+{memories.length - 8}</Text>}
-          </View>
-        )}
-
-        <TouchableOpacity style={styles.dropPinButton} onPress={handleDropPin}>
-          <Ionicons name="location" size={20} color="#FFF" />
-          <Text style={styles.dropPinText}>Drop Pin Here</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.infoText}>Running in Expo Go - maps require a development build</Text>
-
-        {/* Show temp pin indicator */}
-        {showTempPin && manualPinLocation && (
-          <View style={styles.tempPinInfo}>
-            <Ionicons name="location" size={16} color="#FF3B30" />
-            <Text style={styles.tempPinText}>
-              Pin at {manualPinLocation.latitude.toFixed(4)},{' '}
-              {manualPinLocation.longitude.toFixed(4)}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-
-      {/* Loading overlay */}
-      {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="small" color="#5856D6" />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// Native Maps component (when available)
-function NativeMapComponent({
-  initialRegion,
-  onRegionChangeComplete,
-  onLongPress,
-  memories,
-  manualPinLocation,
-  showTempPin,
-  isLoading,
-  containerStyle,
-}: MapComponentProps) {
-  const handleRegionChangeComplete = (region: any) => {
-    onRegionChangeComplete({
-      latitude: region.latitude,
-      longitude: region.longitude,
-      latitudeDelta: region.latitudeDelta,
-      longitudeDelta: region.longitudeDelta,
-    });
+  const handleLongPress = (feature: GeoJSON.Feature) => {
+    if (feature.geometry.type === 'Point') {
+      const coords = feature.geometry.coordinates;
+      onLongPress({
+        latitude: coords[1],
+        longitude: coords[0],
+      });
+    }
   };
 
-  const handleLongPress = (event: any) => {
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    onLongPress({ latitude, longitude });
-  };
+  // Calculate initial zoom from latitudeDelta
+  const initialZoom = Math.log2(360 / initialRegion.latitudeDelta) - 1;
 
   return (
-    <View style={[styles.mapContainer, containerStyle]} pointerEvents="box-none">
-      <MapView
+    <View style={[styles.mapContainer, containerStyle]}>
+      <MapLibreGL.MapView
+        ref={mapRef}
         style={styles.map}
-        initialRegion={{
-          latitude: initialRegion.latitude,
-          longitude: initialRegion.longitude,
-          latitudeDelta: initialRegion.latitudeDelta,
-          longitudeDelta: initialRegion.longitudeDelta,
-        }}
-        onRegionChangeComplete={handleRegionChangeComplete}
+        styleURL={OSM_STYLE_URL}
+        onRegionDidChange={handleRegionChange}
         onLongPress={handleLongPress}
-        showsUserLocation
-        showsMyLocationButton
+        attributionEnabled={true}
+        logoEnabled={false}
       >
+        <MapLibreGL.Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: [initialRegion.longitude, initialRegion.latitude],
+            zoomLevel: initialZoom,
+          }}
+        />
+        
+        <MapLibreGL.UserLocation visible={true} />
+
         {/* Memory markers */}
         {memories.map((memory) => (
-          <Marker
+          <MapLibreGL.MarkerView
             key={memory.id}
-            coordinate={{
-              latitude: memory.latitude,
-              longitude: memory.longitude,
-            }}
-            pinColor={getMemoryColor(memory)}
-            title={memory.title || `${memory.type} memory`}
+            coordinate={[memory.longitude, memory.latitude]}
           >
             <View style={[styles.markerContainer, { backgroundColor: getMemoryColor(memory) }]}>
               <Ionicons name={getMemoryIcon(memory)} size={16} color="#FFF" />
             </View>
-          </Marker>
+          </MapLibreGL.MarkerView>
         ))}
 
         {/* Temporary pin for feeling placement */}
         {showTempPin && manualPinLocation && (
-          <Marker
-            coordinate={{
-              latitude: manualPinLocation.latitude,
-              longitude: manualPinLocation.longitude,
-            }}
-            pinColor="#FF3B30"
+          <MapLibreGL.MarkerView
+            coordinate={[manualPinLocation.longitude, manualPinLocation.latitude]}
           >
             <View style={styles.tempMarker}>
               <Ionicons name="location" size={32} color="#FF3B30" />
               <Text style={styles.tempMarkerLabel}>New Pin</Text>
             </View>
-          </Marker>
+          </MapLibreGL.MarkerView>
         )}
-      </MapView>
+      </MapLibreGL.MapView>
 
       {/* Loading overlay */}
       {isLoading && (
@@ -252,14 +172,6 @@ function NativeMapComponent({
       )}
     </View>
   );
-}
-
-// Main export - chooses between native maps and placeholder
-export function MapComponent(props: MapComponentProps) {
-  if (hasNativeMaps) {
-    return <NativeMapComponent {...props} />;
-  }
-  return <MapPlaceholder {...props} />;
 }
 
 const styles = StyleSheet.create({
@@ -272,80 +184,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-  },
-  mapPlaceholder: {
-    // Only take up to 50% of the screen so BottomSheet can be interacted with
-    maxHeight: '50%',
-    minHeight: 200,
-    backgroundColor: '#E8F4F8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  mapTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 8,
-  },
-  mapSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  moreText: {
-    fontSize: 12,
-    color: '#888',
-    marginLeft: 4,
-  },
-  dropPinButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#5856D6',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    marginTop: 16,
-    gap: 8,
-  },
-  dropPinText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  tempPinInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 4,
-  },
-  tempPinText: {
-    fontSize: 11,
-    color: '#FF3B30',
   },
   markerContainer: {
     width: 32,

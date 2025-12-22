@@ -195,9 +195,11 @@ export default function MapScreen() {
   const bottomSheetRef = React.useRef<BottomSheet>(null);
   const snapPoints = React.useMemo(() => ['15%', '55%', '90%'], []);
   // Mobile Tabs
-  const [activeMobileTab, setActiveMobileTab] = useState<'browse' | 'voice' | 'photo' | 'feeling'>(
+  const [activeMobileTab, setActiveMobileTab] = useState<'browse' | 'posts' | 'voice' | 'photo' | 'feeling'>(
     'browse',
   );
+  // Desktop action panel collapse state
+  const [isActionPanelOpen, setIsActionPanelOpen] = useState(true);
 
   // Initialize viewport on mount and when authenticated
   useEffect(() => {
@@ -499,14 +501,14 @@ export default function MapScreen() {
         />
 
         <View style={styles.desktopOverlayContainer} pointerEvents="box-none">
-          <View style={styles.desktopLeftPanel}>
+          <View style={styles.desktopLeftPanelWide}>
             <View style={[styles.header, { borderBottomWidth: 0, paddingBottom: 0 }]}>
               <ThemedText type="title" style={styles.headerTitle}>
                 My Living Map
               </ThemedText>
               <UploadStatus state={uploadState} />
             </View>
-            <ScrollView style={styles.memoriesList} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.memoriesListWide} showsVerticalScrollIndicator={false}>
               {mapMemories.length === 0 ? (
                 <Text style={styles.emptyText}>
                   {isLoadingMapMemories
@@ -514,14 +516,78 @@ export default function MapScreen() {
                     : 'No memories in this area. Pan the map or start capturing!'}
                 </Text>
               ) : (
-                mapMemories.map((memory) => <MemoryListItem key={memory.id} memory={memory} />)
+                mapMemories.map((memory) => (
+                  <TouchableOpacity
+                    key={memory.id}
+                    style={styles.desktopPostCard}
+                    onPress={() => {
+                      setCurrentRegion({
+                        ...currentRegion,
+                        latitude: memory.latitude,
+                        longitude: memory.longitude,
+                      });
+                    }}
+                  >
+                    {memory.mediaUrl && (
+                      <Image
+                        source={{ uri: memory.mediaUrl }}
+                        style={styles.desktopPostImage}
+                        resizeMode="contain"
+                      />
+                    )}
+                    <View style={styles.desktopPostContent}>
+                      <View style={styles.desktopPostHeader}>
+                        <View
+                          style={[
+                            styles.desktopPostIcon,
+                            { backgroundColor: memory.type === 'voice' ? '#FF6B6B' : memory.type === 'photo' ? '#5856D6' : '#A855F7' },
+                          ]}
+                        >
+                          <Ionicons
+                            name={memory.type === 'voice' ? 'mic' : memory.type === 'photo' ? 'image' : 'heart'}
+                            size={14}
+                            color="#FFF"
+                          />
+                        </View>
+                        <Text style={styles.desktopPostTitle}>
+                          {memory.title || `${memory.type === 'voice' ? 'Voice' : memory.type === 'photo' ? 'Photo' : 'Feeling'} Memory`}
+                        </Text>
+                        {memory.feeling && (
+                          <View style={[styles.desktopPostFeeling, { backgroundColor: '#F0EFFF' }]}>
+                            <Text style={styles.desktopPostFeelingText}>{memory.feeling}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.desktopPostLocation}>
+                        📍 {memory.latitude.toFixed(4)}, {memory.longitude.toFixed(4)}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
               )}
             </ScrollView>
           </View>
 
-          <View style={styles.desktopRightPanel}>
-            {renderError()}
-            {renderActionPanelContent()}
+          <View style={[styles.desktopRightPanel, !isActionPanelOpen && styles.desktopRightPanelCollapsed]}>
+            <TouchableOpacity
+              style={styles.actionPanelToggle}
+              onPress={() => setIsActionPanelOpen(!isActionPanelOpen)}
+            >
+              <Ionicons
+                name={isActionPanelOpen ? 'chevron-forward' : 'chevron-back'}
+                size={20}
+                color="#666"
+              />
+              {!isActionPanelOpen && (
+                <Text style={styles.actionPanelToggleText}>Actions</Text>
+              )}
+            </TouchableOpacity>
+            {isActionPanelOpen && (
+              <View style={styles.actionPanelContent}>
+                {renderError()}
+                {renderActionPanelContent()}
+              </View>
+            )}
           </View>
         </View>
       </SafeAreaView>
@@ -587,91 +653,146 @@ export default function MapScreen() {
           style={{ zIndex: 100 }}
         >
           <BottomSheetView style={styles.sheetHeader}>
-            <View style={styles.mobileHeaderRow}>
-              <Text style={styles.sheetTitle}>Memories</Text>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.quickActionsContainer}
-                style={styles.quickActionsScroll}
-              >
-                <TouchableOpacity
-                  style={[styles.actionBtn, activeMobileTab === 'voice' && styles.actionBtnActive]}
-                  onPress={() =>
-                    setActiveMobileTab(activeMobileTab === 'voice' ? 'browse' : 'voice')
-                  }
-                >
-                  <Ionicons
-                    name="mic"
-                    size={18}
-                    color={activeMobileTab === 'voice' ? '#FFF' : '#5856D6'}
-                  />
-                  <Text
-                    style={[
-                      styles.actionBtnText,
-                      activeMobileTab === 'voice' && styles.actionBtnTextActive,
-                    ]}
-                  >
-                    Voice
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, activeMobileTab === 'photo' && styles.actionBtnActive]}
-                  onPress={() =>
-                    setActiveMobileTab(activeMobileTab === 'photo' ? 'browse' : 'photo')
-                  }
-                >
-                  <Ionicons
-                    name="camera"
-                    size={18}
-                    color={activeMobileTab === 'photo' ? '#FFF' : '#5856D6'}
-                  />
-                  <Text
-                    style={[
-                      styles.actionBtnText,
-                      activeMobileTab === 'photo' && styles.actionBtnTextActive,
-                    ]}
-                  >
-                    Photo
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    activeMobileTab === 'feeling' && styles.actionBtnActive,
-                  ]}
-                  onPress={() =>
-                    setActiveMobileTab(activeMobileTab === 'feeling' ? 'browse' : 'feeling')
-                  }
-                >
-                  <Ionicons
-                    name="heart"
-                    size={18}
-                    color={activeMobileTab === 'feeling' ? '#FFF' : '#5856D6'}
-                  />
-                  <Text
-                    style={[
-                      styles.actionBtnText,
-                      activeMobileTab === 'feeling' && styles.actionBtnTextActive,
-                    ]}
-                  >
-                    Feeling
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnMap]}
-                  onPress={() => bottomSheetRef.current?.snapToIndex(0)}
-                >
-                  <Ionicons name="map-outline" size={18} color="#5856D6" />
-                  <Text style={styles.actionBtnText}>Map</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
+            <Text style={styles.sheetTitle}>Memories</Text>
           </BottomSheetView>
 
+          {/* Di chuyển ScrollView xuống đây, ngoài BottomSheetView */}
+          <View style={styles.quickActionsWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickActionsContainer}
+              style={styles.quickActionsScroll}
+              nestedScrollEnabled={true}
+              scrollEnabled={true}
+              bounces={false}
+            >
+              <TouchableOpacity
+                style={[styles.actionBtn, activeMobileTab === 'posts' && styles.actionBtnActive]}
+                onPress={() =>
+                  setActiveMobileTab(activeMobileTab === 'posts' ? 'browse' : 'posts')
+                }
+              >
+                <Ionicons
+                  name="newspaper"
+                  size={18}
+                  color={activeMobileTab === 'posts' ? '#FFF' : '#5856D6'}
+                />
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    activeMobileTab === 'posts' && styles.actionBtnTextActive,
+                  ]}
+                >
+                  Posts
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, activeMobileTab === 'voice' && styles.actionBtnActive]}
+                onPress={() =>
+                  setActiveMobileTab(activeMobileTab === 'voice' ? 'browse' : 'voice')
+                }
+              >
+                <Ionicons
+                  name="mic"
+                  size={18}
+                  color={activeMobileTab === 'voice' ? '#FFF' : '#5856D6'}
+                />
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    activeMobileTab === 'voice' && styles.actionBtnTextActive,
+                  ]}
+                >
+                  Voice
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, activeMobileTab === 'photo' && styles.actionBtnActive]}
+                onPress={() =>
+                  setActiveMobileTab(activeMobileTab === 'photo' ? 'browse' : 'photo')
+                }
+              >
+                <Ionicons
+                  name="camera"
+                  size={18}
+                  color={activeMobileTab === 'photo' ? '#FFF' : '#5856D6'}
+                />
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    activeMobileTab === 'photo' && styles.actionBtnTextActive,
+                  ]}
+                >
+                  Photo
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  activeMobileTab === 'feeling' && styles.actionBtnActive,
+                ]}
+                onPress={() =>
+                  setActiveMobileTab(activeMobileTab === 'feeling' ? 'browse' : 'feeling')
+                }
+              >
+                <Ionicons
+                  name="heart"
+                  size={18}
+                  color={activeMobileTab === 'feeling' ? '#FFF' : '#5856D6'}
+                />
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    activeMobileTab === 'feeling' && styles.actionBtnTextActive,
+                  ]}
+                >
+                  Feeling
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
           <View style={styles.sheetContent}>
-            {activeMobileTab !== 'browse' ? (
+            {activeMobileTab === 'posts' ? (
+              <GHScrollView
+                contentContainerStyle={{ paddingHorizontal: INSET_X, paddingVertical: 16 }}
+                horizontal={true}
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                snapToInterval={SNAP_INTERVAL}
+                snapToAlignment="center"
+              >
+                {mapMemories.length === 0 ? (
+                  <View style={[styles.emptyPostsContainer, { width: width - INSET_X * 2 }]}>
+                    <Ionicons name="newspaper-outline" size={48} color="#CCC" />
+                    <Text style={styles.emptyPostsText}>No posts yet</Text>
+                    <Text style={styles.emptyPostsSubtext}>
+                      Your memories will appear here as posts
+                    </Text>
+                  </View>
+                ) : (
+                  mapMemories.map((m) => (
+                    <VisualMemoryCard
+                      key={m.id}
+                      memory={m}
+                      onPress={(mem) => {
+                        setCurrentRegion({
+                          ...currentRegion,
+                          latitude: mem.latitude,
+                          longitude: mem.longitude,
+                        });
+                        setActiveMobileTab('browse');
+                        bottomSheetRef.current?.snapToIndex(0);
+                      }}
+                    />
+                  ))
+                )}
+              </GHScrollView>
+            ) : activeMobileTab !== 'browse' ? (
               <View style={styles.mobileCaptureContainer}>
                 {activeMobileTab === 'voice' && (
                   <VoiceRecorder
@@ -869,6 +990,105 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  // 50% wide left panel for desktop
+  desktopLeftPanelWide: {
+    width: '50%',
+    maxWidth: 600,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    margin: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    maxHeight: '90%',
+  },
+  memoriesListWide: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  // Desktop Post Card styles
+  desktopPostCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  desktopPostImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#E8F4F8',
+  },
+  desktopPostContent: {
+    padding: 14,
+  },
+  desktopPostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  desktopPostIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  desktopPostTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  desktopPostFeeling: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  desktopPostFeelingText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#5856D6',
+  },
+  desktopPostLocation: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 8,
+  },
+  // Collapsible action panel
+  desktopRightPanelCollapsed: {
+    width: 50,
+    minWidth: 50,
+    maxWidth: 50,
+    padding: 0,
+  },
+  actionPanelToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  actionPanelToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginLeft: 4,
+    writingDirection: 'ltr',
+  },
+  actionPanelContent: {
+    flex: 1,
   },
   emptyText: {
     textAlign: 'center',
@@ -1303,5 +1523,77 @@ const styles = StyleSheet.create({
   cancelCaptureText: {
     color: '#999',
     fontSize: 14,
+  },
+  quickActionsWrapper: {
+    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  // Posts tab styles
+  emptyPostsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyPostsText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 12,
+  },
+  emptyPostsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  postItem: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  postItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  postItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  postItemDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  postItemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  postItemLocation: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  postItemFeeling: {
+    backgroundColor: '#F0EFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  postItemFeelingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#5856D6',
   },
 });
