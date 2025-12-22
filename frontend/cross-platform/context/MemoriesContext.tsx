@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
 import { ApiService } from '../services/api.service';
 import { useAuth } from './AuthContext';
 import { Platform } from 'react-native';
+import { BoundingBox, boundingBoxToQueryParams, boundingBoxesDiffer } from '../utils/geo';
 
 // Types
 import { Feeling } from '../components/FeelingSelector';
@@ -33,8 +34,10 @@ export type MemoryUploadState = 'idle' | 'recording' | 'uploading' | 'success' |
 
 interface MemoriesContextType {
   memories: Memory[];
+  mapMemories: Memory[];
   uploadState: MemoryUploadState;
   error: string | null;
+  isLoadingMapMemories: boolean;
   uploadVoiceMemory: (data: {
     uri: string;
     duration: number;
@@ -56,6 +59,7 @@ interface MemoriesContextType {
     voiceUri?: string;
   }) => Promise<Memory | null>;
   fetchMemories: () => Promise<void>;
+  fetchMemoriesByBoundingBox: (bbox: BoundingBox, limit?: number) => Promise<void>;
   deleteMemory: (id: string) => Promise<boolean>;
   setUploadState: (state: MemoryUploadState) => void;
   clearError: () => void;
@@ -70,8 +74,13 @@ interface MemoriesProviderProps {
 export function MemoriesProvider({ children }: MemoriesProviderProps) {
   const { accessToken } = useAuth();
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [mapMemories, setMapMemories] = useState<Memory[]>([]);
   const [uploadState, setUploadState] = useState<MemoryUploadState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingMapMemories, setIsLoadingMapMemories] = useState(false);
+  
+  // Track last fetched bbox to avoid redundant API calls
+  const lastBboxRef = useRef<BoundingBox | null>(null);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -86,6 +95,41 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     } catch (err: any) {
       console.error('Failed to fetch memories:', err);
       setError(err.message || 'Failed to load memories');
+    }
+  }, [accessToken]);
+
+  /**
+   * Fetches memories within a bounding box for map viewport rendering.
+   * Story 2.4a: Map Viewport Logic
+   * 
+   * - Debounces duplicate calls for the same viewport
+   * - Returns optimized data for pin rendering (includes audioUrl, feeling, placeholderMetadata)
+   */
+  const fetchMemoriesByBoundingBox = useCallback(async (
+    bbox: BoundingBox,
+    limit: number = 50
+  ) => {
+    if (!accessToken) return;
+
+    // Skip if bbox hasn't changed significantly (debounce optimization)
+    if (!boundingBoxesDiffer(lastBboxRef.current, bbox)) {
+      return;
+    }
+    lastBboxRef.current = bbox;
+
+    setIsLoadingMapMemories(true);
+    try {
+      const queryParams = boundingBoxToQueryParams(bbox);
+      const data = await ApiService.get<Memory[]>(
+        `/api/memories/map?${queryParams}&limit=${limit}`,
+        accessToken
+      );
+      setMapMemories(data);
+    } catch (err: any) {
+      console.error('Failed to fetch map memories:', err);
+      // Don't set error for map fetch failures - non-blocking
+    } finally {
+      setIsLoadingMapMemories(false);
     }
   }, [accessToken]);
 
@@ -295,12 +339,15 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
 
   const value: MemoriesContextType = {
     memories,
+    mapMemories,
     uploadState,
     error,
+    isLoadingMapMemories,
     uploadVoiceMemory,
     uploadPhotoMemory,
     uploadFeelingPin,
     fetchMemories,
+    fetchMemoriesByBoundingBox,
     deleteMemory,
     setUploadState,
     clearError,

@@ -148,7 +148,7 @@ describe('MemoriesService', () => {
 
       await expect(
         service.createVoiceMemory('user-uuid-123', mockFile, invalidDto),
-      ).rejects.toThrow('Audio duration must be between 1 and 6 seconds');
+      ).rejects.toThrow('Audio duration must be between 1 and 6.5 seconds');
     });
 
     it('should throw error if duration is less than 1 second', async () => {
@@ -156,7 +156,7 @@ describe('MemoriesService', () => {
 
       await expect(
         service.createVoiceMemory('user-uuid-123', mockFile, invalidDto),
-      ).rejects.toThrow('Audio duration must be between 1 and 6 seconds');
+      ).rejects.toThrow('Audio duration must be between 1 and 6.5 seconds');
     });
 
     it('should use user default privacy when not specified', async () => {
@@ -402,4 +402,171 @@ describe('MemoriesService', () => {
       );
     });
   });
+
+  describe('getMemoriesByBoundingBox', () => {
+    const mockBboxMemories = [
+      {
+        id: 'memory-1',
+        latitude: 10.5,
+        longitude: 106.5,
+        type: MemoryType.voice,
+        mediaUrl: 'https://cloudinary.com/audio1.m4a',
+        feeling: 'JOY',
+        placeholderMetadata: null,
+        title: 'Morning walk',
+        createdAt: new Date('2025-12-20'),
+      },
+      {
+        id: 'memory-2',
+        latitude: 10.6,
+        longitude: 106.6,
+        type: MemoryType.photo,
+        mediaUrl: 'https://cloudinary.com/photo1.jpg',
+        feeling: null,
+        placeholderMetadata: null,
+        title: null,
+        createdAt: new Date('2025-12-19'),
+      },
+    ];
+
+    it('should query memories within bounding box', async () => {
+      prisma.memory.findMany.mockResolvedValue(mockBboxMemories);
+
+      const result = await service.getMemoriesByBoundingBox(
+        'user-uuid-123',
+        10.0, // minLat
+        106.0, // minLng
+        11.0, // maxLat
+        107.0, // maxLng
+        50, // limit
+      );
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-uuid-123',
+          deletedAt: null,
+          latitude: {
+            gte: 9.5, // 10.5 - 1.0
+            lte: 11.5, // 10.5 + 1.0
+          },
+          longitude: {
+            gte: 105.5, // 106.5 - 1.0
+            lte: 107.5, // 106.5 + 1.0
+          },
+        },
+        select: {
+          id: true,
+          latitude: true,
+          longitude: true,
+          type: true,
+          mediaUrl: true,
+          feeling: true,
+          placeholderMetadata: true,
+          title: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 50,
+      });
+      expect(result).toEqual(mockBboxMemories);
+    });
+
+    it('should respect the limit parameter', async () => {
+      prisma.memory.findMany.mockResolvedValue([mockBboxMemories[0]]);
+
+      await service.getMemoriesByBoundingBox(
+        'user-uuid-123',
+        10.0,
+        106.0,
+        11.0,
+        107.0,
+        1, // limit of 1
+      );
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 1,
+        }),
+      );
+    });
+
+    it('should use default limit of 50 when not specified', async () => {
+      prisma.memory.findMany.mockResolvedValue([]);
+
+      await service.getMemoriesByBoundingBox(
+        'user-uuid-123',
+        10.0,
+        106.0,
+        11.0,
+        107.0,
+      );
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 50,
+        }),
+      );
+    });
+
+    it('should return empty array when no memories in bounding box', async () => {
+      prisma.memory.findMany.mockResolvedValue([]);
+
+      const result = await service.getMemoriesByBoundingBox(
+        'user-uuid-123',
+        0.0, // Far away bounding box
+        0.0,
+        1.0,
+        1.0,
+      );
+
+      expect(result).toEqual([]);
+    });
+
+    it('should handle crossing prime meridian (negative to positive longitude)', async () => {
+      prisma.memory.findMany.mockResolvedValue([]);
+
+      await service.getMemoriesByBoundingBox(
+        'user-uuid-123',
+        51.0, // London
+        -1.0, // West of Greenwich
+        52.0,
+        1.0, // East of Greenwich
+        50,
+      );
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            longitude: {
+              gte: -1.0, // Center 0.0, radius 1.0 -> -1.0
+              lte: 1.0,  // Center 0.0, radius 1.0 -> 1.0
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should order memories by createdAt descending', async () => {
+      prisma.memory.findMany.mockResolvedValue(mockBboxMemories);
+
+      await service.getMemoriesByBoundingBox(
+        'user-uuid-123',
+        10.0,
+        106.0,
+        11.0,
+        107.0,
+      );
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+      );
+    });
+  });
 });
+

@@ -1,6 +1,14 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, StyleSheet, Animated, TouchableOpacity, Text, Alert, Platform, ActivityIndicator } from 'react-native';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Animated,
+  TouchableOpacity,
+  Text,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from 'expo-audio';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useMemories } from '../context/MemoriesContext';
@@ -19,18 +27,23 @@ const MAX_DURATION_MS = 5000; // 5 seconds max
 
 export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderProps) {
   const { uploadState } = useMemories();
-  const [isRecording, setIsRecording] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [hasPermissions, setHasPermissions] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
-  
-  const recordingRef = useRef<Audio.Recording | null>(null);
+
+  // Use the new expo-audio hook with preset
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const isStartingRef = useRef(false); // Mutex to prevent double-tap
   const isStoppingRef = useRef(false); // Mutex to prevent double-stop
+
+  // Derived state from recorder
+  const isRecording = audioRecorder.isRecording;
 
   // Request permissions on mount
   useEffect(() => {
@@ -52,7 +65,7 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
             duration: 500,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
     } else {
       pulseAnim.stopAnimation();
@@ -60,11 +73,60 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
     }
   }, [isRecording, pulseAnim]);
 
+  // Timer for duration tracking and auto-stop
+  useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    if (isRecording) {
+      startTimeRef.current = Date.now();
+      intervalId = setInterval(() => {
+        const elapsed = Date.now() - startTimeRef.current;
+        setRecordingDuration(Math.min(elapsed, MAX_DURATION_MS));
+
+        // Auto-stop at max duration - use ref to avoid stale closure
+        if (elapsed >= MAX_DURATION_MS && !isStoppingRef.current) {
+          isStoppingRef.current = true;
+          audioRecorder
+            .stop()
+            .then(() => {
+              const uri = audioRecorder.uri;
+              const durationSeconds = MAX_DURATION_MS / 1000;
+
+              if (uri && locationRef.current && durationSeconds >= 1.0) {
+                onRecordingComplete({
+                  uri,
+                  duration: durationSeconds,
+                  latitude: locationRef.current.latitude,
+                  longitude: locationRef.current.longitude,
+                });
+              }
+              locationRef.current = null;
+              setRecordingDuration(0);
+              isStoppingRef.current = false;
+            })
+            .catch(console.error);
+        }
+      }, 100);
+      timerRef.current = intervalId;
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isRecording, audioRecorder, onRecordingComplete]);
+
   const requestPermissions = async () => {
     try {
-      // Request audio permission
-      const audioPermission = await Audio.requestPermissionsAsync();
-      if (audioPermission.status !== 'granted') {
+      // Request audio permission using expo-audio
+      const audioStatus = await AudioModule.requestRecordingPermissionsAsync();
+      if (!audioStatus.granted) {
         setPermissionError('Microphone permission is required to record voice stickers');
         setHasPermissions(false);
         return;
@@ -104,12 +166,15 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
 
   const startRecording = async () => {
     if (!hasPermissions) {
-      Alert.alert('Permissions Required', permissionError || 'Please grant microphone and location permissions');
+      Alert.alert(
+        'Permissions Required',
+        permissionError || 'Please grant microphone and location permissions',
+      );
       return;
     }
 
     // Prevent multiple parallel starts (double-tap protection)
-    if (isRecording || recordingRef.current || isStartingRef.current) {
+    if (isRecording || isStartingRef.current) {
       console.log('Already recording or starting, ignoring double-tap');
       return;
     }
@@ -131,104 +196,35 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
       if (!location) {
         onError?.('Could not get your location. Please ensure location services are enabled.');
         setIsInitializing(false);
+        isStartingRef.current = false;
         return;
       }
       locationRef.current = location;
 
-      // Configure audio session
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      // Configure audio mode for recording
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      // Start recording with optimized settings for voice
-      const recording = new Audio.Recording();
-      
-      // Set up native-level status monitoring for auto-stop
-      recording.setOnRecordingStatusUpdate((status) => {
-        if (status.isRecording && status.durationMillis && status.durationMillis >= MAX_DURATION_MS) {
-          // Native-level auto-stop as backup to JS timer
-          stopRecording();
-        }
-      });
+      // Prepare and start recording using the new expo-audio API
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
 
-      // PREPARE
-      await recording.prepareToRecordAsync({
-        android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 64000,
-        },
-        ios: {
-          extension: '.m4a',
-          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-          audioQuality: Audio.IOSAudioQuality.MEDIUM,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 64000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        web: {
-          mimeType: 'audio/webm',
-          bitsPerSecond: 64000,
-        },
-      });
-
-      // START
-      await recording.startAsync();
-      recordingRef.current = recording;
       setIsInitializing(false);
-      setIsRecording(true);
       setRecordingDuration(0);
-
-      // Start timer and auto-stop at MAX_DURATION
-      const startTime = Date.now();
-      timerRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        setRecordingDuration(Math.min(elapsed, MAX_DURATION_MS));
-
-        // Auto-stop at max duration
-        if (elapsed >= MAX_DURATION_MS) {
-          stopRecording();
-        }
-      }, 100);
-
     } catch (error) {
       console.error('Recording start error:', error);
       onError?.('Failed to start recording');
-      // Cleanup on failure
-      if (recordingRef.current) {
-        try {
-          await recordingRef.current.stopAndUnloadAsync();
-        } catch (e) { /* ignore */ }
-        recordingRef.current = null;
-      }
       setIsInitializing(false);
-      setIsRecording(false);
     } finally {
-      setIsInitializing(false); 
       isStartingRef.current = false; // Release mutex
     }
   };
 
   const stopRecording = async () => {
     // Prevent double-stop
-    if (isStoppingRef.current) {
-      console.log('Already stopping, ignoring');
-      return;
-    }
-    
-    // Capture the current recording instance to avoid race conditions
-    const recording = recordingRef.current;
-    
-    // If we don't have a recording ref, we can't stop anything.
-    if (!recording) {
-      setIsRecording(false);
+    if (isStoppingRef.current || !isRecording) {
       return;
     }
 
@@ -236,43 +232,11 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
     isStoppingRef.current = true;
 
     try {
-      // Clear timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      // Stop recording and get the URI
+      await audioRecorder.stop();
 
-    let durationMillis = 0;
-    
-      // Get status to check recording state and duration
-      try {
-        const status = await recording.getStatusAsync();
-        durationMillis = status.durationMillis || 0;
-        
-        // Stop and unload if currently recording
-        if (status.isRecording) {
-          await recording.stopAndUnloadAsync();
-        } else {
-          // If not recording but loaded, ensure it's unloaded
-          await recording.stopAndUnloadAsync();
-        }
-      } catch (e) {
-        // Fallback: If getStatus fails, try to stop/unload blindly to ensure cleanup
-        console.warn('Error getting status or stopping:', e);
-        try { await recording.stopAndUnloadAsync(); } catch (ign) {}
-      }
-
-      // Reset audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-
-      // Get URI
-      const uri = recording.getURI();
-      
-      setIsRecording(false);
-
-      const durationSeconds = durationMillis / 1000;
+      const uri = audioRecorder.uri;
+      const durationSeconds = recordingDuration / 1000;
 
       if (uri && locationRef.current && durationSeconds >= 1.0) {
         onRecordingComplete({
@@ -282,23 +246,15 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
           longitude: locationRef.current.longitude,
         });
       } else if (durationSeconds < 1.0) {
-        onError?.(`Recording too short (${durationSeconds.toFixed(1)}s). Hold for at least 1 second.`);
+        onError?.(
+          `Recording too short (${durationSeconds.toFixed(1)}s). Hold for at least 1 second.`,
+        );
       }
 
-      // Only nullify if it's still the same recording (though unlikely to change if we handle start correctly)
-      if (recordingRef.current === recording) {
-        recordingRef.current = null;
-      }
       locationRef.current = null;
       setRecordingDuration(0);
-
     } catch (error) {
       console.error('Recording stop error:', error);
-      setIsRecording(false);
-      // Ensure cleanup
-      if (recordingRef.current === recording) {
-        recordingRef.current = null;
-      }
       onError?.('Failed to save recording');
     } finally {
       isStoppingRef.current = false; // Release mutex
@@ -310,22 +266,8 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
   };
 
   const handlePressOut = () => {
-    // Small delay to ensure startRecording has time to initialize if it was just called
-    // or just call stopRecording immediately and let the logic handle it.
     stopRecording();
   };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
-      }
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
 
   const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -362,11 +304,7 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
           {isInitializing ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Ionicons
-              name={isRecording ? 'mic' : 'mic-outline'}
-              size={32}
-              color="#FFFFFF"
-            />
+            <Ionicons name={isRecording ? 'mic' : 'mic-outline'} size={32} color="#FFFFFF" />
           )}
         </Animated.View>
       </TouchableOpacity>
@@ -381,9 +319,7 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
 
       {/* Instructions */}
       {!isRecording && !permissionError && (
-        <Text style={styles.instructionText}>
-          Hold to record (max 5 seconds)
-        </Text>
+        <Text style={styles.instructionText}>Hold to record (max 5 seconds)</Text>
       )}
     </View>
   );

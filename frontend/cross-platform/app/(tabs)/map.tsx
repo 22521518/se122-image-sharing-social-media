@@ -1,5 +1,16 @@
-import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, Text, ScrollView, TouchableOpacity, Alert, Image, TextInput, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
+import React, { useCallback, useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Image,
+  TextInput,
+  useWindowDimensions,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -10,6 +21,13 @@ import { useMemories, Memory, MemoryUploadState } from '@/context/MemoriesContex
 import { useAuth } from '@/context/AuthContext';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
+import { useMapViewport, MapRegion } from '@/hooks/useMapViewport';
+import { createInitialRegion } from '@/utils/geo';
+// Platform-agnostic map component - Metro resolves to .web.tsx or .native.tsx
+import { MapComponent } from '@/components/MapComponent';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native-gesture-handler';
+import { VisualMemoryCard } from '@/components/VisualMemoryCard';
 
 type CaptureMode = 'voice' | 'photo' | 'feeling';
 type ActivePanel = 'none' | 'photo-confirm' | 'feeling-pin';
@@ -48,36 +66,46 @@ function UploadStatus({ state }: { state: MemoryUploadState }) {
 }
 
 // Capture mode toggle
-function CaptureModeToggle({ mode, onModeChange, disabled }: { 
-  mode: CaptureMode; 
+function CaptureModeToggle({
+  mode,
+  onModeChange,
+  disabled,
+}: {
+  mode: CaptureMode;
   onModeChange: (mode: CaptureMode) => void;
   disabled?: boolean;
 }) {
   return (
     <View style={[styles.modeToggle, disabled && styles.modeToggleDisabled]}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.modeButton, mode === 'voice' && styles.modeButtonActive]}
         onPress={() => onModeChange('voice')}
         disabled={disabled}
       >
         <Ionicons name="mic" size={20} color={mode === 'voice' ? '#FFFFFF' : '#666'} />
-        <Text style={[styles.modeButtonText, mode === 'voice' && styles.modeButtonTextActive]}>Voice</Text>
+        <Text style={[styles.modeButtonText, mode === 'voice' && styles.modeButtonTextActive]}>
+          Voice
+        </Text>
       </TouchableOpacity>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.modeButton, mode === 'photo' && styles.modeButtonActive]}
         onPress={() => onModeChange('photo')}
         disabled={disabled}
       >
         <Ionicons name="image" size={20} color={mode === 'photo' ? '#FFFFFF' : '#666'} />
-        <Text style={[styles.modeButtonText, mode === 'photo' && styles.modeButtonTextActive]}>Photo</Text>
+        <Text style={[styles.modeButtonText, mode === 'photo' && styles.modeButtonTextActive]}>
+          Photo
+        </Text>
       </TouchableOpacity>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.modeButton, mode === 'feeling' && styles.modeButtonActive]}
         onPress={() => onModeChange('feeling')}
         disabled={disabled}
       >
         <Ionicons name="heart" size={20} color={mode === 'feeling' ? '#FFFFFF' : '#666'} />
-        <Text style={[styles.modeButtonText, mode === 'feeling' && styles.modeButtonTextActive]}>Feeling</Text>
+        <Text style={[styles.modeButtonText, mode === 'feeling' && styles.modeButtonTextActive]}>
+          Feeling
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -90,7 +118,7 @@ function MemoryListItem({ memory }: { memory: Memory }) {
     if (memory.type === 'voice') return 'mic';
     return 'image';
   };
-  
+
   const getColor = () => {
     if (memory.feeling) {
       const colors: Record<Feeling, string> = {
@@ -126,22 +154,57 @@ function MemoryListItem({ memory }: { memory: Memory }) {
 export default function MapScreen() {
   const { width } = useWindowDimensions();
   const isWideScreen = width >= 768;
-  
+
   const { accessToken } = useAuth();
   const isAuthenticated = !!accessToken;
-  const { memories, uploadState, error, uploadVoiceMemory, uploadPhotoMemory, uploadFeelingPin, setUploadState, clearError } = useMemories();
-  
+  const {
+    mapMemories,
+    uploadState,
+    error,
+    isLoadingMapMemories,
+    uploadVoiceMemory,
+    uploadPhotoMemory,
+    uploadFeelingPin,
+    clearError,
+  } = useMemories();
+
+  // Map viewport hook for debounced bounding box queries (Story 2.4a)
+  const { onRegionChange } = useMapViewport({
+    debounceMs: 500, // AC: Debounce to avoid request spam
+    limit: 50,
+  });
+
+  // Track current map region
+  const [currentRegion, setCurrentRegion] = useState<MapRegion>(
+    createInitialRegion(10.762622, 106.660172, 12), // Default: Ho Chi Minh City
+  );
+
   const [captureMode, setCaptureMode] = useState<CaptureMode>('voice');
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Photo upload state
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
-  
+
   // Feeling pin state
   const [manualPinLocation, setManualPinLocation] = useState<ManualPinLocation | null>(null);
   const [selectedFeeling, setSelectedFeeling] = useState<Feeling | null>(null);
   const [pinTitle, setPinTitle] = useState('');
+
+  // Mobile Layout State
+  const bottomSheetRef = React.useRef<BottomSheet>(null);
+  const snapPoints = React.useMemo(() => ['15%', '55%', '90%'], []);
+  // Mobile Tabs
+  const [activeMobileTab, setActiveMobileTab] = useState<'browse' | 'voice' | 'photo' | 'feeling'>(
+    'browse',
+  );
+
+  // Initialize viewport on mount and when authenticated
+  useEffect(() => {
+    if (isAuthenticated && currentRegion) {
+      onRegionChange(currentRegion);
+    }
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get current location for feeling pin
   const handleDropFeelingPin = useCallback(async () => {
@@ -153,7 +216,7 @@ export default function MapScreen() {
         setIsLoading(false);
         return;
       }
-      
+
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       setManualPinLocation({
         latitude: location.coords.latitude,
@@ -170,61 +233,64 @@ export default function MapScreen() {
     }
   }, []);
 
-  const handleRecordingComplete = useCallback(async (data: {
-    uri: string;
-    duration: number;
-    latitude: number;
-    longitude: number;
-  }) => {
-    await uploadVoiceMemory({
-      uri: data.uri,
-      duration: data.duration,
-      latitude: data.latitude,
-      longitude: data.longitude,
-    });
-  }, [uploadVoiceMemory]);
+  const handleRecordingComplete = useCallback(
+    async (data: { uri: string; duration: number; latitude: number; longitude: number }) => {
+      await uploadVoiceMemory({
+        uri: data.uri,
+        duration: data.duration,
+        latitude: data.latitude,
+        longitude: data.longitude,
+      });
+    },
+    [uploadVoiceMemory],
+  );
 
-  const handlePhotoSelected = useCallback(async (data: {
-    uri: string;
-    exif: { latitude?: number; longitude?: number; timestamp?: string } | null;
-    hasLocation: boolean;
-  }) => {
-    let latitude: number;
-    let longitude: number;
-    let locationSource: 'exif' | 'device';
+  const handlePhotoSelected = useCallback(
+    async (data: {
+      uri: string;
+      exif: { latitude?: number; longitude?: number; timestamp?: string } | null;
+      hasLocation: boolean;
+    }) => {
+      let latitude: number;
+      let longitude: number;
+      let locationSource: 'exif' | 'device';
 
-    if (data.hasLocation && data.exif?.latitude && data.exif?.longitude) {
-      latitude = data.exif.latitude;
-      longitude = data.exif.longitude;
-      locationSource = 'exif';
-    } else {
-      setIsLoading(true);
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Location Required', 'Please enable location services.');
+      if (data.hasLocation && data.exif?.latitude && data.exif?.longitude) {
+        latitude = data.exif.latitude;
+        longitude = data.exif.longitude;
+        locationSource = 'exif';
+      } else {
+        setIsLoading(true);
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Location Required', 'Please enable location services.');
+            setIsLoading(false);
+            return;
+          }
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          latitude = location.coords.latitude;
+          longitude = location.coords.longitude;
+          locationSource = 'device';
+        } catch {
+          Alert.alert('Error', 'Failed to get location for this photo.');
           setIsLoading(false);
           return;
         }
-        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        latitude = location.coords.latitude;
-        longitude = location.coords.longitude;
-        locationSource = 'device';
-      } catch (err) {
-        Alert.alert('Error', 'Failed to get location for this photo.');
         setIsLoading(false);
-        return;
       }
-      setIsLoading(false);
-    }
 
-    setPendingUpload({ uri: data.uri, latitude, longitude, locationSource });
-    setActivePanel('photo-confirm');
-  }, []);
+      setPendingUpload({ uri: data.uri, latitude, longitude, locationSource });
+      setActivePanel('photo-confirm');
+    },
+    [],
+  );
 
   const handleConfirmPhotoUpload = useCallback(async () => {
     if (!pendingUpload) return;
-    
+
     await uploadPhotoMemory({
       uri: pendingUpload.uri,
       latitude: pendingUpload.latitude,
@@ -237,7 +303,7 @@ export default function MapScreen() {
 
   const handleConfirmFeelingPin = useCallback(async () => {
     if (!selectedFeeling || !manualPinLocation) return;
-    
+
     await uploadFeelingPin({
       latitude: manualPinLocation.latitude,
       longitude: manualPinLocation.longitude,
@@ -275,221 +341,409 @@ export default function MapScreen() {
     );
   }
 
-  const hasActivePanel = activePanel !== 'none';
+  // Shared error banner helper
+  const renderError = () =>
+    error && (
+      <TouchableOpacity style={styles.errorBanner} onPress={clearError}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Ionicons name="close" size={16} color="#FF3B30" />
+      </TouchableOpacity>
+    );
+
+  // Shared Action Panel Content (Photo Confirmation, Feeling Pin, Capture UI)
+  const renderActionPanelContent = () => (
+    <>
+      {activePanel === 'photo-confirm' && pendingUpload && (
+        <View style={styles.confirmPanel}>
+          <Text style={styles.panelTitle}>Confirm Photo Upload</Text>
+          <Image
+            source={{ uri: pendingUpload.uri }}
+            style={styles.photoPreview}
+            resizeMode="contain"
+          />
+          <View style={styles.locationInfo}>
+            <Ionicons name="location" size={18} color="#5856D6" />
+            <Text style={styles.locationText}>
+              {pendingUpload.latitude.toFixed(4)}, {pendingUpload.longitude.toFixed(4)}
+            </Text>
+            <Text style={styles.locationSource}>({pendingUpload.locationSource})</Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelPanel}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmButton, uploadState === 'uploading' && styles.buttonDisabled]}
+              onPress={handleConfirmPhotoUpload}
+              disabled={uploadState === 'uploading'}
+            >
+              {uploadState === 'uploading' ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="cloud-upload" size={18} color="#FFF" />
+                  <Text style={styles.confirmButtonText}>Upload</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {activePanel === 'feeling-pin' && manualPinLocation && (
+        <View style={styles.confirmPanel}>
+          <Text style={styles.panelTitle}>Create Feeling Pin</Text>
+          <View style={styles.locationInfo}>
+            <Ionicons name="location" size={18} color="#5856D6" />
+            <Text style={styles.locationText}>
+              {manualPinLocation.latitude.toFixed(4)}, {manualPinLocation.longitude.toFixed(4)}
+            </Text>
+          </View>
+          <TextInput
+            style={styles.titleInput}
+            placeholder="Add a title (optional)"
+            placeholderTextColor="#999"
+            value={pinTitle}
+            onChangeText={setPinTitle}
+            maxLength={100}
+          />
+          <FeelingSelector
+            selectedFeeling={selectedFeeling}
+            onFeelingSelect={setSelectedFeeling}
+            compact={!isWideScreen}
+          />
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelPanel}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmButton, !selectedFeeling && styles.buttonDisabled]}
+              onPress={handleConfirmFeelingPin}
+              disabled={!selectedFeeling || uploadState === 'uploading'}
+            >
+              {uploadState === 'uploading' ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="heart" size={18} color="#FFF" />
+                  <Text style={styles.confirmButtonText}>Create</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {activePanel === 'none' && (
+        <>
+          <CaptureModeToggle mode={captureMode} onModeChange={setCaptureMode} />
+          <View style={styles.captureArea}>
+            {captureMode === 'voice' && (
+              <VoiceRecorder
+                onRecordingComplete={handleRecordingComplete}
+                onError={handleRecordingError}
+              />
+            )}
+            {captureMode === 'photo' && (
+              <PhotoPicker onPhotoSelected={handlePhotoSelected} onError={handleRecordingError} />
+            )}
+            {captureMode === 'feeling' && (
+              <View style={styles.feelingCaptureArea}>
+                <Ionicons name="hand-left" size={48} color="#5856D6" />
+                <Text style={styles.feelingCaptureText}>
+                  Long-press anywhere on the map above to drop a pin with an emotional tag
+                </Text>
+                <Text style={styles.feelingCaptureHint}>
+                  💡 Tip: Hold your finger on the map for half a second
+                </Text>
+                <TouchableOpacity style={styles.dropPinButton} onPress={handleDropFeelingPin}>
+                  <Ionicons name="add-circle" size={24} color="#FFF" />
+                  <Text style={styles.dropPinButtonText}>Drop Right Here</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </>
+      )}
+
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#5856D6" />
+          <Text style={styles.loadingText}>Getting location...</Text>
+        </View>
+      )}
+    </>
+  );
+
+  // Desktop Layout
+  if (isWideScreen) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <MapComponent
+          initialRegion={currentRegion}
+          onRegionChangeComplete={(region) => {
+            setCurrentRegion(region);
+            onRegionChange(region);
+          }}
+          onLongPress={(coordinate) => {
+            setManualPinLocation(coordinate);
+            setSelectedFeeling(null);
+            setPinTitle('');
+            setActivePanel('feeling-pin');
+          }}
+          memories={mapMemories}
+          manualPinLocation={manualPinLocation}
+          showTempPin={activePanel === 'feeling-pin'}
+          isLoading={isLoadingMapMemories}
+          containerStyle={StyleSheet.absoluteFill}
+        />
+
+        <View style={styles.desktopOverlayContainer} pointerEvents="box-none">
+          <View style={styles.desktopLeftPanel}>
+            <View style={[styles.header, { borderBottomWidth: 0, paddingBottom: 0 }]}>
+              <ThemedText type="title" style={styles.headerTitle}>
+                My Living Map
+              </ThemedText>
+              <UploadStatus state={uploadState} />
+            </View>
+            <ScrollView style={styles.memoriesList} showsVerticalScrollIndicator={false}>
+              {mapMemories.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  {isLoadingMapMemories
+                    ? 'Loading memories...'
+                    : 'No memories in this area. Pan the map or start capturing!'}
+                </Text>
+              ) : (
+                mapMemories.map((memory) => <MemoryListItem key={memory.id} memory={memory} />)
+              )}
+            </ScrollView>
+          </View>
+
+          <View style={styles.desktopRightPanel}>
+            {renderError()}
+            {renderActionPanelContent()}
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Mobile Layout
+  const CARD_WIDTH = width * 0.7;
+  const SNAP_INTERVAL = CARD_WIDTH + 16;
+  const INSET_X = (width - CARD_WIDTH) / 2;
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <ThemedText type="title" style={styles.headerTitle}>My Living Map</ThemedText>
-        <UploadStatus state={uploadState} />
-      </View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <MapComponent
+        initialRegion={currentRegion}
+        onRegionChangeComplete={(region) => {
+          setCurrentRegion(region);
+          onRegionChange(region);
+        }}
+        onLongPress={(coordinate) => {
+          setManualPinLocation(coordinate);
+          setSelectedFeeling(null);
+          setPinTitle('');
+          setActivePanel('feeling-pin');
+        }}
+        memories={mapMemories}
+        manualPinLocation={manualPinLocation}
+        showTempPin={activePanel === 'feeling-pin'}
+        isLoading={isLoadingMapMemories}
+        containerStyle={StyleSheet.absoluteFill}
+      />
 
-      {/* Main content - responsive layout */}
-      <View style={[styles.mainContent, isWideScreen && styles.mainContentWide]}>
-        {/* Left/Top: Map + Memories List */}
-        <View style={[styles.mapSection, isWideScreen && styles.mapSectionWide]}>
-          {/* Map placeholder with long-press simulation */}
-          <Pressable 
-            style={styles.mapPlaceholder}
-            onLongPress={(event) => {
-              // Simulate coordinate extraction from touch position
-              // In real map: coordinates would come from map's coordinate system
-              // Here: we calculate relative position and convert to lat/lng range
-              const { locationX, locationY } = event.nativeEvent;
-              const mapWidth = 400; // approximate placeholder width
-              const mapHeight = 180; // placeholder height
-              
-              // Simulate world coordinates (example: Vietnam region)
-              // Lat range: 8°N to 23°N, Lng range: 102°E to 110°E
-              const baseLat = 10.762622; // Ho Chi Minh City base
-              const baseLng = 106.660172;
-              const latRange = 15; // degrees
-              const lngRange = 8; // degrees
-              
-              // Calculate offset based on touch position (normalized to -0.5 to 0.5)
-              const latOffset = ((locationY / mapHeight) - 0.5) * latRange * -1; // invert Y
-              const lngOffset = ((locationX / mapWidth) - 0.5) * lngRange;
-              
-              const simulatedLat = baseLat + latOffset;
-              const simulatedLng = baseLng + lngOffset;
-              
-              // Clamp to valid ranges
-              const latitude = Math.max(-90, Math.min(90, simulatedLat));
-              const longitude = Math.max(-180, Math.min(180, simulatedLng));
-              
-              setManualPinLocation({ latitude, longitude });
-              setSelectedFeeling(null);
-              setPinTitle('');
-              setActivePanel('feeling-pin');
-            }}
-            delayLongPress={500}
+      <SafeAreaView style={styles.mobileHeaderOverlay} pointerEvents="box-none">
+        {renderError()}
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            width: '100%',
+            paddingHorizontal: 16,
+          }}
+        >
+          <UploadStatus state={uploadState} />
+          <TouchableOpacity
+            style={styles.fullscreenToggle}
+            onPress={() => bottomSheetRef.current?.snapToIndex(0)}
           >
-            <Text style={styles.mapPlaceholderEmoji}>🗺️</Text>
-            <Text style={styles.mapPlaceholderText}>Map View (Long-press to drop pin)</Text>
-            <Text style={styles.mapPinCount}>{memories.length} memories placed</Text>
-            
-            {/* Show temporary pin marker when location is selected */}
-            {manualPinLocation && activePanel === 'feeling-pin' && (
-              <View style={styles.tempPinMarker}>
-                <Ionicons name="location" size={32} color="#FF3B30" />
-                <Text style={styles.tempPinLabel}>New Pin</Text>
-              </View>
-            )}
-          </Pressable>
-
-          {/* Memories list */}
-          <ScrollView style={styles.memoriesList} showsVerticalScrollIndicator={false}>
-            {memories.length === 0 ? (
-              <Text style={styles.emptyText}>No memories yet. Start capturing!</Text>
-            ) : (
-              memories.map(memory => <MemoryListItem key={memory.id} memory={memory} />)
-            )}
-          </ScrollView>
+            <Ionicons name="map-outline" size={24} color="#333" />
+          </TouchableOpacity>
         </View>
+      </SafeAreaView>
 
-        {/* Right/Bottom: Action Panel */}
-        <View style={[styles.actionPanel, isWideScreen && styles.actionPanelWide]}>
-          {/* Error display */}
-          {error && (
-            <TouchableOpacity style={styles.errorBanner} onPress={clearError}>
-              <Text style={styles.errorText}>{error}</Text>
-              <Ionicons name="close" size={16} color="#FF3B30" />
-            </TouchableOpacity>
-          )}
+      {/* Overlay for Blocking Actions (Photo Confirm / Manual Pin) */}
+      {activePanel !== 'none' ? (
+        <View style={styles.mobileActionOverlay}>{renderActionPanelContent()}</View>
+      ) : (
+        <BottomSheet
+          ref={bottomSheetRef}
+          index={1}
+          snapPoints={snapPoints}
+          enablePanDownToClose={false}
+          style={{ zIndex: 100 }}
+        >
+          <BottomSheetView style={styles.sheetHeader}>
+            <View style={styles.mobileHeaderRow}>
+              <Text style={styles.sheetTitle}>Memories</Text>
 
-          {/* Photo Confirmation Panel */}
-          {activePanel === 'photo-confirm' && pendingUpload && (
-            <View style={styles.confirmPanel}>
-              <Text style={styles.panelTitle}>Confirm Photo Upload</Text>
-              
-              <Image source={{ uri: pendingUpload.uri }} style={styles.photoPreview} resizeMode="contain" />
-              
-              <View style={styles.locationInfo}>
-                <Ionicons name="location" size={18} color="#5856D6" />
-                <Text style={styles.locationText}>
-                  {pendingUpload.latitude.toFixed(4)}, {pendingUpload.longitude.toFixed(4)}
-                </Text>
-                <Text style={styles.locationSource}>({pendingUpload.locationSource})</Text>
-              </View>
-
-              <View style={styles.buttonRow}>
-                <TouchableOpacity style={styles.cancelButton} onPress={handleCancelPanel}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.confirmButton, uploadState === 'uploading' && styles.buttonDisabled]} 
-                  onPress={handleConfirmPhotoUpload}
-                  disabled={uploadState === 'uploading'}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickActionsContainer}
+                style={styles.quickActionsScroll}
+              >
+                <TouchableOpacity
+                  style={[styles.actionBtn, activeMobileTab === 'voice' && styles.actionBtnActive]}
+                  onPress={() =>
+                    setActiveMobileTab(activeMobileTab === 'voice' ? 'browse' : 'voice')
+                  }
                 >
-                  {uploadState === 'uploading' ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="cloud-upload" size={18} color="#FFF" />
-                      <Text style={styles.confirmButtonText}>Upload</Text>
-                    </>
-                  )}
+                  <Ionicons
+                    name="mic"
+                    size={18}
+                    color={activeMobileTab === 'voice' ? '#FFF' : '#5856D6'}
+                  />
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      activeMobileTab === 'voice' && styles.actionBtnTextActive,
+                    ]}
+                  >
+                    Voice
+                  </Text>
                 </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Feeling Pin Panel */}
-          {activePanel === 'feeling-pin' && manualPinLocation && (
-            <View style={styles.confirmPanel}>
-              <Text style={styles.panelTitle}>Create Feeling Pin</Text>
-              
-              <View style={styles.locationInfo}>
-                <Ionicons name="location" size={18} color="#5856D6" />
-                <Text style={styles.locationText}>
-                  {manualPinLocation.latitude.toFixed(4)}, {manualPinLocation.longitude.toFixed(4)}
-                </Text>
-              </View>
-
-              <TextInput
-                style={styles.titleInput}
-                placeholder="Add a title (optional)"
-                placeholderTextColor="#999"
-                value={pinTitle}
-                onChangeText={setPinTitle}
-                maxLength={100}
-              />
-
-              <FeelingSelector
-                selectedFeeling={selectedFeeling}
-                onFeelingSelect={setSelectedFeeling}
-                compact={!isWideScreen}
-              />
-
-              <View style={styles.buttonRow}>
-                <TouchableOpacity style={styles.cancelButton} onPress={handleCancelPanel}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.confirmButton, !selectedFeeling && styles.buttonDisabled]} 
-                  onPress={handleConfirmFeelingPin}
-                  disabled={!selectedFeeling || uploadState === 'uploading'}
+                <TouchableOpacity
+                  style={[styles.actionBtn, activeMobileTab === 'photo' && styles.actionBtnActive]}
+                  onPress={() =>
+                    setActiveMobileTab(activeMobileTab === 'photo' ? 'browse' : 'photo')
+                  }
                 >
-                  {uploadState === 'uploading' ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="heart" size={18} color="#FFF" />
-                      <Text style={styles.confirmButtonText}>Create</Text>
-                    </>
-                  )}
+                  <Ionicons
+                    name="camera"
+                    size={18}
+                    color={activeMobileTab === 'photo' ? '#FFF' : '#5856D6'}
+                  />
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      activeMobileTab === 'photo' && styles.actionBtnTextActive,
+                    ]}
+                  >
+                    Photo
+                  </Text>
                 </TouchableOpacity>
-              </View>
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    activeMobileTab === 'feeling' && styles.actionBtnActive,
+                  ]}
+                  onPress={() =>
+                    setActiveMobileTab(activeMobileTab === 'feeling' ? 'browse' : 'feeling')
+                  }
+                >
+                  <Ionicons
+                    name="heart"
+                    size={18}
+                    color={activeMobileTab === 'feeling' ? '#FFF' : '#5856D6'}
+                  />
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      activeMobileTab === 'feeling' && styles.actionBtnTextActive,
+                    ]}
+                  >
+                    Feeling
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnMap]}
+                  onPress={() => bottomSheetRef.current?.snapToIndex(0)}
+                >
+                  <Ionicons name="map-outline" size={18} color="#5856D6" />
+                  <Text style={styles.actionBtnText}>Map</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
-          )}
+          </BottomSheetView>
 
-          {/* Default Capture UI */}
-          {activePanel === 'none' && (
-            <>
-              <CaptureModeToggle mode={captureMode} onModeChange={setCaptureMode} />
-              
-              <View style={styles.captureArea}>
-                {captureMode === 'voice' && (
+          <View style={styles.sheetContent}>
+            {activeMobileTab !== 'browse' ? (
+              <View style={styles.mobileCaptureContainer}>
+                {activeMobileTab === 'voice' && (
                   <VoiceRecorder
-                    onRecordingComplete={handleRecordingComplete}
+                    onRecordingComplete={(file) => {
+                      handleRecordingComplete(file);
+                      setActiveMobileTab('browse');
+                    }}
                     onError={handleRecordingError}
                   />
                 )}
-                {captureMode === 'photo' && (
+                {activeMobileTab === 'photo' && (
                   <PhotoPicker
-                    onPhotoSelected={handlePhotoSelected}
+                    onPhotoSelected={(p) => {
+                      handlePhotoSelected(p);
+                      setActiveMobileTab('browse');
+                    }}
                     onError={handleRecordingError}
                   />
                 )}
-                {captureMode === 'feeling' && (
-                  <View style={styles.feelingCaptureArea}>
-                    <Ionicons name="hand-left" size={48} color="#5856D6" />
-                    <Text style={styles.feelingCaptureText}>
-                      Long-press anywhere on the map above to drop a pin with an emotional tag
-                    </Text>
-                    <Text style={styles.feelingCaptureHint}>
-                      💡 Tip: Hold your finger on the map for half a second
-                    </Text>
-                    <TouchableOpacity style={styles.dropPinButton} onPress={handleDropFeelingPin}>
-                      <Ionicons name="add-circle" size={24} color="#FFF" />
-                      <Text style={styles.dropPinButtonText}>Drop Right Here</Text>
+                {activeMobileTab === 'feeling' && (
+                  <View style={styles.feelingCaptureAreaMobile}>
+                    <ThemedText style={{ textAlign: 'center', marginBottom: 12 }}>
+                      How are you feeling right now?
+                    </ThemedText>
+                    <TouchableOpacity
+                      style={[styles.dropPinButton, { width: '100%' }]}
+                      onPress={() => {
+                        handleDropFeelingPin();
+                        setActiveMobileTab('browse');
+                      }}
+                    >
+                      <Ionicons name="location" size={20} color="#FFF" />
+                      <Text style={styles.dropPinButtonText}>Drop Feeling Pin Here</Text>
                     </TouchableOpacity>
                   </View>
                 )}
+                <TouchableOpacity
+                  style={styles.cancelCaptureBtn}
+                  onPress={() => setActiveMobileTab('browse')}
+                >
+                  <Text style={styles.cancelCaptureText}>Cancel</Text>
+                </TouchableOpacity>
               </View>
-            </>
-          )}
-          {/* Loading Overlay */}
-          {isLoading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#5856D6" />
-              <Text style={styles.loadingText}>Getting location...</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </SafeAreaView>
+            ) : (
+              <GHScrollView
+                contentContainerStyle={{ paddingHorizontal: INSET_X, paddingVertical: 16 }}
+                horizontal={true}
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                snapToInterval={SNAP_INTERVAL}
+                snapToAlignment="center"
+              >
+                {mapMemories.map((m) => (
+                  <VisualMemoryCard
+                    key={m.id}
+                    memory={m}
+                    onPress={(mem) => {
+                      setCurrentRegion({
+                        ...currentRegion,
+                        latitude: mem.latitude,
+                        longitude: mem.longitude,
+                      });
+                      bottomSheetRef.current?.snapToIndex(0);
+                    }}
+                  />
+                ))}
+              </GHScrollView>
+            )}
+          </View>
+        </BottomSheet>
+      )}
+    </GestureHandlerRootView>
   );
 }
 
@@ -535,7 +789,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  
+
   // Main content layout
   mainContent: {
     flex: 1,
@@ -544,7 +798,7 @@ const styles = StyleSheet.create({
   mainContentWide: {
     flexDirection: 'row',
   },
-  
+
   // Map section
   mapSection: {
     flex: 1,
@@ -554,6 +808,35 @@ const styles = StyleSheet.create({
     flex: 2,
     borderRightWidth: 1,
     borderRightColor: '#E5E5EA',
+  },
+  mapContainer: {
+    height: 280,
+    position: 'relative',
+  },
+  map: {
+    flex: 1,
+  },
+  mapLoadingOverlay: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mapLoadingText: {
+    fontSize: 12,
+    color: '#5856D6',
+    fontWeight: '600',
   },
   mapPlaceholder: {
     height: 180,
@@ -576,6 +859,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     color: '#888',
+  },
+  mapInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
   memoriesList: {
     flex: 1,
@@ -626,7 +914,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  
+
   // Action Panel
   actionPanel: {
     backgroundColor: '#FFFFFF',
@@ -640,7 +928,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     maxWidth: 400,
   },
-  
+
   // Mode toggle
   modeToggle: {
     flexDirection: 'row',
@@ -672,7 +960,7 @@ const styles = StyleSheet.create({
   modeButtonTextActive: {
     color: '#FFFFFF',
   },
-  
+
   // Capture area
   captureArea: {
     minHeight: 100,
@@ -709,7 +997,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  
+
   // Confirmation panels
   confirmPanel: {
     gap: 12,
@@ -788,7 +1076,7 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     backgroundColor: '#C7C7CC',
   },
-  
+
   // Error banner
   errorBanner: {
     flexDirection: 'row',
@@ -837,5 +1125,183 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     marginTop: -4,
+  },
+
+  // Mobile Layout Styles
+  mobileHeaderOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    padding: 16,
+    alignItems: 'flex-end',
+    pointerEvents: 'box-none',
+  },
+  fullscreenToggle: {
+    position: 'absolute',
+    bottom: 300, // Adjust based on sheet
+    right: 16,
+    backgroundColor: '#FFF',
+    padding: 12,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 50,
+  },
+  sheetHeader: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  sheetContent: {
+    flex: 1,
+    backgroundColor: '#F9F9FB',
+  },
+  mobileTabs: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  mobileTab: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  mobileTabActive: {
+    backgroundColor: '#5856D6',
+  },
+  mobileTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  mobileTabTextActive: {
+    color: '#FFF',
+  },
+  mobileActionOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 20,
+    zIndex: 200,
+  },
+  mobileCardsContainer: {
+    padding: 16,
+  },
+  mobileCaptureContainer: {
+    padding: 20,
+  },
+  feelingCaptureAreaMobile: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 16,
+  },
+  desktopOverlayContainer: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 24,
+    zIndex: 10,
+  },
+  desktopLeftPanel: {
+    width: 380,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+    display: 'flex',
+    flexDirection: 'column',
+    maxHeight: '100%',
+  },
+  desktopRightPanel: {
+    width: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  mobileHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+  },
+  quickActions: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  quickActionsScroll: {
+    flexGrow: 0,
+  },
+  quickActionsContainer: {
+    gap: 8,
+    paddingRight: 16,
+    alignItems: 'center',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    gap: 4,
+  },
+  actionBtnMap: {
+    backgroundColor: '#E5E5EA',
+  },
+  actionBtnActive: {
+    backgroundColor: '#5856D6',
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#5856D6',
+  },
+  actionBtnTextActive: {
+    color: '#FFF',
+  },
+  cancelCaptureBtn: {
+    alignSelf: 'center',
+    marginTop: 16,
+    padding: 10,
+  },
+  cancelCaptureText: {
+    color: '#999',
+    fontSize: 14,
   },
 });

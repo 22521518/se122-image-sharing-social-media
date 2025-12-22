@@ -4,6 +4,7 @@ import {
   Get,
   Delete,
   Param,
+  Query,
   Body,
   UseGuards,
   UseInterceptors,
@@ -15,7 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { MemoriesService } from '../services/memories.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto } from '../dto';
 import {
   ApiTags,
   ApiOperation,
@@ -221,6 +222,48 @@ export class MemoriesController {
     @Body() dto: CreateFeelingPinDto,
   ) {
     return this.memoriesService.createFeelingPin(req.user.id, dto, file);
+  }
+
+  @Get('map')
+  @ApiOperation({
+    summary: 'Get memories for map viewport',
+    description: 'Query memories within a bounding box for map rendering. Returns optimized data for pin rendering including audioUrl, feeling, and placeholderMetadata to prevent N+1 fetches.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of memories within the bounding box with rendering data',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Memory UUID' },
+          latitude: { type: 'number', description: 'GPS latitude' },
+          longitude: { type: 'number', description: 'GPS longitude' },
+          type: { type: 'string', enum: ['voice', 'photo', 'mixed', 'text_only'] },
+          mediaUrl: { type: 'string', nullable: true, description: 'Audio or photo URL for playback' },
+          feeling: { type: 'string', nullable: true, enum: ['JOY', 'MELANCHOLY', 'ENERGETIC', 'CALM', 'INSPIRED'] },
+          placeholderMetadata: { type: 'object', nullable: true, description: 'Gradient metadata for client rendering' },
+          title: { type: 'string', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid bounding box parameters' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMapMemories(
+    @Request() req: any,
+    @Query() query: MapBoundingBoxQueryDto,
+  ) {
+    return this.memoriesService.getMemoriesByBoundingBox(
+      req.user.id,
+      query.minLat,
+      query.minLng,
+      query.maxLat,
+      query.maxLng,
+      query.limit || 50,
+    );
   }
 
   @Get()

@@ -353,5 +353,78 @@ export class MemoriesService {
 
     return memory;
   }
+
+  /**
+   * Get memories within a bounding box for map viewport rendering.
+   * Returns optimized data for pin rendering: id, lat, lng, type, audioUrl, feeling, placeholderMetadata.
+   * 
+   * Story 2.4a: Map Viewport Logic
+   * - Filters by userId for "My Memories" context
+   * - Limits result set to prevent performance degradation
+   * - Returns fields needed for immediate playback without N+1 fetches (NFR2: <200ms)
+   */
+  async getMemoriesByBoundingBox(
+    userId: string,
+    minLat: number,
+    minLng: number,
+    maxLat: number,
+    maxLng: number,
+    limit: number = 50,
+  ) {
+    this.logger.debug(
+      `Fetching memories in bbox: [${minLat}, ${minLng}] -> [${maxLat}, ${maxLng}] for user ${userId}`,
+    );
+
+    // Calculate center
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+
+    // Minimum radius in degrees (approx 100km)
+    // 1 degree lat = ~111km. 1 degree lng = ~111km * cos(lat)
+    const MIN_DEGREE_RADIUS = 1.0;
+
+    // Ensure window is at least MIN_DEGREE_RADIUS big
+    const adjustedMinLat = Math.min(minLat, centerLat - MIN_DEGREE_RADIUS);
+    const adjustedMaxLat = Math.max(maxLat, centerLat + MIN_DEGREE_RADIUS);
+    const adjustedMinLng = Math.min(minLng, centerLng - MIN_DEGREE_RADIUS);
+    const adjustedMaxLng = Math.max(maxLng, centerLng + MIN_DEGREE_RADIUS);
+
+    const memories = await this.prisma.memory.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        latitude: {
+          gte: adjustedMinLat,
+          lte: adjustedMaxLat,
+        },
+        longitude: {
+          gte: adjustedMinLng,
+          lte: adjustedMaxLng,
+        },
+      },
+      select: {
+        id: true,
+        latitude: true,
+        longitude: true,
+        type: true,
+        mediaUrl: true, // audioUrl for voice memories, photoUrl for photo memories
+        feeling: true,
+        placeholderMetadata: true,
+        title: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+    });
+
+    this.logger.log(
+      `Found ${memories.length} memories in bounding box for user ${userId}`,
+    );
+
+    return memories;
+  }
 }
+
 
