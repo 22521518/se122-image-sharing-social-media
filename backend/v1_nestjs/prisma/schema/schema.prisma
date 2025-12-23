@@ -43,6 +43,24 @@ model User {
   @@map("users")
   refreshTokens   RefreshToken[]
   memories        Memory[]
+  
+  // Social Graph
+  followers       Follow[]     @relation("followers")
+  following       Follow[]     @relation("following")
+  followerCount   Int          @default(0) @map("follower_count")
+  followingCount  Int          @default(0) @map("following_count")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  follower    User     @relation("following", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String   @map("following_id")
+  following   User     @relation("followers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followingId])
+  @@map("follows")
 }
 
 model RefreshToken {

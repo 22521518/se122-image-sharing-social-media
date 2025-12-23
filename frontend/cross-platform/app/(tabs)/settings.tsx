@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,117 +6,22 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
-  Alert,
 } from 'react-native';
-import { router } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+import { useUserSettings } from '@/hooks/useUserSettings';
 
 type PrivacyLevel = 'private' | 'friends' | 'public';
 
-interface Settings {
-  defaultPrivacy: PrivacyLevel;
-}
-
 export default function SettingsScreen() {
-  const { accessToken, logout, isLoading: authLoading } = useAuth();
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  useEffect(() => {
-    // Wait for auth to finish loading and have a valid token
-    if (!authLoading && accessToken) {
-      loadSettings();
-    } else if (!authLoading && !accessToken) {
-      setIsLoading(false);
-    }
-  }, [authLoading, accessToken]);
-
-  const loadSettings = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/settings`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
-      }
-    } catch (err) {
-      setError('Failed to load settings');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const updatePrivacy = async (level: PrivacyLevel) => {
-    setError('');
-    setSuccess('');
-    setIsSaving(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/settings`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ defaultPrivacy: level }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
-        setSuccess('Privacy settings updated!');
-      } else {
-        setError('Failed to update settings');
-      }
-    } catch (err) {
-      setError('Failed to update settings');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const confirmDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? Your account will be scheduled for permanent deletion in 30 days. You can reactivate by logging in within this period.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: deleteAccount },
-      ],
-    );
-  };
-
-  const deleteAccount = async () => {
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/account`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (response.ok) {
-        await logout();
-        router.replace('/(auth)/login');
-      } else {
-        setError('Failed to delete account');
-      }
-    } catch (err) {
-      setError('Failed to delete account');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  const {
+    settings,
+    isLoading,
+    isSaving,
+    isDeleting,
+    error,
+    success,
+    updatePrivacy,
+    confirmDeleteAccount,
+  } = useUserSettings();
 
   if (isLoading) {
     return (

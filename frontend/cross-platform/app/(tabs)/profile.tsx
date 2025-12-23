@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,141 +11,35 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-
-interface Profile {
-  id: string;
-  email: string;
-  name: string | null;
-  bio: string | null;
-  avatarUrl: string | null;
-}
+import { useUserProfile } from '@/hooks/useUserProfile';
 
 export default function ProfileScreen() {
-  const { user, accessToken, logout, isLoading: authLoading } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [name, setName] = useState('');
-  const [bio, setBio] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const { accessToken, logout } = useAuth();
+  const { 
+    profile, 
+    isLoading, 
+    isSaving, 
+    error, 
+    success, 
+    updateProfile 
+  } = useUserProfile();
+  
+  const [name, setName] = useState(profile?.name || '');
+  const [bio, setBio] = useState(profile?.bio || '');
 
-  // Load profile function with proper error handling
-  const loadProfile = useCallback(async (token: string) => {
-    setIsLoading(true);
-    setError('');
-    
-    try {
-      console.log('Fetching profile from:', `${API_BASE_URL}/api/users/profile`);
-      
-      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      console.log('Profile response status:', response.status);
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Profile data received:', result);
-        
-        // API returns { success, data, meta }
-        const data = result.data || result;
-        console.log('Actual profile:', data);
-        
-        setProfile(data);
-        setName(data.name || '');
-        setBio(data.bio || '');
-      } else {
-        const errorText = await response.text();
-        console.error('Profile load failed:', response.status, errorText);
-        setError(`Failed to load profile: ${response.status}`);
-      }
-    } catch (err) {
-      console.error('Profile fetch error:', err);
-      setError('Network error: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setIsLoading(false);
+  // Sync local state when profile loads
+  React.useEffect(() => {
+    if (profile) {
+      setName(profile.name || '');
+      setBio(profile.bio || '');
     }
-  }, []);
-
-  // Effect to load profile when auth is ready
-  useEffect(() => {
-    console.log('Auth state changed:', { 
-      authLoading, 
-      hasToken: !!accessToken,
-      hasProfile: !!profile 
-    });
-
-    // Wait for auth to finish loading
-    if (authLoading) {
-      return;
-    }
-
-    // If no token, stop loading
-    if (!accessToken) {
-      console.log('No access token available');
-      setIsLoading(false);
-      return;
-    }
-
-    // Load profile with valid token
-    loadProfile(accessToken);
-  }, [authLoading, accessToken, loadProfile]);
+  }, [profile]);
 
   const handleSave = async () => {
-    setError('');
-    setSuccess('');
-
-    if (!accessToken) {
-      setError('Not authenticated');
-      return;
-    }
-
-    if (name && (name.length < 2 || name.length > 50)) {
-      setError('Display name must be between 2 and 50 characters');
-      return;
-    }
-
-    setIsSaving(true);
-    
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ 
-          name: name || undefined, 
-          bio: bio || undefined 
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        // API returns { success, data, meta }
-        const data = result.data || result;
-        
-        setProfile(data);
-        setSuccess('Profile updated successfully!');
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
-      } else {
-        const err = await response.json().catch(() => ({ message: 'Failed to update profile' }));
-        setError(err.message || 'Failed to update profile');
-      }
-    } catch (err) {
-      console.error('Save error:', err);
-      setError('Failed to update profile: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setIsSaving(false);
-    }
+    await updateProfile({ 
+      name: name || undefined, 
+      bio: bio || undefined 
+    });
   };
 
   const handleLogout = async () => {
@@ -158,7 +52,7 @@ export default function ProfileScreen() {
   };
 
   // Loading state
-  if (isLoading || authLoading) {
+  if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -255,7 +149,6 @@ export default function ProfileScreen() {
           <View style={styles.debugContainer}>
             <Text style={styles.debugText}>
               Debug Info:{'\n'}
-              Auth Loading: {String(authLoading)}{'\n'}
               Has Token: {String(!!accessToken)}{'\n'}
               Has Profile: {String(!!profile)}{'\n'}
               Profile Email: {profile?.email || 'N/A'}

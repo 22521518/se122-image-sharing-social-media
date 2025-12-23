@@ -1,23 +1,27 @@
-import { Controller, Get, Patch, Body, UseGuards, Req, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Req, Delete, UseInterceptors, UploadedFile, Param, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpdateSettingsDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../auth-core/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth-core/guards/optional-jwt-auth.guard';
+import { Public } from '../auth-core/decorators/public.decorator';
 import { User } from '@prisma/client';
 import { AuditService, AuditAction } from '../audit/audit.service';
 import { MediaService } from '../media/services/media.service';
+import { GraphService } from '../social/graph/graph.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(OptionalJwtAuthGuard)
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly auditService: AuditService,
     private readonly mediaService: MediaService,
+    private readonly graphService: GraphService,
   ) { }
 
   @Get('profile')
@@ -145,6 +149,39 @@ export class UsersController {
 
     return {
       message: 'Account scheduled for deletion. You have 30 days to reactivate by logging in.',
+    };
+  }
+
+  // Parameterized routes MUST come AFTER static routes to avoid route conflicts
+  // This endpoint allows unauthenticated access - privacy filtering will be added later
+  @Public()
+  @Get(':id/public-profile')
+  @ApiOperation({ summary: 'Get another user public profile (no auth required)' })
+  @ApiResponse({ status: 200, description: 'Return public profile with optional follow status.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  async getPublicProfile(@Req() req: Request & { user?: User }, @Param('id') userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if following (only if viewer is authenticated)
+    let isFollowing = false;
+    if (req.user) {
+      isFollowing = await this.graphService.isFollowing(req.user.id, userId);
+    }
+
+    // TODO: Add privacy filtering based on user.defaultPrivacy settings
+    // For now, return basic public info for all users
+    return {
+      id: user.id,
+      name: user.name,
+      bio: user.bio,
+      avatarUrl: user.avatarUrl,
+      followerCount: user.followerCount,
+      followingCount: user.followingCount,
+      isFollowing,
+      isAuthenticated: !!req.user,
     };
   }
 }

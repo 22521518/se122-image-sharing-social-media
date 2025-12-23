@@ -36,7 +36,7 @@ interface UserDto {
 
 // 2. Use ApiService for all API calls
 // 3. Access data via response.data, NOT response directly
-const response = await fetch('/auth/login');
+const response = await fetch('api/auth/login');
 const json = await response.json();
 const token = json.data?.accessToken || json.accessToken; // Handle both formats
 ```
@@ -45,7 +45,7 @@ const token = json.data?.accessToken || json.accessToken; // Handle both formats
 ```
 src/
 ├── context/     # React Context providers
-├── services/    # API services (future: ApiService)
+├── services/    # API services (future: ApiService) # the endpoint should include api/ (eg. api/users/profile)
 ├── types/       # TypeScript types and DTOs
 ├── hooks/       # Custom React hooks
 ├── components/  # Reusable UI components
