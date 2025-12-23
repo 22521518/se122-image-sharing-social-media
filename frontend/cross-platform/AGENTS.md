@@ -53,6 +53,27 @@ src/
 
 ---
 
+## Technology Stack (CRITICAL - READ BEFORE CODING)
+
+> [!CAUTION]
+> **Audio Library:** Use `expo-audio` NOT `expo-av`!
+
+| Category | Package | Notes |
+|----------|---------|-------|
+| Audio | `expo-audio` | `useAudioPlayer` for playback, `useAudioRecorder` for recording |
+| Images | `expo-image` | Use instead of React Native `Image` |
+| Maps (Native) | `@maplibre/maplibre-react-native` | With OpenStreetMap tiles |
+| Maps (Web) | `react-leaflet` + `leaflet` | Fallback for web platform |
+| Location | `expo-location` | Device GPS |
+| Bottom Sheet | `@gorhom/bottom-sheet` | Mobile UI patterns |
+| Navigation | `expo-router` | File-based routing |
+
+**Common Mistakes to Avoid:**
+- ❌ `import { Audio } from 'expo-av'` - DEPRECATED
+- ✅ `import { useAudioPlayer, useAudioRecorder } from 'expo-audio'`
+
+---
+
 ## Dependencies
 - **Auth Context**: Handles authentication state
 - **AsyncStorage**: Token persistence

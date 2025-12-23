@@ -13,6 +13,7 @@ export interface MapComponentProps {
   onRegionChangeComplete: (region: MapRegion) => void;
   onLongPress: (coordinate: { latitude: number; longitude: number }) => void;
   memories: Memory[];
+  onMemoryPress: (memory: Memory) => void;
   manualPinLocation: { latitude: number; longitude: number } | null;
   showTempPin: boolean;
   isLoading: boolean;

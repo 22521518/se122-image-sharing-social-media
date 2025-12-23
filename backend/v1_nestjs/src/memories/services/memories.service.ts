@@ -375,33 +375,32 @@ export class MemoriesService {
       `Fetching memories in bbox: [${minLat}, ${minLng}] -> [${maxLat}, ${maxLng}] for user ${userId}`,
     );
 
-    // Calculate center
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLng = (minLng + maxLng) / 2;
+    // Use the requested bounding box directly or default logic
+    const isCrossMeridian = minLng > maxLng;
+    const whereClause: any = {
+      userId,
+      deletedAt: null,
+      latitude: {
+        gte: minLat,
+        lte: maxLat,
+      },
+    };
 
-    // Minimum radius in degrees (approx 100km)
-    // 1 degree lat = ~111km. 1 degree lng = ~111km * cos(lat)
-    const MIN_DEGREE_RADIUS = 1.0;
-
-    // Ensure window is at least MIN_DEGREE_RADIUS big
-    const adjustedMinLat = Math.min(minLat, centerLat - MIN_DEGREE_RADIUS);
-    const adjustedMaxLat = Math.max(maxLat, centerLat + MIN_DEGREE_RADIUS);
-    const adjustedMinLng = Math.min(minLng, centerLng - MIN_DEGREE_RADIUS);
-    const adjustedMaxLng = Math.max(maxLng, centerLng + MIN_DEGREE_RADIUS);
+    // Handle International Date Line crossing (e.g. minLng=179, maxLng=-179)
+    if (isCrossMeridian) {
+      whereClause.OR = [
+        { longitude: { gte: minLng, lte: 180 } },
+        { longitude: { gte: -180, lte: maxLng } },
+      ];
+    } else {
+      whereClause.longitude = {
+        gte: minLng,
+        lte: maxLng,
+      };
+    }
 
     const memories = await this.prisma.memory.findMany({
-      where: {
-        userId,
-        deletedAt: null,
-        latitude: {
-          gte: adjustedMinLat,
-          lte: adjustedMaxLat,
-        },
-        longitude: {
-          gte: adjustedMinLng,
-          lte: adjustedMaxLng,
-        },
-      },
+      where: whereClause,
       select: {
         id: true,
         latitude: true,

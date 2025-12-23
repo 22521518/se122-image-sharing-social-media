@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -28,6 +28,8 @@ import { MapComponent } from '@/components/MapComponent';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { VisualMemoryCard } from '@/components/VisualMemoryCard';
+import { Filmstrip, FilmstripRef } from '@/components/map/Filmstrip';
+import { getMemoryColor, getMemoryIcon, getTypeIcon } from '@/constants/MemoryUI';
 
 type CaptureMode = 'voice' | 'photo' | 'feeling';
 type ActivePanel = 'none' | 'photo-confirm' | 'feeling-pin';
@@ -113,25 +115,8 @@ function CaptureModeToggle({
 
 // Memory list item
 function MemoryListItem({ memory }: { memory: Memory }) {
-  const getIcon = () => {
-    if (memory.type === 'text_only') return 'heart';
-    if (memory.type === 'voice') return 'mic';
-    return 'image';
-  };
-
-  const getColor = () => {
-    if (memory.feeling) {
-      const colors: Record<Feeling, string> = {
-        JOY: '#FFD93D',
-        MELANCHOLY: '#667BC6',
-        ENERGETIC: '#FF6B35',
-        CALM: '#5CBDB9',
-        INSPIRED: '#A855F7',
-      };
-      return colors[memory.feeling] || '#5856D6';
-    }
-    return memory.type === 'voice' ? '#FF6B6B' : '#5856D6';
-  };
+  const getIcon = () => getMemoryIcon(memory);
+  const getColor = () => getMemoryColor(memory);
 
   return (
     <View style={[styles.memoryItem, { borderLeftColor: getColor() }]}>
@@ -200,6 +185,9 @@ export default function MapScreen() {
   );
   // Desktop action panel collapse state
   const [isActionPanelOpen, setIsActionPanelOpen] = useState(true);
+  // Story 2.4b: Selected memory for filmstrip two-way sync
+  const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
+  const filmstripRef = useRef<FilmstripRef>(null);
 
   // Initialize viewport on mount and when authenticated
   useEffect(() => {
@@ -325,6 +313,25 @@ export default function MapScreen() {
     setSelectedFeeling(null);
     setPinTitle('');
     setActivePanel('none');
+  }, []);
+
+  // Story 2.4b: Handle filmstrip memory press - center map and optionally play audio
+  const handleFilmstripMemoryPress = useCallback((memory: Memory) => {
+    // Update selected memory for highlight
+    setSelectedMemoryId(memory.id);
+    // Animate map to memory location (AC: centers map on pin)
+    setCurrentRegion({
+      ...currentRegion,
+      latitude: memory.latitude,
+      longitude: memory.longitude,
+    });
+  }, [currentRegion]);
+
+  // Handle map pin press for two-way sync
+  const handleMapMemoryPress = useCallback((memory: Memory) => {
+    setSelectedMemoryId(memory.id);
+    // Scroll filmstrip to the memory
+    filmstripRef.current?.scrollToMemory(memory.id);
   }, []);
 
   const handleRecordingError = useCallback((errorMessage: string) => {
@@ -494,10 +501,20 @@ export default function MapScreen() {
             setActivePanel('feeling-pin');
           }}
           memories={mapMemories}
+          onMemoryPress={handleMapMemoryPress}
           manualPinLocation={manualPinLocation}
           showTempPin={activePanel === 'feeling-pin'}
           isLoading={isLoadingMapMemories}
           containerStyle={StyleSheet.absoluteFill}
+        />
+
+        {/* Story 2.4b: Filmstrip overlay at bottom of map */}
+        <Filmstrip
+          ref={filmstripRef}
+          memories={mapMemories}
+          onMemoryPress={handleFilmstripMemoryPress}
+          isLoading={isLoadingMapMemories}
+          selectedMemoryId={selectedMemoryId}
         />
 
         <View style={styles.desktopOverlayContainer} pointerEvents="box-none">
@@ -614,6 +631,7 @@ export default function MapScreen() {
           setActivePanel('feeling-pin');
         }}
         memories={mapMemories}
+        onMemoryPress={handleMapMemoryPress}
         manualPinLocation={manualPinLocation}
         showTempPin={activePanel === 'feeling-pin'}
         isLoading={isLoadingMapMemories}

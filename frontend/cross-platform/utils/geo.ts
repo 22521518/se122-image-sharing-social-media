@@ -37,18 +37,37 @@ export interface BoundingBox {
  * // { minLat: 10.25, minLng: 106.25, maxLat: 10.75, maxLng: 106.75 }
  */
 export function regionToBoundingBox(region: MapRegion): BoundingBox {
-  const minLat = region.latitude - region.latitudeDelta / 2;
-  const maxLat = region.latitude + region.latitudeDelta / 2;
-  const minLng = region.longitude - region.longitudeDelta / 2;
-  const maxLng = region.longitude + region.longitudeDelta / 2;
+  const minLat = Math.max(-90, region.latitude - region.latitudeDelta / 2);
+  const maxLat = Math.min(90, region.latitude + region.latitudeDelta / 2);
+
+  let rawMinLng = region.longitude - region.longitudeDelta / 2;
+  let rawMaxLng = region.longitude + region.longitudeDelta / 2;
+
+  // If view spans more than 360, return full world
+  if (region.longitudeDelta >= 360) {
+    return { minLat, maxLat, minLng: -180, maxLng: 180 };
+  }
+
+  // Normalize to -180...180 range
+  // This naturally produces minLng > maxLng if we cross the date line (e.g. 170 to -170)
+  const minLng = normalizeLng(rawMinLng);
+  const maxLng = normalizeLng(rawMaxLng);
 
   return {
-    minLat: Math.max(-90, minLat),
-    maxLat: Math.min(90, maxLat),
-    minLng: Math.max(-180, minLng),
-    maxLng: Math.min(180, maxLng),
+    minLat,
+    maxLat,
+    minLng,
+    maxLng,
   };
 }
+
+function normalizeLng(lng: number): number {
+  while (lng > 180) lng -= 360;
+  while (lng < -180) lng += 360;
+  return lng;
+}
+
+
 
 /**
  * Checks if two bounding boxes are significantly different.

@@ -446,12 +446,12 @@ describe('MemoriesService', () => {
           userId: 'user-uuid-123',
           deletedAt: null,
           latitude: {
-            gte: 9.5, // 10.5 - 1.0
-            lte: 11.5, // 10.5 + 1.0
+            gte: 10.0,
+            lte: 11.0,
           },
           longitude: {
-            gte: 105.5, // 106.5 - 1.0
-            lte: 107.5, // 106.5 + 1.0
+            gte: 106.0,
+            lte: 107.0,
           },
         },
         select: {
@@ -524,25 +524,27 @@ describe('MemoriesService', () => {
       expect(result).toEqual([]);
     });
 
-    it('should handle crossing prime meridian (negative to positive longitude)', async () => {
+    it('should handle crossing International Date Line (minLng > maxLng)', async () => {
       prisma.memory.findMany.mockResolvedValue([]);
 
       await service.getMemoriesByBoundingBox(
         'user-uuid-123',
-        51.0, // London
-        -1.0, // West of Greenwich
-        52.0,
-        1.0, // East of Greenwich
+        10.0,
+        179.0, // starts East
+        11.0,
+        -179.0, // ends West (crosses IDL)
         50,
       );
 
       expect(prisma.memory.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            longitude: {
-              gte: -1.0, // Center 0.0, radius 1.0 -> -1.0
-              lte: 1.0,  // Center 0.0, radius 1.0 -> 1.0
-            },
+            userId: 'user-uuid-123',
+            latitude: { gte: 10.0, lte: 11.0 },
+            OR: [
+              { longitude: { gte: 179.0, lte: 180 } },
+              { longitude: { gte: -180, lte: -179.0 } },
+            ],
           }),
         }),
       );

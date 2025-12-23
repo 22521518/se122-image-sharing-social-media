@@ -38,7 +38,7 @@ interface UseMapViewportResult {
 
 export function useMapViewport(options: UseMapViewportOptions = {}): UseMapViewportResult {
   const {
-    debounceMs = 500, // AC: 500ms debounce to avoid request spam
+    debounceMs = 200, // Reduced from 500ms to improve responsiveness (NFR2) when drag stops
     limit = 50,
     changeThreshold = 0.01,
   } = options;

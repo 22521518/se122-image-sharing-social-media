@@ -13,57 +13,28 @@ import {
   ActivityIndicator,
   StyleProp,
   ViewStyle,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapLibreGL, { MapViewRef, CameraRef } from '@maplibre/maplibre-react-native';
+import * as MapLibreGL from '@maplibre/maplibre-react-native';
+import type { MapViewRef, CameraRef } from '@maplibre/maplibre-react-native';
 import { Memory } from '@/context/MemoriesContext';
-import { Feeling } from './FeelingSelector';
 import { MapRegion } from '@/hooks/useMapViewport';
+import { getMemoryColor, getMemoryIcon } from '@/constants/MemoryUI';
 
 // Initialize MapLibre (required before using any components)
 MapLibreGL.setAccessToken(null);
 
-interface MapComponentProps {
+export interface MapComponentProps {
   initialRegion: MapRegion;
   onRegionChangeComplete: (region: MapRegion) => void;
   onLongPress: (coordinate: { latitude: number; longitude: number }) => void;
   memories: Memory[];
+  onMemoryPress: (memory: Memory) => void;
   manualPinLocation: { latitude: number; longitude: number } | null;
   showTempPin: boolean;
   isLoading: boolean;
   containerStyle?: StyleProp<ViewStyle>;
-}
-
-// Get marker color based on memory type and feeling
-function getMemoryColor(memory: Memory): string {
-  if (memory.feeling) {
-    const colors: Record<Feeling, string> = {
-      JOY: '#FFD93D',
-      MELANCHOLY: '#667BC6',
-      ENERGETIC: '#FF6B35',
-      CALM: '#5CBDB9',
-      INSPIRED: '#A855F7',
-    };
-    return colors[memory.feeling] || '#5856D6';
-  }
-  switch (memory.type) {
-    case 'voice':
-      return '#FF6B6B';
-    case 'photo':
-      return '#5856D6';
-    case 'text_only':
-      return '#A855F7';
-    default:
-      return '#5856D6';
-  }
-}
-
-// Get marker icon based on memory type
-function getMemoryIcon(memory: Memory): keyof typeof Ionicons.glyphMap {
-  if (memory.type === 'voice') return 'mic';
-  if (memory.type === 'photo') return 'image';
-  if (memory.feeling) return 'heart';
-  return 'location';
 }
 
 // Free OSM Raster Tile Style URL
@@ -74,6 +45,7 @@ export function MapComponent({
   onRegionChangeComplete,
   onLongPress,
   memories,
+  onMemoryPress,
   manualPinLocation,
   showTempPin,
   isLoading,
@@ -122,7 +94,7 @@ export function MapComponent({
       <MapLibreGL.MapView
         ref={mapRef}
         style={styles.map}
-        styleURL={OSM_STYLE_URL}
+        mapStyle={OSM_STYLE_URL}
         onRegionDidChange={handleRegionChange}
         onLongPress={handleLongPress}
         attributionEnabled={true}
@@ -138,28 +110,33 @@ export function MapComponent({
         
         <MapLibreGL.UserLocation visible={true} />
 
-        {/* Memory markers */}
+        {/* Memory markers - Using PointAnnotation for reliable positioning on Android */}
         {memories.map((memory) => (
-          <MapLibreGL.MarkerView
+          <MapLibreGL.PointAnnotation
             key={memory.id}
+            id={`memory-${memory.id}`}
             coordinate={[memory.longitude, memory.latitude]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            onSelected={() => onMemoryPress(memory)}
           >
             <View style={[styles.markerContainer, { backgroundColor: getMemoryColor(memory) }]}>
               <Ionicons name={getMemoryIcon(memory)} size={16} color="#FFF" />
             </View>
-          </MapLibreGL.MarkerView>
+          </MapLibreGL.PointAnnotation>
         ))}
 
         {/* Temporary pin for feeling placement */}
         {showTempPin && manualPinLocation && (
-          <MapLibreGL.MarkerView
+          <MapLibreGL.PointAnnotation
+            id="temp-pin"
             coordinate={[manualPinLocation.longitude, manualPinLocation.latitude]}
+            anchor={{ x: 0.5, y: 1 }}
           >
             <View style={styles.tempMarker}>
               <Ionicons name="location" size={32} color="#FF3B30" />
               <Text style={styles.tempMarkerLabel}>New Pin</Text>
             </View>
-          </MapLibreGL.MarkerView>
+          </MapLibreGL.PointAnnotation>
         )}
       </MapLibreGL.MapView>
 
@@ -228,3 +205,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
