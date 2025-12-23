@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useMemories, MemoryUploadState } from '../context/MemoriesContext';
-import { clusterPhotos, ClusterablePhoto } from '../utils/clustering';
+import { clusterPhotos, ClusterablePhoto, splitCluster } from '../utils/clustering';
 import { VoiceRecorder } from './VoiceRecorder';
 import BatchUploadQueue from '../utils/BatchUploadQueue';
 import heicConverter from '../utils/heic-converter';
@@ -569,7 +569,7 @@ export function PhotoPicker({
   };
 
   // Render photo thumbnail with remove button (3x3 grid - Subtask 1.4)
-  const renderPhotoItem = (photo: SelectedPhoto, index: number) => {
+  const renderPhotoItem = (photo: SelectedPhoto, index: number, isAnchor?: boolean) => {
     // Use calculated grid item size for consistent 3x3 layout
     const itemStyle = [styles.gridItem, { width: gridItemSize, height: gridItemSize }];
 
@@ -588,6 +588,27 @@ export function PhotoPicker({
             color="#FFF"
           />
         </View>
+
+        {/* Status badges (Story 3.2 AC 7) */}
+        {photo.status === 'duplicate' && (
+          <View style={styles.statusBadge}>
+            <Ionicons name="copy" size={12} color="#FFF" />
+            <Text style={styles.statusBadgeText}>Duplicate</Text>
+          </View>
+        )}
+        {photo.exif && !photo.exif.timestamp && (
+          <View style={[styles.statusBadge, { top: 26 }]}>
+            <Ionicons name="calendar-outline" size={12} color="#FFF" />
+            <Text style={styles.statusBadgeText}>Date Fallback</Text>
+          </View>
+        )}
+
+        {/* Anchor indicator (Story 3.3 Task 3.2) */}
+        {isAnchor && (
+          <View style={styles.anchorBadge}>
+            <Ionicons name="star" size={14} color="#FFD700" />
+          </View>
+        )}
 
         {/* Remove button */}
         <TouchableOpacity
@@ -747,14 +768,15 @@ export function PhotoPicker({
                      </View>
                   </View>
                   
-                  {expandedClusters.has(cluster.id) && (
-                      <View style={[styles.gridContainer, { gap: GRID_GAP }]}>
-                          {cluster.photos.map((p, idx) => {
-                             const photo = selectedPhotos.find(sp => sp.id === p.id);
-                             return photo ? renderPhotoItem(photo, idx) : null;
-                          })}
-                      </View>
-                  )}
+                   {expandedClusters.has(cluster.id) && (
+                       <View style={[styles.gridContainer, { gap: GRID_GAP }]}>
+                           {cluster.photos.map((p, idx) => {
+                              const photo = selectedPhotos.find(sp => sp.id === p.id);
+                              const isAnchor = p.id === cluster.anchorPhotoId;
+                              return photo ? renderPhotoItem(photo, idx, isAnchor) : null;
+                           })}
+                       </View>
+                   )}
                   {!expandedClusters.has(cluster.id) && (
                       <View style={styles.clusterStack}>
                          {cluster.photos.slice(0, 3).map((p, idx) => (
@@ -769,8 +791,40 @@ export function PhotoPicker({
                          ))}
                       </View>
                   )}
-                  
-                  {/* Cluster Upload Button */}
+                   
+                   {/* Cluster Actions: Merge & Split (Story 3.3 Task 2.3) */}
+                   {expandedClusters.has(cluster.id) && cluster.photos.length > 1 && (
+                      <View style={styles.clusterManipulationActions}>
+                         <TouchableOpacity 
+                            style={styles.clusterActionBtn}
+                            onPress={() => {
+                               // Split cluster at midpoint
+                               const midpoint = Math.floor(cluster.photos.length / 2);
+                               const splitResult = splitCluster(cluster, midpoint);
+                               if (splitResult) {
+                                  Alert.alert('Cluster Split', `Split into 2 clusters (${splitResult[0].photos.length} + ${splitResult[1].photos.length} photos). Re-cluster to apply.`);
+                               }
+                            }}
+                         >
+                            <Ionicons name="cut-outline" size={16} color="#5856D6" />
+                            <Text style={styles.clusterActionText}>Split</Text>
+                         </TouchableOpacity>
+                         
+                         {photoClusters.length > 1 && (
+                            <TouchableOpacity 
+                               style={styles.clusterActionBtn}
+                               onPress={() => {
+                                  Alert.alert('Merge Cluster', 'Select another cluster to merge with this one (feature in progress)');
+                               }}
+                            >
+                               <Ionicons name="git-merge-outline" size={16} color="#34C759" />
+                               <Text style={styles.clusterActionText}>Merge</Text>
+                            </TouchableOpacity>
+                         )}
+                      </View>
+                   )}
+                   
+                   {/* Cluster Upload Button */}
                    <TouchableOpacity 
                        style={styles.clusterUploadBtn}
                        onPress={() => {
@@ -1117,6 +1171,56 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#FFF',
     fontWeight: '600',
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: 'rgba(255, 59, 48, 0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  anchorBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 26,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clusterManipulationActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  clusterActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    gap: 4,
+  },
+  clusterActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
   },
 
   // Add button
