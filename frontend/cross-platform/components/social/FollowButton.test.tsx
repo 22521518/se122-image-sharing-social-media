@@ -28,6 +28,7 @@ jest.spyOn(Alert, 'alert');
 
 describe('FollowButton', () => {
   const userId = 'user-123';
+  const mockToken = 'mock-access-token';
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -45,7 +46,14 @@ describe('FollowButton', () => {
 
   it('calls followUser when clicked and not following', async () => {
     (socialService.followUser as jest.Mock).mockResolvedValue({});
-    const { getByText } = render(<FollowButton userId={userId} initialIsFollowing={false} />);
+    const { getByText } = render(
+      <FollowButton 
+        userId={userId} 
+        initialIsFollowing={false} 
+        isAuthenticated={true}
+        accessToken={mockToken}
+      />
+    );
     
     fireEvent.press(getByText('Follow'));
 
@@ -53,7 +61,7 @@ describe('FollowButton', () => {
     expect(getByText('Following')).toBeTruthy();
     
     await waitFor(() => {
-      expect(socialService.followUser).toHaveBeenCalledWith(userId);
+      expect(socialService.followUser).toHaveBeenCalledWith(userId, mockToken);
     });
   });
 
@@ -78,12 +86,19 @@ describe('FollowButton', () => {
       unfollowButton.onPress();
     });
 
-    const { getByText } = render(<FollowButton userId={userId} initialIsFollowing={true} />);
+    const { getByText } = render(
+      <FollowButton 
+        userId={userId} 
+        initialIsFollowing={true}
+        isAuthenticated={true}
+        accessToken={mockToken}
+      />
+    );
     
     fireEvent.press(getByText('Following'));
 
     await waitFor(() => {
-      expect(socialService.unfollowUser).toHaveBeenCalledWith(userId);
+      expect(socialService.unfollowUser).toHaveBeenCalledWith(userId, mockToken);
     });
     
     expect(getByText('Follow')).toBeTruthy();
@@ -91,7 +106,14 @@ describe('FollowButton', () => {
 
   it('reverts optimistic update on error', async () => {
     (socialService.followUser as jest.Mock).mockRejectedValue(new Error('Failed'));
-    const { getByText } = render(<FollowButton userId={userId} initialIsFollowing={false} />);
+    const { getByText } = render(
+      <FollowButton 
+        userId={userId} 
+        initialIsFollowing={false}
+        isAuthenticated={true}
+        accessToken={mockToken}
+      />
+    );
     
     fireEvent.press(getByText('Follow'));
     expect(getByText('Following')).toBeTruthy(); // Optimistic

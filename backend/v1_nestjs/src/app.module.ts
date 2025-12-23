@@ -12,6 +12,8 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { MediaModule } from './media/media.module';
 import { MemoriesModule } from './memories/memories.module';
+import { SocialModule } from './social/social.module';
+import { PostcardsModule } from './postcards/postcards.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { MemoriesModule } from './memories/memories.module';
     WebsocketModule,
     MediaModule,     // Media upload to Cloudinary
     MemoriesModule,  // Voice stickers and memory capture
+    SocialModule,    // Social interactions (Feed, Posts, Likes, Comments)
+    PostcardsModule, // Time-locked postcards
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -71,6 +71,9 @@ src/
 **Common Mistakes to Avoid:**
 - ❌ `import { Audio } from 'expo-av'` - DEPRECATED
 - ✅ `import { useAudioPlayer, useAudioRecorder } from 'expo-audio'`
+- ❌ `router.push("/post/${id}")` - May cause type errors with dynamic routes
+- ✅ `router.push({ pathname: "/post/[id]", params: { id } })` - Use object syntax
+- ❌ Forgetting to add new Modules to `app.module.ts` (e.g. `SocialModule`)
 
 ---
 

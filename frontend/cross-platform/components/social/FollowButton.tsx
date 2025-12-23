@@ -39,6 +39,7 @@ export function FollowButton({
       return;
     }
 
+    setIsLoading(true);
     setIsFollowing(true);
     
     try {
@@ -86,6 +87,7 @@ export function FollowButton({
   const performUnfollow = async () => {
     if (!accessToken) return;
     
+    setIsLoading(true);
     setIsFollowing(false);
     
     try {

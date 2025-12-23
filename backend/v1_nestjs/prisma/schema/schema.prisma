@@ -49,6 +49,11 @@ model User {
   following       Follow[]     @relation("following")
   followerCount   Int          @default(0) @map("follower_count")
   followingCount  Int          @default(0) @map("following_count")
+  
+  // Social Posts & Interactions
+  posts           Post[]
+  likes           Like[]
+  comments        Comment[]
 }
 
 model Follow {
@@ -114,4 +119,53 @@ model Memory {
   @@index([userId])
   @@index([latitude, longitude])
   @@index([contentHash]) // Index for fast duplicate lookup
+}
+
+// Social Posts (Epic 5 - minimal fields for Epic 6 dependencies)
+model Post {
+  id           String       @id @default(uuid())
+  authorId     String       @map("author_id")
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content      String       // Text content (max 2000 chars enforced at service layer)
+  privacy      PrivacyLevel @default(friends)
+  likeCount    Int          @default(0) @map("like_count")
+  commentCount Int          @default(0) @map("comment_count")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+
+  likes    Like[]
+  comments Comment[]
+
+  @@map("posts")
+  @@index([authorId])
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, postId])
+  @@map("likes")
+  @@index([postId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String   // Max 500 chars enforced at service layer
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime?@map("deleted_at")
+
+  @@map("comments")
+  @@index([postId])
+  @@index([userId])
 }

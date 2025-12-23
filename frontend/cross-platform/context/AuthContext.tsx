@@ -13,6 +13,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   accessToken: string | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
@@ -27,6 +28,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const isAuthenticated = !!user && !!accessToken;
 
   useEffect(() => {
     loadStoredAuth();
@@ -141,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, login, register, logout, refreshAuth, completeOnboarding }}>
+    <AuthContext.Provider value={{ user, accessToken, isAuthenticated, isLoading, login, register, logout, refreshAuth, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   );

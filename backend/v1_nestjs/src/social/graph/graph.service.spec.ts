@@ -117,4 +117,36 @@ describe('GraphService', () => {
       expect(result).toEqual({ success: true });
     });
   });
+
+  describe('isFollowing', () => {
+    it('should return true when follow relationship exists', async () => {
+      const followerId = 'user1';
+      const followingId = 'user2';
+
+      mockPrismaService.follow.findUnique.mockResolvedValue({ id: 'follow1', followerId, followingId });
+
+      const result = await service.isFollowing(followerId, followingId);
+
+      expect(prisma.follow.findUnique).toHaveBeenCalledWith({
+        where: {
+          followerId_followingId: {
+            followerId,
+            followingId,
+          },
+        },
+      });
+      expect(result).toBe(true);
+    });
+
+    it('should return false when follow relationship does not exist', async () => {
+      const followerId = 'user1';
+      const followingId = 'user2';
+
+      mockPrismaService.follow.findUnique.mockResolvedValue(null);
+
+      const result = await service.isFollowing(followerId, followingId);
+
+      expect(result).toBe(false);
+    });
+  });
 });
