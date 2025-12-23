@@ -11,5 +11,5 @@ Checks:
   Evidence: multiple Given/When/Then entries (1-1-user-registration-and-login-with-email-password.md#L15-L29)
 
 Notes & Recommendations:
-- Technical constraints are documented (NestJS, TypeORM, JWT) — good.
+- Technical constraints are documented (NestJS, TypeORM or Prisma (preferable), JWT) — good.
 - Recommendation: add explicit API contract examples (request/response JSON), error codes, and a minimal integration test checklist.

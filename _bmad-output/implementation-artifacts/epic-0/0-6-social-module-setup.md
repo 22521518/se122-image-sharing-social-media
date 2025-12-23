@@ -1,6 +1,6 @@
 # Story 0.6: Social Module Setup
 
-Status: review
+Status: done
 
 ## Story
 

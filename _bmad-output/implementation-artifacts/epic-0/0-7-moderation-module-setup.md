@@ -1,6 +1,6 @@
 # Story 0.7: Moderation Module Setup
 
-Status: review
+Status: done
 
 ## Story
 

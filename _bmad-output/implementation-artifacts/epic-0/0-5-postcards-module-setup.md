@@ -1,6 +1,6 @@
 # Story 0.5: Postcards Module Setup
 
-Status: review
+Status: done
 
 ## Story
 

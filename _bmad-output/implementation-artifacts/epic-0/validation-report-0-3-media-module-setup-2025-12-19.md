@@ -11,4 +11,4 @@ Checks:
   Evidence: "**Given** the backend `src/media` directory" (0-3-media-module-setup.md#L13)
 
 Notes & Recommendations:
-- This module should add `README.md` and `AGENTS.md` into `backend/src/media/` and flesh out the S3/Sharp pipeline implementation story.
+- This module should add `README.md` and `AGENTS.md` into `backend/src/media/` and flesh out the S3/Cloudinary/Sharp pipeline implementation story.

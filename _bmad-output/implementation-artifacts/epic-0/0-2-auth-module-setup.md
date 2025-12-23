@@ -1,6 +1,6 @@
 # Story 0.2: Auth Module Setup
 
-Status: review
+Status: done
 
 ## Story
 

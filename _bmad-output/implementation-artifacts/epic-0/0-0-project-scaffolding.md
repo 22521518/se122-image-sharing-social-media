@@ -1,6 +1,6 @@
 # Story 0.0: Project Scaffolding & CI/CD
 
-Status: review
+Status: done
 
 ## Story
 

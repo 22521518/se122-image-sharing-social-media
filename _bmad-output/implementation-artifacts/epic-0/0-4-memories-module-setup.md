@@ -1,6 +1,6 @@
 # Story 0.4: Memories Module Setup
 
-Status: review
+Status: done
 
 ## Story
 
@@ -25,7 +25,7 @@ So that the core domain logic has a dedicated home.
 
 ## Dev Notes
 - **Constraint:** Core Domain. Heavily dependent on PostGIS (`geography` type).
-- **Reference:** `04-CORE-DECISIONS.md` - Decision 1 (TypeORM), Decision 3 (GiST Index).
+- **Reference:** `04-CORE-DECISIONS.md` - Decision 1 (TypeORM or Prisma (preferable)), Decision 3 (GiST Index).
 
 ## Dev Agent Record
 
