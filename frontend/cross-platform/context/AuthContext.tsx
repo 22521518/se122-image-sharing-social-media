@@ -7,6 +7,7 @@ interface User {
   id: string;
   email: string;
   name?: string;
+  hasOnboarded?: boolean;
 }
 
 interface AuthContextType {
@@ -17,6 +18,7 @@ interface AuthContextType {
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,7 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.accessToken) {
       await AsyncStorage.setItem('accessToken', data.accessToken);
       setAccessToken(data.accessToken);
-      await decodeAndStoreUser(data.accessToken);
+      
+      // Use user data from response if available, otherwise decode from token
+      if (data.user) {
+        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+        setUser(data.user);
+      } else {
+        await decodeAndStoreUser(data.accessToken);
+      }
     } else {
       throw new Error('Invalid response: missing access token');
     }
@@ -83,7 +92,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.accessToken) {
       await AsyncStorage.setItem('accessToken', data.accessToken);
       setAccessToken(data.accessToken);
-      await decodeAndStoreUser(data.accessToken);
+      
+      // Use user data from response if available, otherwise decode from token
+      if (data.user) {
+        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+        setUser(data.user);
+      } else {
+        await decodeAndStoreUser(data.accessToken);
+      }
     } else {
       throw new Error('Invalid response: missing access token');
     }
@@ -102,8 +118,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadStoredAuth();
   };
 
+  // Mark user as onboarded
+  const completeOnboarding = async () => {
+    try {
+      await ApiService.patch('/api/users/me/onboarding', {});
+      
+      // Update local state
+      if (user) {
+        const updatedUser = { ...user, hasOnboarded: true };
+        setUser(updatedUser);
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch (error) {
+      console.error('Failed to complete onboarding:', error);
+      // Optimistic update - proceed even if API call fails
+      if (user) {
+        const updatedUser = { ...user, hasOnboarded: true };
+        setUser(updatedUser);
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, login, register, logout, refreshAuth }}>
+    <AuthContext.Provider value={{ user, accessToken, isLoading, login, register, logout, refreshAuth, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   );

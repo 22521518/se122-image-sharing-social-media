@@ -35,6 +35,7 @@ export class UsersController {
       bio: user.bio,
       avatarUrl: user.avatarUrl,
       defaultPrivacy: user.defaultPrivacy,
+      hasOnboarded: user.hasOnboarded,
       createdAt: user.createdAt,
     };
   }
@@ -113,6 +114,16 @@ export class UsersController {
     return {
       defaultPrivacy: updated.defaultPrivacy,
       privacySettings: updated.privacySettings,
+    };
+  }
+
+  @Patch('me/onboarding')
+  @ApiOperation({ summary: 'Mark user as onboarded' })
+  @ApiResponse({ status: 200, description: 'Onboarding status updated.' })
+  async completeOnboarding(@Req() req: Request & { user: User }) {
+    const updated = await this.usersService.update(req.user.id, { hasOnboarded: true });
+    return {
+      hasOnboarded: updated?.hasOnboarded ?? true,
     };
   }
 

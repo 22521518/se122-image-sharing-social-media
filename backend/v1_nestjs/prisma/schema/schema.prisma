@@ -34,6 +34,7 @@ model User {
   googleId        String?      @unique @map("google_id")
   defaultPrivacy  PrivacyLevel @default(private) @map("default_privacy")
   role            UserRole     @default(user)
+  hasOnboarded    Boolean      @default(false) @map("has_onboarded")
   privacySettings Json?        @map("privacy_settings")
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")

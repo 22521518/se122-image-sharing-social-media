@@ -23,6 +23,7 @@ import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { useMapViewport, MapRegion } from '@/hooks/useMapViewport';
 import { createInitialRegion } from '@/utils/geo';
+import { useLocalSearchParams } from 'expo-router';
 // Platform-agnostic map component - Metro resolves to .web.tsx or .native.tsx
 import { MapComponent } from '@/components/MapComponent';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -140,8 +141,9 @@ export default function MapScreen() {
   const { width } = useWindowDimensions();
   const isWideScreen = width >= 768;
 
-  const { accessToken } = useAuth();
+  const { accessToken, completeOnboarding } = useAuth();
   const isAuthenticated = !!accessToken;
+  const params = useLocalSearchParams<{ onboardingMemory?: string }>();
   const {
     mapMemories,
     uploadState,
@@ -195,6 +197,19 @@ export default function MapScreen() {
       onRegionChange(currentRegion);
     }
   }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle onboarding memory (AC 4, Subtask 3.1-3.3)
+  useEffect(() => {
+    if (params.onboardingMemory && isAuthenticated) {
+      // Pre-fill the feeling pin with onboarding memory
+      setPinTitle(params.onboardingMemory);
+      setCaptureMode('feeling');
+      setActiveMobileTab('feeling');
+      
+      // Get current location and show feeling pin panel
+      handleDropFeelingPin();
+    }
+  }, [params.onboardingMemory, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get current location for feeling pin
   const handleDropFeelingPin = useCallback(async () => {
@@ -301,11 +316,16 @@ export default function MapScreen() {
       title: pinTitle || undefined,
     });
 
+    // If this pin was created from onboarding, mark user as onboarded (AC 4, Subtask 3.3)
+    if (params.onboardingMemory) {
+      await completeOnboarding();
+    }
+
     setManualPinLocation(null);
     setSelectedFeeling(null);
     setPinTitle('');
     setActivePanel('none');
-  }, [selectedFeeling, manualPinLocation, pinTitle, uploadFeelingPin]);
+  }, [selectedFeeling, manualPinLocation, pinTitle, uploadFeelingPin, params.onboardingMemory, completeOnboarding]);
 
   const handleCancelPanel = useCallback(() => {
     setPendingUpload(null);

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Req, Res, HttpCode, HttpStatus, Headers } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Req, Res, HttpCode, HttpStatus, Headers, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response, Request } from 'express';
@@ -33,8 +33,19 @@ export class AuthUserController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    const user = await this.authService.getUserByEmail(dto.email);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
     return {
       accessToken: tokens.accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        hasOnboarded: user.hasOnboarded,
+      },
     };
   }
 
@@ -57,8 +68,19 @@ export class AuthUserController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    const user = await this.authService.getUserByEmail(dto.email);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
     return {
       accessToken: tokens.accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        hasOnboarded: user.hasOnboarded,
+      },
     };
   }
 

@@ -106,4 +106,8 @@ export class AuthUserService {
   async validateUser(payload: TokenPayload) {
     return this.authCore.validateUser(payload);
   }
+
+  async getUserByEmail(email: string) {
+    return this.authCore.findUserByEmail(email);
+  }
 }

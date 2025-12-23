@@ -17,6 +17,7 @@ export interface ApiResponse<T> {
 // Auth DTOs
 export interface AuthTokensDto {
   accessToken: string;
+  user?: UserDto;
 }
 
 export interface UserDto {
@@ -26,6 +27,7 @@ export interface UserDto {
   bio?: string;
   avatarUrl?: string;
   defaultPrivacy?: 'private' | 'friends' | 'public';
+  hasOnboarded?: boolean;
   createdAt?: string;
 }
 
