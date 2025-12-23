@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   continueButtonText: {
-    color: '#FFFFFF',
+    color: '#CCC',
     fontSize: 16,
     fontWeight: '600',
   },

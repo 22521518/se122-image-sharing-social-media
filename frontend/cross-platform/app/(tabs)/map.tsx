@@ -388,42 +388,7 @@ export default function MapScreen() {
   // Shared Action Panel Content (Photo Confirmation, Feeling Pin, Capture UI)
   const renderActionPanelContent = () => (
     <>
-      {activePanel === 'photo-confirm' && pendingUpload && (
-        <View style={styles.confirmPanel}>
-          <Text style={styles.panelTitle}>Confirm Photo Upload</Text>
-          <Image
-            source={{ uri: pendingUpload.uri }}
-            style={styles.photoPreview}
-            resizeMode="contain"
-          />
-          <View style={styles.locationInfo}>
-            <Ionicons name="location" size={18} color="#5856D6" />
-            <Text style={styles.locationText}>
-              {pendingUpload.latitude.toFixed(4)}, {pendingUpload.longitude.toFixed(4)}
-            </Text>
-            <Text style={styles.locationSource}>({pendingUpload.locationSource})</Text>
-          </View>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelPanel}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.confirmButton, uploadState === 'uploading' && styles.buttonDisabled]}
-              onPress={handleConfirmPhotoUpload}
-              disabled={uploadState === 'uploading'}
-            >
-              {uploadState === 'uploading' ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Ionicons name="cloud-upload" size={18} color="#FFF" />
-                  <Text style={styles.confirmButtonText}>Upload</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      {/* Photo confirm panel now handled inside PhotoPicker (Story 3.2 Subtask 3.4) */}
 
       {activePanel === 'feeling-pin' && manualPinLocation && (
         <View style={styles.confirmPanel}>
@@ -480,7 +445,18 @@ export default function MapScreen() {
               />
             )}
             {captureMode === 'photo' && (
-              <PhotoPicker onPhotoSelected={handlePhotoSelected} onError={handleRecordingError} />
+              <PhotoPicker
+                onConfirmUpload={async (data) => {
+                  await uploadPhotoMemory({
+                    uri: data.uri,
+                    latitude: data.latitude,
+                    longitude: data.longitude,
+                  });
+                }}
+                showConfirmPanel={true}
+                uploadState={uploadState}
+                onError={handleRecordingError}
+              />
             )}
             {captureMode === 'feeling' && (
               <View style={styles.feelingCaptureArea}>
@@ -849,10 +825,16 @@ export default function MapScreen() {
                 )}
                 {activeMobileTab === 'photo' && (
                   <PhotoPicker
-                    onPhotoSelected={(p) => {
-                      handlePhotoSelected(p);
+                    onConfirmUpload={async (data) => {
+                      await uploadPhotoMemory({
+                        uri: data.uri,
+                        latitude: data.latitude,
+                        longitude: data.longitude,
+                      });
                       setActiveMobileTab('browse');
                     }}
+                    showConfirmPanel={true}
+                    uploadState={uploadState}
                     onError={handleRecordingError}
                   />
                 )}
@@ -1499,7 +1481,7 @@ const styles = StyleSheet.create({
     maxHeight: '100%',
   },
   desktopRightPanel: {
-    width: 340,
+    width: 480,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,

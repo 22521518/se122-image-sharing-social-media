@@ -80,6 +80,7 @@ model Memory {
   user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   type                MemoryType   @default(voice)
   mediaUrl            String?      @map("media_url") // Cloudinary URL for audio/image (optional for text_only)
+  contentHash         String?      @map("content_hash") // SHA-256 hash of first 4KB + size for duplicate detection
   duration            Float?       // Duration in seconds (for voice)
   latitude            Float        // GPS latitude
   longitude           Float        // GPS longitude
@@ -94,4 +95,5 @@ model Memory {
   @@map("memories")
   @@index([userId])
   @@index([latitude, longitude])
+  @@index([contentHash]) // Index for fast duplicate lookup
 }

@@ -16,7 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { MemoriesService } from '../services/memories.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto, CheckDuplicatesDto } from '../dto';
 import {
   ApiTags,
   ApiOperation,
@@ -264,6 +264,42 @@ export class MemoriesController {
       query.maxLng,
       query.limit || 50,
     );
+  }
+
+  @Post('check-duplicates')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check for duplicate files',
+    description: 'Check if files with given content hashes already exist in the user\'s memories. Used during bulk import to detect duplicates before upload.',
+  })
+  @ApiBody({
+    description: 'Array of file content hashes to check',
+    type: CheckDuplicatesDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of duplicate hashes found',
+    schema: {
+      type: 'object',
+      properties: {
+        duplicates: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Hashes that already exist in the database',
+        },
+        count: {
+          type: 'number',
+          description: 'Number of duplicates found',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async checkDuplicates(
+    @Request() req: any,
+    @Body() dto: CheckDuplicatesDto,
+  ) {
+    return this.memoriesService.checkDuplicates(req.user.id, dto.hashes);
   }
 
   @Get()

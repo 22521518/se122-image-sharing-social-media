@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService } from '../../media/services/media.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, CheckDuplicatesDto } from '../dto';
 import { MemoryType, PrivacyLevel, Feeling } from '@prisma/client';
 
 // Gradient ID mappings for feeling + time of day combinations
@@ -423,6 +423,55 @@ export class MemoriesService {
     );
 
     return memories;
+  }
+
+  /**
+   * Check for duplicate memories by content hash.
+   * Used during bulk import to detect files already uploaded.
+   * 
+   * Story 3.2: Bulk-Drop Wall for Historical Import
+   * - Accepts array of hashes (SHA-256 of first 4KB + file size)
+   * - Returns set of hashes that already exist in user's memories
+   * - Enables client to mark duplicates before upload
+   */
+  async checkDuplicates(
+    userId: string,
+    hashes: string[],
+  ): Promise<{ duplicates: string[]; count: number }> {
+    if (!hashes || hashes.length === 0) {
+      return { duplicates: [], count: 0 };
+    }
+
+    this.logger.debug(
+      `Checking ${hashes.length} hashes for duplicates for user ${userId}`,
+    );
+
+    // Find memories with matching hashes for this user
+    const existingMemories = await this.prisma.memory.findMany({
+      where: {
+        userId,
+        contentHash: {
+          in: hashes,
+        },
+        deletedAt: null,
+      },
+      select: {
+        contentHash: true,
+      },
+    });
+
+    const duplicates = existingMemories
+      .map(m => m.contentHash)
+      .filter((hash): hash is string => hash !== null);
+
+    this.logger.log(
+      `Found ${duplicates.length} duplicates out of ${hashes.length} hashes for user ${userId}`,
+    );
+
+    return {
+      duplicates,
+      count: duplicates.length,
+    };
   }
 }
 
