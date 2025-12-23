@@ -19,6 +19,8 @@ export interface UploadItem {
   status: 'pending' | 'uploading' | 'success' | 'error' | 'duplicate';
   progress: number;
   error?: string;
+  audioUri?: string;
+  audioDuration?: number;
 }
 
 export interface UploadProgress {
@@ -253,6 +255,19 @@ export class BatchUploadQueue {
       }
       if (item.hash) {
         formData.append('contentHash', item.hash);
+      }
+      if (item.audioUri) {
+        if (item.audioUri.startsWith('data:')) {
+          const response = await fetch(item.audioUri);
+          const blob = await response.blob();
+          formData.append('audio', blob, `audio_${item.id}.m4a`);
+        } else {
+          // Native URI
+          formData.append('audioUri', item.audioUri);
+        }
+        if (item.audioDuration) {
+          formData.append('audioDuration', item.audioDuration.toString());
+        }
       }
 
       // Upload with progress tracking

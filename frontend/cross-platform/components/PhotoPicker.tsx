@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -16,7 +16,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useMemories, MemoryUploadState } from '../context/MemoriesContext';
-import { clusterPhotos, PhotoCluster, ClusterablePhoto } from '../utils/clustering';
+import { clusterPhotos, ClusterablePhoto } from '../utils/clustering';
+import { VoiceRecorder } from './VoiceRecorder';
+import BatchUploadQueue from '../utils/BatchUploadQueue';
+import heicConverter from '../utils/heic-converter';
+import { createWorker } from '../utils/worker-factory';
+
 
 // Web-only imports (react-dropzone)
 let useDropzone: any = null;
@@ -50,6 +55,13 @@ interface SelectedPhoto {
   fileName?: string;
   fileSize?: number;
 }
+
+// Worker type definition
+type WorkerType = Worker & {
+  postMessage(message: any): void;
+  onmessage: ((this: Worker, ev: MessageEvent) => any) | null;
+  terminate(): void;
+};
 
 interface PhotoPickerProps {
   /** Called when photos are selected (multi-select mode) */
@@ -107,6 +119,85 @@ export function PhotoPicker({
   // Clustering state (Story 3.3)
   const [showClusters, setShowClusters] = useState(true);
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'grid' | 'clusters'>('grid'); // Story 3.3
+  const [processedPhotos, setProcessedPhotos] = useState<Map<string, SelectedPhoto>>(new Map());
+  
+  // Worker reference
+  const workerRef = React.useRef<WorkerType | null>(null);
+  const batchQueueRef = React.useRef<BatchUploadQueue | null>(null);
+
+
+
+  // Initialize Worker
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      try {
+        const worker = createWorker();
+        if (!worker) return;
+
+        workerRef.current = worker as any;
+
+        worker.onmessage = async (e: MessageEvent) => {
+           const { type, results, processed, total, error } = e.data;
+           
+           if (type === 'progress') {
+             setProcessingProgress({ current: processed, total });
+           } else if (type === 'complete') {
+             setIsProcessing(false);
+             // Merge results
+             const newProcessed = new Map(processedPhotos);
+             for (const res of results) {
+               if (res.error === 'heic_needs_conversion') {
+                  // Handle HEIC conversion
+                  try {
+                    const photo = selectedPhotos.find(p => p.id === res.id);
+                    if (photo) {
+                       const conversion = await heicConverter.convertHeicDataUrlToJpeg(photo.uri);
+                       if (conversion.success && conversion.dataUrl) {
+                          // Update photo with new URI (JPEG)
+                          const updatedPhoto = { ...photo, uri: conversion.dataUrl };
+                          // We could send back to worker for EXIF, or just assume we have basic EXIF or none.
+                          // Ideally extract EXIF from original blob if possible? 
+                          // The worker failed EXIF on HEIC because no DOM.
+                          newProcessed.set(res.id, { ...updatedPhoto, status: 'ready' });
+                       }
+                    }
+                  } catch (err) {
+                    console.error('HEIC Main thread conversion failed', err);
+                  }
+               } else if (res.success) {
+                 const photo = selectedPhotos.find(p => p.id === res.id);
+                 if (photo) {
+                   newProcessed.set(res.id, { 
+                     ...photo, 
+                     status: 'ready',
+                     hash: res.hash,
+                     exif: res.exif ? { ...res.exif } : photo.exif,
+                     hasLocation: res.exif?.hasLocation ?? photo.hasLocation
+                   });
+                 }
+               } else if (res.status === 'duplicate') {
+                  // Actually worker calculates hash, duplicate status comes from server check later
+               }
+             }
+             setProcessedPhotos(newProcessed);
+             
+             // Update main selection with processed data
+             const updatedSelection = selectedPhotos.map(p => newProcessed.get(p.id) || p);
+             setSelectedPhotos(updatedSelection);
+             onPhotosSelected?.(updatedSelection);
+           }
+        };
+        
+        return () => {
+          worker.terminate();
+        };
+      } catch (err) {
+        console.warn('Worker initialization failed', err);
+      }
+    }
+  }, []); // Run once
+
   
   // Compute clusters from selected photos (Story 3.3)
   const photoClusters = useMemo(() => {
@@ -561,6 +652,24 @@ export function PhotoPicker({
         )}
       </View>
 
+      {/* View Toggle (Story 3.3) */}
+      {selectedPhotos.length > 0 && (
+        <View style={styles.viewToggleContainer}>
+          <TouchableOpacity 
+            style={[styles.viewToggleButton, viewMode === 'grid' && styles.viewToggleButtonActive]}
+            onPress={() => setViewMode('grid')}
+          >
+            <Ionicons name="grid-outline" size={20} color={viewMode === 'grid' ? '#FFF' : '#666'} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+             style={[styles.viewToggleButton, viewMode === 'clusters' && styles.viewToggleButtonActive]}
+             onPress={() => setViewMode('clusters')}
+          >
+            <Ionicons name="layers-outline" size={20} color={viewMode === 'clusters' ? '#FFF' : '#666'} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Photo display area */}
       {selectedPhotos.length === 0 ? (
         // Empty state with drag-and-drop (web only)
@@ -600,6 +709,90 @@ export function PhotoPicker({
         ]}>
           {selectedPhotos.map((photo, index) => renderPhotoItem(photo, index))}
         </View>
+      )}
+      
+      {/* Cluster View (Story 3.3) */}
+      {viewMode === 'clusters' && selectedPhotos.length > 0 && (
+         <View style={styles.clustersContainer}>
+            {photoClusters.map((cluster) => (
+               <View key={cluster.id} style={styles.clusterCard}>
+                  <View style={styles.clusterHeader}>
+                     <View>
+                        <Text style={styles.clusterLabel}>{cluster.label}</Text>
+                        <Text style={styles.clusterSubLabel}>
+                           {cluster.startTime ? new Date(cluster.startTime).toLocaleTimeString() : ''} - {cluster.photos.length} photos
+                        </Text>
+                     </View>
+                     <View style={styles.clusterActions}>
+                        <VoiceRecorder 
+                            onRecordingComplete={(rec) => {
+                               // Attach voice to cluster anchor?
+                               const updatedMap = new Map(processedPhotos);
+                               const anchor = cluster.photos.find(p => p.id === cluster.anchorPhotoId);
+                               if (anchor) {
+                                   (anchor as any).audioUri = rec.uri;
+                                   (anchor as any).audioDuration = rec.duration;
+                                   console.log('Attached voice to cluster anchor', anchor.id);
+                               }
+                            }}
+                        />
+                        <TouchableOpacity onPress={() => {
+                             const newExpanded = new Set(expandedClusters);
+                             if (newExpanded.has(cluster.id)) newExpanded.delete(cluster.id);
+                             else newExpanded.add(cluster.id);
+                             setExpandedClusters(newExpanded);
+                        }}>
+                           <Ionicons name={expandedClusters.has(cluster.id) ? "chevron-up" : "chevron-down"} size={24} color="#666" />
+                        </TouchableOpacity>
+                     </View>
+                  </View>
+                  
+                  {expandedClusters.has(cluster.id) && (
+                      <View style={[styles.gridContainer, { gap: GRID_GAP }]}>
+                          {cluster.photos.map((p, idx) => {
+                             const photo = selectedPhotos.find(sp => sp.id === p.id);
+                             return photo ? renderPhotoItem(photo, idx) : null;
+                          })}
+                      </View>
+                  )}
+                  {!expandedClusters.has(cluster.id) && (
+                      <View style={styles.clusterStack}>
+                         {cluster.photos.slice(0, 3).map((p, idx) => (
+                            <Image 
+                               key={p.id} 
+                               source={{ uri: p.uri }} 
+                               style={[
+                                  styles.stackImage, 
+                                  { zIndex: 3-idx, top: idx*5, left: idx*5 }
+                               ]} 
+                            />
+                         ))}
+                      </View>
+                  )}
+                  
+                  {/* Cluster Upload Button */}
+                   <TouchableOpacity 
+                       style={styles.clusterUploadBtn}
+                       onPress={() => {
+                          const items = cluster.photos.map(p => selectedPhotos.find(sp => sp.id === p.id)).filter(Boolean);
+                          if (!batchQueueRef.current) return;
+                          
+                          batchQueueRef.current.addItems(items.map(p => ({
+                             id: p!.id,
+                             uri: p!.uri,
+                             exif: p!.exif ? { ...p!.exif } : null,
+                             hash: p!.hash || null,
+                             audioUri: (p as any).audioUri,
+                             audioDuration: (p as any).audioDuration
+                          })));
+                          batchQueueRef.current.start();
+                       }}
+                   >
+                       <Text style={styles.clusterUploadText}>Upload Cluster</Text>
+                   </TouchableOpacity>
+               </View>
+            ))}
+         </View>
       )}
 
       {/* Add More Button */}
@@ -798,6 +991,79 @@ const styles = StyleSheet.create({
   emptyTextDragActive: {
     color: '#5856D6',
     fontWeight: '600',
+  },
+  viewToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  viewToggleButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#E5E5EA',
+  },
+  viewToggleButtonActive: {
+    backgroundColor: '#5856D6',
+  },
+  clustersContainer: {
+    width: '100%',
+    gap: 16,
+  },
+  clusterCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  clusterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  clusterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  clusterSubLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  clusterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clusterStack: {
+    height: 120,
+    position: 'relative',
+    marginBottom: 12,
+  },
+  stackImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  clusterUploadBtn: {
+    backgroundColor: '#34C759',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  clusterUploadText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 
   // 3x3 Grid layout (Story 3.2 Subtask 1.4)
