@@ -10,6 +10,8 @@ import { UsersModule } from './users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { WebsocketModule } from './websocket/websocket.module';
+import { MediaModule } from './media/media.module';
+import { MemoriesModule } from './memories/memories.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { WebsocketModule } from './websocket/websocket.module';
     AuthAdminModule, // Admin/Mod auth (web-console only)
     SchedulerModule,
     WebsocketModule,
+    MediaModule,     // Media upload to Cloudinary
+    MemoriesModule,  // Voice stickers and memory capture
   ],
   controllers: [AppController],
   providers: [AppService],

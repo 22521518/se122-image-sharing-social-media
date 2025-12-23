@@ -105,4 +105,36 @@ export class ApiService {
 
     return unwrapApiResponse<TResponse>(json);
   }
+
+  /**
+   * Upload multipart/form-data (for file uploads)
+   * Note: Does not set Content-Type header - let browser set it with boundary
+   */
+  static async uploadFormData<TResponse>(
+    endpoint: string,
+    formData: FormData,
+    token?: string | null,
+  ): Promise<TResponse> {
+    const headers: HeadersInit = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'include',
+    });
+
+    const json = await response.json();
+
+    if (!response.ok) {
+      const error = json as ApiErrorDto;
+      throw new Error(error.message || `Request failed with status ${response.status}`);
+    }
+
+    return unwrapApiResponse<TResponse>(json);
+  }
 }
+

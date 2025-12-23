@@ -9,3 +9,4 @@
 # *.csv
 # .xml
 .vscode
+**/node_modules/**

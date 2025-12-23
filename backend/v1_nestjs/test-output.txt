@@ -1,0 +1,40 @@
+PASS src/memories/services/memories.service.spec.ts
+  MemoriesService
+    createVoiceMemory
+      ÔêÜ should create a voice memory successfully (9 ms)
+      ÔêÜ should throw error if no file is provided (3 ms)
+      ÔêÜ should throw error if file type is invalid (2 ms)
+      ÔêÜ should throw error if duration exceeds 6 seconds (1 ms)
+      ÔêÜ should throw error if duration is less than 1 second (1 ms)
+      ÔêÜ should use user default privacy when not specified (2 ms)
+    getMemoriesByUser
+      ÔêÜ should return all non-deleted memories for user (1 ms)
+    getMemoryById
+      ÔêÜ should return memory if user is owner (1 ms)
+      ÔêÜ should return null if memory not found (1 ms)
+    deleteMemory
+      ÔêÜ should soft delete memory and remove from Cloudinary (2 ms)
+      ÔêÜ should throw error if memory not found (1 ms)
+      ÔêÜ should throw error if user is not owner (1 ms)
+    createPhotoMemory
+      ÔêÜ should create a photo memory successfully (2 ms)
+      ÔêÜ should use EXIF timestamp as createdAt when provided (1 ms)
+      ÔêÜ should ignore invalid EXIF timestamp (1 ms)
+      ÔêÜ should throw error if no image file is provided (1 ms)
+      ÔêÜ should throw error if file type is invalid (1 ms)
+      ÔêÜ should accept PNG images (1 ms)
+      ÔêÜ should accept WebP images (1 ms)
+      ÔêÜ should use user default privacy when not specified (1 ms)
+    getMemoriesByBoundingBox
+      ÔêÜ should query memories within bounding box (1 ms)
+      ÔêÜ should respect the limit parameter (2 ms)
+      ÔêÜ should use default limit of 50 when not specified (1 ms)
+      ÔêÜ should return empty array when no memories in bounding box (1 ms)
+      ÔêÜ should handle crossing prime meridian (negative to positive longitude) (1 ms)
+      ÔêÜ should order memories by createdAt descending (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       26 passed, 26 total
+Snapshots:   0 total
+Time:        1.008 s
+Ran all test suites matching src/memories/services/memories.service.spec.ts.
