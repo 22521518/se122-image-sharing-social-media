@@ -31,6 +31,7 @@ import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native
 import { VisualMemoryCard } from '@/components/VisualMemoryCard';
 import { Filmstrip, FilmstripRef } from '@/components/map/Filmstrip';
 import { getMemoryColor, getMemoryIcon, getTypeIcon } from '@/constants/MemoryUI';
+import { analytics } from '@/services/analytics';
 
 type CaptureMode = 'voice' | 'photo' | 'feeling';
 type ActivePanel = 'none' | 'photo-confirm' | 'feeling-pin';
@@ -319,6 +320,11 @@ export default function MapScreen() {
     // If this pin was created from onboarding, mark user as onboarded (AC 4, Subtask 3.3)
     if (params.onboardingMemory) {
       await completeOnboarding();
+      // Track onboarding completion (Subtask 2.4)
+      analytics.track('ONBOARDING_COMPLETED', {
+        hasMemory: true,
+        feeling: selectedFeeling,
+      });
     }
 
     setManualPinLocation(null);
