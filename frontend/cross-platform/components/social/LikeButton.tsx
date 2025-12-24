@@ -13,7 +13,8 @@ import { socialService } from '../../services/social.service';
 import { Ionicons } from '@expo/vector-icons';
 
 interface LikeButtonProps {
-  postId: string;
+  itemId: string; // Renamed from postId for clarity, but keeping postId supported for back-compat if needed (or just use generic)
+  targetType?: 'post' | 'memory';
   initialLiked?: boolean;
   initialCount?: number;
   isAuthenticated?: boolean;
@@ -32,7 +33,8 @@ const SIZE_CONFIG = {
 };
 
 export function LikeButton({
-  postId,
+  itemId,
+  targetType = 'post',
   initialLiked = false,
   initialCount = 0,
   isAuthenticated = true,
@@ -58,7 +60,7 @@ export function LikeButton({
     colorAnim.setValue(initialLiked ? 1 : 0);
   }, [initialLiked, initialCount]);
 
-  if (!postId) {
+  if (!itemId) {
     return null;
   }
 
@@ -109,7 +111,13 @@ export function LikeButton({
     setIsLoading(true);
 
     try {
-      const response = await socialService.toggleLike(postId, accessToken);
+      let response;
+      if (targetType === 'post') {
+        response = await socialService.toggleLike(itemId, accessToken);
+      } else {
+        response = await socialService.toggleLikeMemory(itemId, accessToken);
+      }
+      
       // Sync with server response
       setLiked(response.liked);
       setCount(response.likeCount);

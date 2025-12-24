@@ -109,4 +109,101 @@ export class LikesService {
 
     return post.likeCount;
   }
+
+  /**
+   * Toggle like on a memory
+   */
+  async toggleLikeMemory(userId: string, memoryId: string): Promise<ToggleLikeResult> {
+    // Validate memory exists
+    const memory = await this.prisma.memory.findUnique({
+      where: { id: memoryId },
+      select: { id: true, userId: true, likeCount: true },
+    });
+
+    if (!memory) {
+      throw new NotFoundException('Memory not found');
+    }
+
+    // Check if like exists
+    const existingLike = await this.prisma.like.findUnique({
+      where: {
+        userId_memoryId: {
+          userId,
+          memoryId,
+        },
+      },
+    });
+
+    if (existingLike) {
+      // Unlike
+      await this.prisma.$transaction(async (tx) => {
+        await tx.like.delete({
+          where: { id: existingLike.id },
+        });
+
+        await tx.memory.update({
+          where: { id: memoryId },
+          data: { likeCount: { decrement: 1 } },
+        });
+      });
+
+      return {
+        liked: false,
+        likeCount: Math.max(0, memory.likeCount - 1),
+      };
+    } else {
+      // Like
+      await this.prisma.$transaction(async (tx) => {
+        await tx.like.create({
+          data: {
+            userId,
+            memoryId,
+          },
+        });
+
+        await tx.memory.update({
+          where: { id: memoryId },
+          data: { likeCount: { increment: 1 } },
+        });
+      });
+
+      // TODO: Notification triggered here later
+
+      return {
+        liked: true,
+        likeCount: memory.likeCount + 1,
+      };
+    }
+  }
+
+  /**
+   * Check if user has liked a memory
+   */
+  async hasLikedMemory(userId: string, memoryId: string): Promise<boolean> {
+    const like = await this.prisma.like.findUnique({
+      where: {
+        userId_memoryId: {
+          userId,
+          memoryId,
+        },
+      },
+    });
+    return !!like;
+  }
+
+  /**
+   * Get like count for a memory
+   */
+  async getMemoryLikeCount(memoryId: string): Promise<number> {
+    const memory = await this.prisma.memory.findUnique({
+      where: { id: memoryId },
+      select: { likeCount: true },
+    });
+
+    if (!memory) {
+      throw new NotFoundException('Memory not found');
+    }
+
+    return memory.likeCount;
+  }
 }

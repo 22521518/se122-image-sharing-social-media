@@ -14,7 +14,8 @@ import { socialService, Comment as CommentType } from '../../services/social.ser
 import { Ionicons } from '@expo/vector-icons';
 
 interface CommentListProps {
-  postId: string;
+  itemId: string;
+  targetType?: 'post' | 'memory';
   accessToken?: string;
   currentUserId?: string;
   isAuthenticated?: boolean;
@@ -95,7 +96,8 @@ function CommentItem({ comment, onDelete, isDeleting }: CommentItemProps) {
 }
 
 export function CommentList({
-  postId,
+  itemId,
+  targetType = 'post',
   accessToken,
   currentUserId,
   isAuthenticated = true,
@@ -119,7 +121,13 @@ export function CommentList({
     }
 
     try {
-      const response = await socialService.getComments(postId, accessToken);
+      let response;
+      if (targetType === 'post') {
+        response = await socialService.getComments(itemId, accessToken);
+      } else {
+        response = await socialService.getMemoryComments(itemId, accessToken);
+      }
+      
       setComments(response.comments);
       onCommentCountChange?.(response.count);
       setError(null);
@@ -141,7 +149,7 @@ export function CommentList({
 
   useEffect(() => {
     loadComments();
-  }, [postId, accessToken]);
+  }, [itemId, accessToken]);
 
   const handleDelete = async (commentId: string) => {
     if (!accessToken) return;

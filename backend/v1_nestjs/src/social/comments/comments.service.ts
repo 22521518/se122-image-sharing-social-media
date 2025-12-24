@@ -112,6 +112,9 @@ export class CommentsService {
         post: {
           select: { id: true, commentCount: true },
         },
+        memory: {
+          select: { id: true, commentCount: true },
+        },
       },
     });
 
@@ -124,25 +127,115 @@ export class CommentsService {
       throw new ForbiddenException('You can only delete your own comments');
     }
 
-    // Delete comment and decrement count in transaction
-    await this.prisma.$transaction([
-      this.prisma.comment.delete({
-        where: { id: commentId },
-      }),
-      this.prisma.post.update({
-        where: { id: comment.postId },
-        data: { commentCount: { decrement: 1 } },
-      }),
-    ]);
+    // Delete comment and update count in transaction
+    if (comment.postId && comment.post) {
+      await this.prisma.$transaction([
+        this.prisma.comment.delete({
+          where: { id: commentId },
+        }),
+        this.prisma.post.update({
+          where: { id: comment.postId },
+          data: { commentCount: { decrement: 1 } },
+        }),
+      ]);
+
+      return {
+        success: true,
+        commentCount: Math.max(0, comment.post.commentCount - 1),
+      };
+    } else if (comment.memoryId && comment.memory) {
+      await this.prisma.$transaction([
+        this.prisma.comment.delete({
+          where: { id: commentId },
+        }),
+        this.prisma.memory.update({
+          where: { id: comment.memoryId },
+          data: { commentCount: { decrement: 1 } },
+        }),
+      ]);
+
+      return {
+        success: true,
+        commentCount: Math.max(0, comment.memory.commentCount - 1),
+      };
+    }
+
+    // Fallback if neither (should be unreachable with valid data)
+    await this.prisma.comment.delete({
+      where: { id: commentId },
+    });
 
     return {
       success: true,
-      commentCount: Math.max(0, comment.post.commentCount - 1),
+      commentCount: 0,
     };
   }
 
   /**
-   * Get all comments for a post, sorted chronologically (oldest first)
+   * Create a new comment on a memory
+   */
+  async createCommentOnMemory(
+    userId: string,
+    memoryId: string,
+    dto: CreateCommentDto,
+  ): Promise<CreateCommentResult> {
+    if (dto.content.length > 500) {
+      throw new BadRequestException('Comment cannot exceed 500 characters');
+    }
+
+    const memory = await this.prisma.memory.findUnique({
+      where: { id: memoryId },
+      select: { id: true, userId: true, commentCount: true },
+    });
+
+    if (!memory) {
+      throw new NotFoundException('Memory not found');
+    }
+
+    const [comment, _] = await this.prisma.$transaction([
+      this.prisma.comment.create({
+        data: {
+          content: dto.content,
+          userId,
+          memoryId,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      }),
+      this.prisma.memory.update({
+        where: { id: memoryId },
+        data: { commentCount: { increment: 1 } },
+      }),
+    ]);
+
+    // TODO: Notify memory author
+
+    return {
+      comment: {
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
+        author: {
+          id: comment.user.id,
+          name: comment.user.name,
+          avatarUrl: comment.user.avatarUrl,
+        },
+        isOwner: true,
+      },
+      commentCount: memory.commentCount + 1,
+    };
+  }
+
+  /**
+   * Get all comments for a post
    */
   async getComments(userId: string, postId: string): Promise<CommentWithAuthor[]> {
     // Validate post exists
@@ -166,7 +259,48 @@ export class CommentsService {
           },
         },
       },
-      orderBy: { createdAt: 'asc' }, // Oldest first (chronological)
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return comments.map((comment) => ({
+      id: comment.id,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      author: {
+        id: comment.user.id,
+        name: comment.user.name,
+        avatarUrl: comment.user.avatarUrl,
+      },
+      isOwner: comment.userId === userId,
+    }));
+  }
+
+  /**
+   * Get all comments for a memory
+   */
+  async getMemoryComments(userId: string, memoryId: string): Promise<CommentWithAuthor[]> {
+    const memory = await this.prisma.memory.findUnique({
+      where: { id: memoryId },
+      select: { id: true },
+    });
+
+    if (!memory) {
+      throw new NotFoundException('Memory not found');
+    }
+
+    const comments = await this.prisma.comment.findMany({
+      where: { memoryId, deletedAt: null },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
     });
 
     return comments.map((comment) => ({
@@ -197,5 +331,21 @@ export class CommentsService {
     }
 
     return post.commentCount;
+  }
+
+  /**
+   * Get comment count for a memory
+   */
+  async getMemoryCommentCount(memoryId: string): Promise<number> {
+    const memory = await this.prisma.memory.findUnique({
+      where: { id: memoryId },
+      select: { commentCount: true },
+    });
+
+    if (!memory) {
+      throw new NotFoundException('Memory not found');
+    }
+
+    return memory.commentCount;
   }
 }

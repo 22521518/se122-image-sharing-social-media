@@ -19,6 +19,10 @@ describe('CommentsService', () => {
       delete: jest.fn(),
     },
     $transaction: jest.fn(),
+    memory: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
   };
 
   beforeEach(async () => {

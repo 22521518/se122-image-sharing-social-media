@@ -256,7 +256,7 @@ export class MemoriesController {
     @Request() req: any,
     @Query() query: MapBoundingBoxQueryDto,
   ) {
-    return this.memoriesService.getMemoriesByBoundingBox(
+    const memories = await this.memoriesService.getMemoriesByBoundingBox(
       req.user.id,
       query.minLat,
       query.minLng,
@@ -264,6 +264,13 @@ export class MemoriesController {
       query.maxLng,
       query.limit || 50,
     );
+
+    // Map liked status
+    return memories.map((m: any) => ({
+      ...m,
+      liked: m.likes?.length > 0,
+      likes: undefined, // Check if this should be removed from payload size
+    }));
   }
 
   @Post('check-duplicates')

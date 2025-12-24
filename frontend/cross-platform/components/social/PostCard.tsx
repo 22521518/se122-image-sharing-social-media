@@ -138,7 +138,8 @@ export function PostCard({
       {/* Interaction Bar */}
       <View style={styles.interactionBar}>
         <LikeButton
-          postId={post.id}
+          itemId={post.id}
+          targetType="post"
           initialLiked={liked}
           initialCount={likeCount}
           isAuthenticated={isAuthenticated}

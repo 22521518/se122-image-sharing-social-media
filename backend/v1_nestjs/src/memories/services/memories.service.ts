@@ -411,6 +411,12 @@ export class MemoriesService {
         placeholderMetadata: true,
         title: true,
         createdAt: true,
+        likeCount: true,
+        commentCount: true,
+        likes: {
+          where: { userId },
+          select: { id: true },
+        },
       },
       orderBy: {
         createdAt: 'desc',

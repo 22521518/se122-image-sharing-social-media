@@ -25,6 +25,12 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Features Implemented
+- **Auth**: JWT Authentication.
+- **Social Graph**: Follow/Unfollow.
+- **Memories**: Geotagged Voice and Photo memories.
+- **Interactions**: Polymorphic Likes and Comments (Posts & Memories).
+
 ## Project setup
 
 ```bash

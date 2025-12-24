@@ -1,6 +1,13 @@
-# Welcome to your Expo app 👋
+# Frontend - Cross-Platform App (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is an [Expo](https://expo.dev) project for the SE122 Social Media App.
+Features include: Map-based Memories, Social Graph, Voice Stickers.
+
+## Recent Updates
+- **Story 6.5**: Liking and Commenting on Memories (Filmstrip integration).
+- **Story 6.x**: Social interactions (Posts, Likes, Comments).
+
+This project was created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
 

@@ -18,6 +18,10 @@ describe('LikesService', () => {
       delete: jest.fn(),
     },
     $transaction: jest.fn((callback) => callback(mockPrismaService)),
+    memory: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -161,6 +165,94 @@ describe('LikesService', () => {
       mockPrismaService.post.findUnique.mockResolvedValue(null);
 
       await expect(service.getLikeCount(postId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+  describe('toggleLikeMemory', () => {
+    const userId = 'user-123';
+    const memoryId = 'memory-456';
+    const mockMemory = { id: memoryId, userId: 'author-789', likeCount: 5 };
+
+    it('should create a like if not exists (like action)', async () => {
+      mockPrismaService.memory.findUnique.mockResolvedValue(mockMemory);
+      mockPrismaService.like.findUnique.mockResolvedValue(null);
+      mockPrismaService.like.create.mockResolvedValue({ id: 'like-1', userId, memoryId });
+
+      const result = await service.toggleLikeMemory(userId, memoryId);
+
+      expect(result).toEqual({ liked: true, likeCount: 6 });
+      expect(mockPrismaService.like.create).toHaveBeenCalledWith({
+        data: { userId, memoryId },
+      });
+      expect(mockPrismaService.memory.update).toHaveBeenCalledWith({
+        where: { id: memoryId },
+        data: { likeCount: { increment: 1 } },
+      });
+    });
+
+    it('should delete a like if exists (unlike action)', async () => {
+      const existingLike = { id: 'like-1', userId, memoryId };
+      mockPrismaService.memory.findUnique.mockResolvedValue(mockMemory);
+      mockPrismaService.like.findUnique.mockResolvedValue(existingLike);
+
+      const result = await service.toggleLikeMemory(userId, memoryId);
+
+      expect(result).toEqual({ liked: false, likeCount: 4 });
+      expect(mockPrismaService.like.delete).toHaveBeenCalledWith({
+        where: { id: existingLike.id },
+      });
+      expect(mockPrismaService.memory.update).toHaveBeenCalledWith({
+        where: { id: memoryId },
+        data: { likeCount: { decrement: 1 } },
+      });
+    });
+
+    it('should throw NotFoundException if memory does not exist', async () => {
+      mockPrismaService.memory.findUnique.mockResolvedValue(null);
+
+      await expect(service.toggleLikeMemory(userId, memoryId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('hasLikedMemory', () => {
+    const userId = 'user-123';
+    const memoryId = 'memory-456';
+
+    it('should return true if user has liked the memory', async () => {
+      mockPrismaService.like.findUnique.mockResolvedValue({ id: 'like-1', userId, memoryId });
+
+      const result = await service.hasLikedMemory(userId, memoryId);
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false if user has not liked the memory', async () => {
+      mockPrismaService.like.findUnique.mockResolvedValue(null);
+
+      const result = await service.hasLikedMemory(userId, memoryId);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getMemoryLikeCount', () => {
+    const memoryId = 'memory-456';
+
+    it('should return the like count for a memory', async () => {
+      mockPrismaService.memory.findUnique.mockResolvedValue({ likeCount: 10 });
+
+      const result = await service.getMemoryLikeCount(memoryId);
+
+      expect(result).toBe(10);
+    });
+
+    it('should throw NotFoundException if memory does not exist', async () => {
+      mockPrismaService.memory.findUnique.mockResolvedValue(null);
+
+      await expect(service.getMemoryLikeCount(memoryId)).rejects.toThrow(
         NotFoundException,
       );
     });

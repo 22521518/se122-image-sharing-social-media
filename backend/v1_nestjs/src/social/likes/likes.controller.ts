@@ -27,4 +27,22 @@ export class LikesController {
     const likeCount = await this.likesService.getLikeCount(postId);
     return { liked, likeCount };
   }
+
+  @Post('memory/toggle/:memoryId')
+  @ApiOperation({ summary: 'Toggle like on a memory' })
+  @ApiParam({ name: 'memoryId', description: 'ID of the memory to toggle like on' })
+  async toggleLikeMemory(@Param('memoryId') memoryId: string, @Req() req: any) {
+    const userId = req.user.id;
+    return this.likesService.toggleLikeMemory(userId, memoryId);
+  }
+
+  @Get('memory/status/:memoryId')
+  @ApiOperation({ summary: 'Check if current user has liked a memory' })
+  @ApiParam({ name: 'memoryId', description: 'ID of the memory to check' })
+  async hasLikedMemory(@Param('memoryId') memoryId: string, @Req() req: any) {
+    const userId = req.user.id;
+    const liked = await this.likesService.hasLikedMemory(userId, memoryId);
+    const likeCount = await this.likesService.getMemoryLikeCount(memoryId);
+    return { liked, likeCount };
+  }
 }

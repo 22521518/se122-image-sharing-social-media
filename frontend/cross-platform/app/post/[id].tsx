@@ -184,7 +184,8 @@ export default function PostDetailScreen() {
         {/* Interaction Bar */}
         <View style={styles.interactionBar}>
           <LikeButton
-            postId={post.id}
+            itemId={post.id}
+            targetType="post"
             initialLiked={post.liked}
             initialCount={post.likeCount}
             isAuthenticated={isAuthenticated}
@@ -211,7 +212,8 @@ export default function PostDetailScreen() {
         {/* Comments List */}
         <View style={styles.commentsSection}>
           <CommentList
-            postId={post.id}
+            itemId={post.id}
+            targetType="post"
             accessToken={accessToken || undefined}
             currentUserId={user?.id}
             isAuthenticated={isAuthenticated}

@@ -28,6 +28,16 @@ export interface Memory {
   placeholderMetadata?: PlaceholderMetadata;
   createdAt: string;
   updatedAt: string;
+  // Social Interactions (Epic 6)
+  likeCount: number;
+  commentCount: number;
+  liked?: boolean;
+  // Creator info (Story 6.5)
+  user?: {
+    id: string;
+    name: string | null;
+    avatarUrl: string | null;
+  };
 }
 
 export type MemoryUploadState = 'idle' | 'recording' | 'uploading' | 'success' | 'error';

@@ -30,6 +30,7 @@ import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { VisualMemoryCard } from '@/components/VisualMemoryCard';
 import { Filmstrip, FilmstripRef } from '@/components/map/Filmstrip';
+import { MemoryDetailModal } from '@/components/memories/MemoryDetailModal';
 import { getMemoryColor, getMemoryIcon, getTypeIcon } from '@/constants/MemoryUI';
 import { analytics } from '@/services/analytics';
 
@@ -190,6 +191,8 @@ export default function MapScreen() {
   const [isActionPanelOpen, setIsActionPanelOpen] = useState(true);
   // Story 2.4b: Selected memory for filmstrip two-way sync
   const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
+  // Story 6.5: Memory detail modal from map marker press
+  const [detailMemory, setDetailMemory] = useState<Memory | null>(null);
   const filmstripRef = useRef<FilmstripRef>(null);
 
   // Initialize viewport on mount and when authenticated
@@ -353,11 +356,18 @@ export default function MapScreen() {
     });
   }, [currentRegion]);
 
-  // Handle map pin press for two-way sync
+  // Handle map pin press for two-way sync AND open detail modal (Story 6.5)
   const handleMapMemoryPress = useCallback((memory: Memory) => {
     setSelectedMemoryId(memory.id);
     // Scroll filmstrip to the memory
     filmstripRef.current?.scrollToMemory(memory.id);
+    // Open detail modal (Story 6.5: AC1 - tap on memory pin opens detail view)
+    setDetailMemory(memory);
+  }, []);
+
+  // Close detail modal handler
+  const handleCloseDetail = useCallback(() => {
+    setDetailMemory(null);
   }, []);
 
   const handleRecordingError = useCallback((errorMessage: string) => {
@@ -609,6 +619,13 @@ export default function MapScreen() {
             )}
           </View>
         </View>
+
+        {/* Memory Detail Modal (Story 6.5) */}
+        <MemoryDetailModal
+          visible={!!detailMemory}
+          memory={detailMemory}
+          onClose={handleCloseDetail}
+        />
       </SafeAreaView>
     );
   }
@@ -806,7 +823,7 @@ export default function MapScreen() {
                           longitude: mem.longitude,
                         });
                         setActiveMobileTab('browse');
-                        bottomSheetRef.current?.snapToIndex(0);
+                        // bottomSheetRef.current?.snapToIndex(0);
                       }}
                     />
                   ))
@@ -881,7 +898,7 @@ export default function MapScreen() {
                         latitude: mem.latitude,
                         longitude: mem.longitude,
                       });
-                      bottomSheetRef.current?.snapToIndex(0);
+                      // bottomSheetRef.current?.snapToIndex(0);
                     }}
                   />
                 ))}
@@ -890,6 +907,13 @@ export default function MapScreen() {
           </View>
         </BottomSheet>
       )}
+
+      {/* Memory Detail Modal (Story 6.5) */}
+      <MemoryDetailModal
+        visible={!!detailMemory}
+        memory={detailMemory}
+        onClose={handleCloseDetail}
+      />
     </GestureHandlerRootView>
   );
 }

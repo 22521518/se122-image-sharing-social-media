@@ -89,3 +89,22 @@ src/
 2. ✅ Handle wrapped response format (`{ success, data, meta }`)
 3. ❌ NEVER assume API returns data directly at root level
 4. ❌ NEVER hardcode API URLs - use `EXPO_PUBLIC_API_URL` env var
+
+---
+
+## Social Components (Story 6.5)
+
+Reusable social interaction components in `components/social/`:
+
+| Component | Props | Notes |
+|-----------|-------|-------|
+| `LikeButton` | `itemId`, `targetType: 'post' \| 'memory'` | Animated heart with optimistic updates |
+| `CommentList` | `itemId`, `targetType: 'post' \| 'memory'` | Scrollable comment list with delete |
+| `CommentInput` | `onSubmit`, `isAuthenticated` | Keyboard-aware text input |
+| `DoubleTapLike` | `onDoubleTap`, `children` | Wrap any content for double-tap like gesture |
+
+**Usage Pattern:**
+```tsx
+<LikeButton itemId={memory.id} targetType="memory" />
+<CommentList itemId={memory.id} targetType="memory" />
+```

@@ -41,4 +41,27 @@ export class CommentsController {
     const count = await this.commentsService.getCommentCount(postId);
     return { comments, count };
   }
+
+  @Post('memory/:memoryId')
+  @ApiOperation({ summary: 'Create a comment on a memory' })
+  @ApiParam({ name: 'memoryId', description: 'ID of the memory to comment on' })
+  @ApiBody({ type: CreateCommentDto })
+  async createCommentOnMemory(
+    @Param('memoryId') memoryId: string,
+    @Body() dto: CreateCommentDto,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    return this.commentsService.createCommentOnMemory(userId, memoryId, dto);
+  }
+
+  @Get('memory/:memoryId')
+  @ApiOperation({ summary: 'Get all comments for a memory (sorted oldest first)' })
+  @ApiParam({ name: 'memoryId', description: 'ID of the memory' })
+  async getMemoryComments(@Param('memoryId') memoryId: string, @Req() req: any) {
+    const userId = req.user.id;
+    const comments = await this.commentsService.getMemoryComments(userId, memoryId);
+    const count = await this.commentsService.getMemoryCommentCount(memoryId);
+    return { comments, count };
+  }
 }

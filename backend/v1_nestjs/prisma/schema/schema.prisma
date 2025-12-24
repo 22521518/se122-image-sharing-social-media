@@ -111,6 +111,13 @@ model Memory {
   title               String?      // Optional title/caption
   feeling             Feeling?     // User's emotional state when capturing
   placeholderMetadata Json?        @map("placeholder_metadata") // { gradientId, feeling, timeOfDay } for client rendering
+  
+  // Social Interactions (Epic 6)
+  likeCount           Int          @default(0) @map("like_count")
+  commentCount        Int          @default(0) @map("comment_count")
+  likes               Like[]
+  comments            Comment[]
+
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
   deletedAt           DateTime?    @map("deleted_at")
@@ -145,19 +152,33 @@ model Like {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId    String   @map("post_id")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  // Polymorphic-like relation (one of these must be distinct)
+  postId    String?  @map("post_id")
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  memoryId  String?  @map("memory_id")
+  memory    Memory?  @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([userId, postId])
+  @@unique([userId, memoryId])
   @@map("likes")
   @@index([postId])
+  @@index([memoryId])
 }
 
 model Comment {
   id        String   @id @default(uuid())
-  postId    String   @map("post_id")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  // Polymorphic-like relation
+  postId    String?  @map("post_id")
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  memoryId  String?  @map("memory_id")
+  memory    Memory?  @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   content   String   // Max 500 chars enforced at service layer
@@ -167,5 +188,6 @@ model Comment {
 
   @@map("comments")
   @@index([postId])
+  @@index([memoryId])
   @@index([userId])
 }

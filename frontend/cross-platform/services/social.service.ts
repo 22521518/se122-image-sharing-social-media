@@ -85,9 +85,21 @@ export const socialService = {
     return api.get(`/api/social/likes/status/${postId}`, token);
   },
 
+  async toggleLikeMemory(memoryId: string, token: string): Promise<ToggleLikeResponse> {
+    return api.post(`/api/social/likes/memory/toggle/${memoryId}`, {}, token);
+  },
+
+  async getLikeStatusMemory(memoryId: string, token: string): Promise<LikeStatusResponse> {
+    return api.get(`/api/social/likes/memory/status/${memoryId}`, token);
+  },
+
   // Comments
   async createComment(postId: string, content: string, token: string): Promise<CreateCommentResponse> {
     return api.post(`/api/social/comments/${postId}`, { content }, token);
+  },
+
+  async createCommentOnMemory(memoryId: string, content: string, token: string): Promise<CreateCommentResponse> {
+    return api.post(`/api/social/comments/memory/${memoryId}`, { content }, token);
   },
 
   async deleteComment(commentId: string, token: string): Promise<DeleteCommentResponse> {
@@ -96,6 +108,10 @@ export const socialService = {
 
   async getComments(postId: string, token: string): Promise<GetCommentsResponse> {
     return api.get(`/api/social/comments/post/${postId}`, token);
+  },
+
+  async getMemoryComments(memoryId: string, token: string): Promise<GetCommentsResponse> {
+    return api.get(`/api/social/comments/memory/${memoryId}`, token);
   },
 };
 

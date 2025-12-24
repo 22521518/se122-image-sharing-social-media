@@ -27,6 +27,10 @@ import { Feeling } from '@/components/FeelingSelector';
 const THUMBNAIL_SIZE = 80;
 const ITEM_MARGIN = 8;
 
+import { MemoryDetailModal } from '@/components/memories/MemoryDetailModal';
+
+// ... existing code ...
+
 interface FilmstripProps {
   memories: Memory[];
   onMemoryPress: (memory: Memory) => void;
@@ -42,10 +46,11 @@ export interface FilmstripRef {
 interface FilmstripItemProps {
   memory: Memory;
   onPress: () => void;
+  onLongPress: () => void;
   isSelected: boolean;
 }
 
-function FilmstripItem({ memory, onPress, isSelected }: FilmstripItemProps) {
+function FilmstripItem({ memory, onPress, onLongPress, isSelected }: FilmstripItemProps) {
   const color = getMemoryColor(memory);
   const icon = getMemoryIcon(memory);
   const typeIcon = getTypeIcon(memory.type);
@@ -59,6 +64,7 @@ function FilmstripItem({ memory, onPress, isSelected }: FilmstripItemProps) {
         isSelected && { borderColor: color },
       ]}
       onPress={onPress}
+      onLongPress={onLongPress}
       activeOpacity={0.8}
     >
       {hasImage ? (
@@ -97,8 +103,8 @@ export const Filmstrip = forwardRef<FilmstripRef, FilmstripProps>(({
   onAudioPlay,
 }, ref) => {
   const flatListRef = useRef<FlatList>(null);
-  // Track current audio URL for the player
   const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
+  const [detailMemory, setDetailMemory] = useState<Memory | null>(null);
   
   // Use expo-audio useAudioPlayer hook
   const audioPlayer = useAudioPlayer(currentAudioUrl ?? undefined);
@@ -126,10 +132,13 @@ export const Filmstrip = forwardRef<FilmstripRef, FilmstripProps>(({
     }
   }));
 
-  // Handle memory press: center map + play audio if voice
+  // Handle memory press: center map, play audio if voice, AND open detail modal (Story 6.5: AC4)
   const handlePress = useCallback((memory: Memory) => {
     // Trigger map centering callback
     onMemoryPress(memory);
+
+    // Open detail modal (Story 6.5: When I tap on a filmstrip item, open detail view)
+    setDetailMemory(memory);
 
     // Play audio if it's a voice memory (AC: triggers Voice Sticker)
     if (memory.type === 'voice' && memory.mediaUrl) {
@@ -142,16 +151,26 @@ export const Filmstrip = forwardRef<FilmstripRef, FilmstripProps>(({
     }
   }, [onMemoryPress, onAudioPlay]);
 
+  // Handle long press to show details
+  const handleLongPress = useCallback((memory: Memory) => {
+    setDetailMemory(memory);
+  }, []);
+
+  const closeDetail = useCallback(() => {
+    setDetailMemory(null);
+  }, []);
+
   // Render item
   const renderItem = useCallback(
     ({ item }: { item: Memory }) => (
       <FilmstripItem
         memory={item}
         onPress={() => handlePress(item)}
+        onLongPress={() => handleLongPress(item)}
         isSelected={selectedMemoryId === item.id}
       />
     ),
-    [handlePress, selectedMemoryId]
+    [handlePress, handleLongPress, selectedMemoryId]
   );
 
   const keyExtractor = useCallback((item: Memory) => item.id, []);
@@ -169,32 +188,41 @@ export const Filmstrip = forwardRef<FilmstripRef, FilmstripProps>(({
   }
 
   return (
-    <View style={styles.container}>
-      {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="small" color="#5856D6" />
-        </View>
-      )}
-      <FlatList
-        ref={flatListRef}
-        data={memories}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        // Performance optimizations
-        removeClippedSubviews={Platform.OS !== 'web'}
-        initialNumToRender={10}
-        maxToRenderPerBatch={5}
-        windowSize={11}
-        getItemLayout={(_data, index) => ({
-          length: THUMBNAIL_SIZE + ITEM_MARGIN * 2,
-          offset: (THUMBNAIL_SIZE + ITEM_MARGIN * 2) * index,
-          index,
-        })}
+    <>
+      <View style={styles.container}>
+        {isLoading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="small" color="#5856D6" />
+          </View>
+        )}
+        <FlatList
+          ref={flatListRef}
+          data={memories}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          // Performance optimizations
+          removeClippedSubviews={Platform.OS !== 'web'}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={11}
+          getItemLayout={(_data, index) => ({
+            length: THUMBNAIL_SIZE + ITEM_MARGIN * 2,
+            offset: (THUMBNAIL_SIZE + ITEM_MARGIN * 2) * index,
+            index,
+          })}
+        />
+      </View>
+
+      <MemoryDetailModal
+        visible={!!detailMemory}
+        memory={detailMemory}
+        onClose={closeDetail}
+        // onLoginRequired should be passed from parent or handled via auth context in modal
       />
-    </View>
+    </>
   );
 });
 
