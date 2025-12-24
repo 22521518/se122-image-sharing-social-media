@@ -8,12 +8,13 @@ export interface SocialPost extends PostDetail {
     content: string;
     privacy: string;
     mediaIds?: string[];
+    mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>;
   };
 }
 
 interface SocialContextType {
   posts: SocialPost[];
-  createPost: (content: string, privacy: string, mediaIds?: string[]) => Promise<void>;
+  createPost: (content: string, privacy: string, mediaIds?: string[], mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>) => Promise<void>;
   retryPost: (postId: string) => Promise<void>;
   deleteFailedPost: (postId: string) => void;
   refreshPosts: () => Promise<void>;
@@ -40,7 +41,12 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     }
   }, [accessToken]);
 
-  const createPost = async (content: string, privacy: string, mediaIds: string[] = []) => {
+  const createPost = async (
+    content: string, 
+    privacy: string, 
+    mediaIds: string[] = [],
+    mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>
+  ) => {
     if (!user || !accessToken) return;
 
     // Optimistic Update
@@ -60,19 +66,19 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       liked: false,
       localStatus: 'pending',
       // Store original data for retry
-      _retryData: { content, privacy, mediaIds },
+      _retryData: { content, privacy, mediaIds, mediaMetadata },
     };
 
     setPosts(prev => [newPost, ...prev]);
 
     try {
-      const created = await socialService.createPost({ content, privacy, mediaIds }, accessToken);
+      const created = await socialService.createPost({ content, privacy, mediaIds, mediaMetadata }, accessToken);
       // Replace temp with real
       setPosts(prev => prev.map(p => p.id === tempId ? { ...created, localStatus: 'published' } : p));
     } catch (e) {
       console.error('Create post failed', e);
       // Mark as failed with retry data
-      setPosts(prev => prev.map(p => p.id === tempId ? { ...p, localStatus: 'failed', _retryData: { content, privacy, mediaIds } } : p));
+      setPosts(prev => prev.map(p => p.id === tempId ? { ...p, localStatus: 'failed', _retryData: { content, privacy, mediaIds, mediaMetadata } } : p));
       throw e;
     }
   };
@@ -89,7 +95,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, localStatus: 'pending' } : p));
 
     try {
-      const created = await socialService.createPost({ content, privacy, mediaIds }, accessToken);
+      const created = await socialService.createPost({ content, privacy, mediaIds, mediaMetadata: (post as any)._retryData.mediaMetadata }, accessToken);
       // Replace failed post with real
       setPosts(prev => prev.map(p => p.id === postId ? { ...created, localStatus: 'published' } : p));
     } catch (e) {

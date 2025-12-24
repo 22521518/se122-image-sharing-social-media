@@ -9,6 +9,7 @@ import { socialService } from '../../services/social.service';
 import { mediaService, Media } from '../../services/media.service';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ImageGalleryEditor, { ImageWithMetadata } from '../../components/social/ImageGalleryEditor';
 
 export default function CreatePostScreen() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function CreatePostScreen() {
   const { createPost } = useSocial();
   const [content, setContent] = useState('');
   const [privacy, setPrivacy] = useState<'public' | 'friends' | 'private'>('friends');
-  const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [images, setImages] = useState<ImageWithMetadata[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const DRAFT_KEY = `post_draft_${user?.id}`;
@@ -54,14 +55,34 @@ export default function CreatePostScreen() {
   };
 
   const pickImage = async () => {
+    // AC 2: Validate max 10 images client-side
+    if (images.length >= 10) {
+      Alert.alert('Limit Reached', 'You can only add up to 10 images per post');
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Only images for now as per requirements or MediaPicker capabilities
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      setImages([...images, ...result.assets]);
+      const remainingSlots = 10 - images.length;
+      const assetsToAdd = result.assets.slice(0, remainingSlots);
+      
+      if (result.assets.length > remainingSlots) {
+        Alert.alert('Limit Reached', `Only ${remainingSlots} image(s) can be added`);
+      }
+
+      const newImages: ImageWithMetadata[] = assetsToAdd.map((asset, index) => ({
+        uri: asset.uri,
+        mimeType: asset.mimeType || 'image/jpeg',
+        sortOrder: images.length + index,
+        caption: undefined,
+      }));
+      
+      setImages([...images, ...newImages]);
     }
   };
 
@@ -86,7 +107,9 @@ export default function CreatePostScreen() {
     try {
       let mediaIds: string[] = [];
       
-      // Upload images first (still blocking for now, as per simple implementation)
+      // Upload images with metadata
+      let mediaMetadata: Array<{ mediaId: string; caption?: string; sortOrder: number }> = [];
+      
       if (images.length > 0) {
         setUploading(true);
         const uploadPromises = images.map(img => 
@@ -94,11 +117,19 @@ export default function CreatePostScreen() {
         );
         const uploadedMedia = await Promise.all(uploadPromises);
         mediaIds = uploadedMedia.map(m => m.id);
+        
+        // AC 5: Build metadata with caption and sortOrder
+        mediaMetadata = uploadedMedia.map((media, index) => ({
+          mediaId: media.id,
+          caption: images[index].caption,
+          sortOrder: images[index].sortOrder,
+        }));
+        
         setUploading(false);
       }
 
-      // Optimistic creation via Context
-      createPost(content, privacy, mediaIds).catch((err: any) => {
+      // Optimistic creation via Context with mediaMetadata
+      createPost(content, privacy, mediaIds, mediaMetadata).catch((err: any) => {
         console.error("Background create post failed", err);
       });
 
@@ -176,19 +207,18 @@ export default function CreatePostScreen() {
         </View>
         <Text style={styles.charCount}>{content.length}/2000</Text>
 
-        <ScrollView horizontal style={styles.mediaRow}>
-          {images.map((img, index) => (
-            <View key={index} style={styles.imageContainer}>
-              <Image source={{ uri: img.uri }} style={styles.previewImage} />
-              <TouchableOpacity style={styles.removeButton} onPress={() => removeImage(index)}>
-                <Ionicons name="close-circle" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
-             <Ionicons name="images-outline" size={30} color="#666" />
-          </TouchableOpacity>
-        </ScrollView>
+        {/* AC 3: Image Gallery with Drag/Drop and Caption Editing */}
+        <ImageGalleryEditor
+          images={images}
+          onImagesChange={setImages}
+          onRemoveImage={removeImage}
+          maxImages={10}
+        />
+
+        <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
+          <Ionicons name="images-outline" size={24} color="#007AFF" />
+          <Text style={styles.addImageText}>Add Image ({images.length}/10)</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {uploading && (
@@ -316,12 +346,20 @@ const styles = StyleSheet.create({
     right: -5,
   },
   addImageButton: {
-    width: 100,
-    height: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginVertical: 8,
+  },
+  addImageText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
   },
   loadingOverlay: {
     position: 'absolute',

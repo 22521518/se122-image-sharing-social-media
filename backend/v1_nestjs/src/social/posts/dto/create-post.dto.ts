@@ -19,4 +19,18 @@ export class CreatePostDto {
   @IsOptional()
   @ArrayMaxSize(10)
   mediaIds?: string[];
+
+  @ApiProperty({
+    description: 'Metadata for each media item (caption, sortOrder)',
+    required: false,
+    type: [Object],
+    example: [{ mediaId: 'uuid', caption: 'My caption', sortOrder: 0 }]
+  })
+  @IsArray()
+  @IsOptional()
+  mediaMetadata?: Array<{
+    mediaId: string;
+    caption?: string;
+    sortOrder: number;
+  }>;
 }

@@ -69,7 +69,21 @@ export class PostsService {
    * Get recent posts for development/testing feed
    */
   async createPost(data: any): Promise<any> {
-    const { authorId, content, privacy } = data;
+    const { authorId, content, privacy, mediaMetadata } = data;
+
+    // AC 2: Validate max 10 media items
+    if (mediaMetadata && mediaMetadata.length > 10) {
+      throw new Error('Posts can have a maximum of 10 media items');
+    }
+
+    // AC 4: Validate caption max 200 chars
+    if (mediaMetadata) {
+      for (const media of mediaMetadata) {
+        if (media.caption && media.caption.length > 200) {
+          throw new Error('Media captions cannot exceed 200 characters');
+        }
+      }
+    }
 
     // Extract hashtags
     const hashtagRegex = /#(\w+)/g;
@@ -98,6 +112,19 @@ export class PostsService {
           } : undefined,
         },
       });
+
+      // AC 5: Update each media item with caption and sortOrder
+      if (mediaMetadata && mediaMetadata.length > 0) {
+        for (const mediaItem of mediaMetadata) {
+          await tx.media.update({
+            where: { id: mediaItem.mediaId },
+            data: {
+              caption: mediaItem.caption,
+              sortOrder: mediaItem.sortOrder,
+            },
+          });
+        }
+      }
 
       // Process hashtags
       for (const tag of uniqueTags) {

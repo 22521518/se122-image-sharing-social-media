@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocial } from '@/context/SocialContext';
 import { socialService, PostDetail } from '@/services/social.service';
 import { Ionicons } from '@expo/vector-icons';
+import CreatePostModal from '@/components/social/CreatePostModal';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function HomeScreen() {
 
   const { posts, refreshPosts, isLoading } = useSocial();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showCreatePost, setShowCreatePost] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -37,6 +39,12 @@ export default function HomeScreen() {
 
   const handleLogin = () => {
     router.push('/(auth)/login');
+  };
+
+  const handleCreatePostClose = () => {
+    setShowCreatePost(false);
+    // Refresh posts after creating
+    refreshPosts();
   };
 
   if (!isAuthenticated) {
@@ -64,6 +72,9 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <ThemedText style={styles.headerTitle}>Feed</ThemedText>
+        <TouchableOpacity onPress={() => setShowCreatePost(true)}>
+          <Ionicons name="add-circle-outline" size={28} color="#007AFF" />
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -85,11 +96,33 @@ export default function HomeScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
+            <Ionicons name="create-outline" size={48} color="#ccc" style={{ marginBottom: 16 }} />
             <ThemedText style={styles.emptyText}>No posts yet.</ThemedText>
-            <ThemedText style={styles.emptySubtext}>Check back later!</ThemedText>
+            <ThemedText style={styles.emptySubtext}>Be the first to share something!</ThemedText>
+            <TouchableOpacity 
+              style={[styles.button, { marginTop: 16 }]} 
+              onPress={() => setShowCreatePost(true)}
+            >
+              <ThemedText style={styles.buttonText}>Create Post</ThemedText>
+            </TouchableOpacity>
           </View>
         }
         contentContainerStyle={posts.length === 0 ? styles.centerContent : styles.listContent}
+      />
+
+      {/* Floating Action Button */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => setShowCreatePost(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Create Post Modal */}
+      <CreatePostModal
+        visible={showCreatePost}
+        onClose={handleCreatePostClose}
       />
     </SafeAreaView>
   );
@@ -101,6 +134,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -165,5 +201,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     marginTop: 8,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
 });

@@ -18,6 +18,9 @@ describe('PostsService', () => {
     postHashtag: {
       create: jest.fn(),
     },
+    media: {
+      update: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -269,4 +272,113 @@ describe('PostsService', () => {
       // Let's assume the requirement is strict.
     });
   });
+
+  describe('createPost with mediaMetadata validation (Story 5.2)', () => {
+    const basePostDto = {
+      authorId: 'user-123',
+      content: 'Gallery post',
+      privacy: 'public' as any,
+    };
+
+    it('should reject posts with more than 10 media items', async () => {
+      const mediaMetadata = Array.from({ length: 11 }, (_, i) => ({
+        mediaId: `media-${i}`,
+        sortOrder: i,
+      }));
+
+      await expect(
+        service.createPost({ ...basePostDto, mediaIds: mediaMetadata.map(m => m.mediaId), mediaMetadata })
+      ).rejects.toThrow('Posts can have a maximum of 10 media items');
+    });
+
+    it('should reject media items with captions exceeding 200 characters', async () => {
+      const longCaption = 'a'.repeat(201);
+      const mediaMetadata = [{
+        mediaId: 'media-1',
+        caption: longCaption,
+        sortOrder: 0,
+      }];
+
+      await expect(
+        service.createPost({ ...basePostDto, mediaIds: ['media-1'], mediaMetadata })
+      ).rejects.toThrow('Media captions cannot exceed 200 characters');
+    });
+
+    it('should accept valid multi-image post with captions and sort order', async () => {
+      mockPrisma.$transaction = jest.fn((callback) => callback(mockPrisma));
+      mockPrisma.post.create = jest.fn().mockResolvedValue({ id: 'post-123' });
+      mockPrisma.media = { update: jest.fn() };
+      mockPrisma.hashtag = { upsert: jest.fn() };
+      mockPrisma.postHashtag = { create: jest.fn() };
+
+      const mediaMetadata = [
+        { mediaId: 'media-1', caption: 'First image', sortOrder: 0 },
+        { mediaId: 'media-2', caption: 'Second image', sortOrder: 1 },
+      ];
+
+      await service.createPost({
+        ...basePostDto,
+        mediaIds: ['media-1', 'media-2'],
+        mediaMetadata
+      });
+
+      // Should update each media with caption and sortOrder
+      expect(mockPrisma.media.update).toHaveBeenCalledWith({
+        where: { id: 'media-1' },
+        data: { caption: 'First image', sortOrder: 0 },
+      });
+      expect(mockPrisma.media.update).toHaveBeenCalledWith({
+        where: { id: 'media-2' },
+        data: { caption: 'Second image', sortOrder: 1 },
+      });
+    });
+
+    it('should accept exactly 10 media items (boundary test)', async () => {
+      mockPrisma.$transaction = jest.fn((callback) => callback(mockPrisma));
+      mockPrisma.post.create = jest.fn().mockResolvedValue({ id: 'post-123' });
+      mockPrisma.media = { update: jest.fn() };
+      mockPrisma.hashtag = { upsert: jest.fn() };
+      mockPrisma.postHashtag = { create: jest.fn() };
+
+      const mediaMetadata = Array.from({ length: 10 }, (_, i) => ({
+        mediaId: `media-${i}`,
+        sortOrder: i,
+      }));
+
+      await service.createPost({
+        ...basePostDto,
+        mediaIds: mediaMetadata.map(m => m.mediaId),
+        mediaMetadata
+      });
+
+      expect(mockPrisma.post.create).toHaveBeenCalled();
+    });
+
+    it('should accept exactly 200 character caption (boundary test)', async () => {
+      mockPrisma.$transaction = jest.fn((callback) => callback(mockPrisma));
+      mockPrisma.post.create = jest.fn().mockResolvedValue({ id: 'post-123' });
+      mockPrisma.media = { update: jest.fn() };
+      mockPrisma.hashtag = { upsert: jest.fn() };
+      mockPrisma.postHashtag = { create: jest.fn() };
+
+      const exactCaption = 'a'.repeat(200);
+      const mediaMetadata = [{
+        mediaId: 'media-1',
+        caption: exactCaption,
+        sortOrder: 0,
+      }];
+
+      await service.createPost({
+        ...basePostDto,
+        mediaIds: ['media-1'],
+        mediaMetadata
+      });
+
+      expect(mockPrisma.media.update).toHaveBeenCalledWith({
+        where: { id: 'media-1' },
+        data: { caption: exactCaption, sortOrder: 0 },
+      });
+    });
+  });
 });
+

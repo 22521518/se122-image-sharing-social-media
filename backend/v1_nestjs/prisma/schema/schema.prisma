@@ -157,6 +157,8 @@ model Media {
   type      String   // 'image' | 'video' | 'audio'
   mimeType  String?  @map("mime_type")
   size      Int?
+  caption   String?  // Per-image caption (max 200 chars, enforced at service layer)
+  sortOrder Int?     @map("sort_order") // Display order in post gallery (0-based)
   
   uploaderId String  @map("uploader_id")
   uploader   User    @relation(fields: [uploaderId], references: [id])

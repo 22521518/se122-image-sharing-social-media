@@ -114,7 +114,12 @@ export const socialService = {
     return api.get(`/api/social/comments/memory/${memoryId}`, token);
   },
 
-  async createPost(data: { content: string; privacy: string; mediaIds?: string[] }, token: string): Promise<PostDetail> {
+  async createPost(data: {
+    content: string;
+    privacy: string;
+    mediaIds?: string[];
+    mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>;
+  }, token: string): Promise<PostDetail> {
     return api.post('/api/social/posts', data, token);
   },
 };
