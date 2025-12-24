@@ -58,7 +58,8 @@ export class UsersController {
 
     if (file) {
       // Upload new avatar
-      avatarUrl = await this.mediaService.uploadFile(file, 'avatars');
+      const media = await this.mediaService.uploadFile(file, req.user.id, 'avatars');
+      avatarUrl = media.url;
 
       // Delete old avatar if exists and different
       if (req.user.avatarUrl) {

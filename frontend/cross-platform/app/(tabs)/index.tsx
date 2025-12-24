@@ -12,44 +12,28 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { PostCard } from '@/components/social/PostCard';
 import { useAuth } from '@/context/AuthContext';
+import { useSocial } from '@/context/SocialContext';
 import { socialService, PostDetail } from '@/services/social.service';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { isAuthenticated, accessToken, user } = useAuth();
-  const [posts, setPosts] = useState<PostDetail[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const { posts, refreshPosts, isLoading } = useSocial();
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const loadPosts = useCallback(async (showRefresh = false) => {
-    if (!accessToken) {
-      setIsLoading(false);
-      return;
-    }
-
-    if (showRefresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-
-    try {
-      const recentPosts = await socialService.getRecentPosts(accessToken);
-      setPosts(recentPosts);
-    } catch (error) {
-      console.error('Failed to load posts:', error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [accessToken]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      loadPosts();
+      refreshPosts();
     }
-  }, [isAuthenticated, loadPosts]);
+  }, [isAuthenticated, refreshPosts]);
+
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshPosts();
+    setIsRefreshing(false);
+  };
 
   const handleLogin = () => {
     router.push('/(auth)/login');
@@ -97,7 +81,7 @@ export default function HomeScreen() {
           />
         )}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={() => loadPosts(true)} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>

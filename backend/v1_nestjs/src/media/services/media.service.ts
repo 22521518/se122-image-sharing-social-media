@@ -3,11 +3,17 @@ import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 const streamifier = require('streamifier');
 
+import { PrismaService } from '../../prisma/prisma.service';
+import { Media } from '@prisma/client';
+
 @Injectable()
 export class MediaService implements OnModuleInit {
   private readonly logger = new Logger(MediaService.name);
 
-  constructor(private readonly configService: ConfigService) { }
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) { }
 
   onModuleInit() {
     cloudinary.config({
@@ -17,14 +23,14 @@ export class MediaService implements OnModuleInit {
     });
   }
 
-  async uploadFile(file: Express.Multer.File, folder: string): Promise<string> {
+  async uploadFile(file: Express.Multer.File, uploaderId: string, folder: string = 'uploads'): Promise<Media> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: folder,
           resource_type: 'auto',
         },
-        (error, result) => {
+        async (error, result) => {
           if (error) {
             this.logger.error('Cloudinary upload error', error);
             return reject(error);
@@ -32,7 +38,23 @@ export class MediaService implements OnModuleInit {
           if (!result) {
             return reject(new Error('Cloudinary upload returned no result'));
           }
-          resolve(result.secure_url);
+
+          try {
+            // Save to DB
+            const media = await this.prisma.media.create({
+              data: {
+                url: result.secure_url,
+                type: result.resource_type, // 'image', 'video'
+                mimeType: file.mimetype,
+                size: file.size,
+                uploaderId: uploaderId,
+              },
+            });
+            resolve(media);
+          } catch (dbError) {
+            this.logger.error('Database save error after upload', dbError);
+            reject(dbError);
+          }
         },
       );
 

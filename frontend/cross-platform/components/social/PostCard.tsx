@@ -5,12 +5,14 @@ import {
   TouchableOpacity,
   Image,
   ViewStyle,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { LikeButton } from './LikeButton';
 import { DoubleTapLike } from './DoubleTapLike';
 import { socialService, PostDetail as PostDetailType } from '@/services/social.service';
+import { useSocial } from '@/context/SocialContext';
 import { Ionicons } from '@expo/vector-icons';
 
 interface PostCardProps {
@@ -39,6 +41,7 @@ export function PostCard({
   style,
 }: PostCardProps) {
   const router = useRouter();
+  const { retryPost, deleteFailedPost } = useSocial();
   const [liked, setLiked] = useState(post.liked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
 
@@ -105,7 +108,11 @@ export function PostCard({
 
   const cardContent = (
     <TouchableOpacity
-      style={[styles.container, style]}
+      style={[
+        styles.container, 
+        style,
+        (post as any).localStatus === 'pending' && { opacity: 0.7 }
+      ]}
       onPress={handlePress}
       activeOpacity={0.9}
     >
@@ -124,7 +131,34 @@ export function PostCard({
           <ThemedText style={styles.authorName} numberOfLines={1}>
             {post.author.name || 'Anonymous'}
           </ThemedText>
-          <ThemedText style={styles.timestamp}>{formatDate(post.createdAt)}</ThemedText>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ThemedText style={styles.timestamp}>{formatDate(post.createdAt)}</ThemedText>
+            {(post as any).localStatus === 'pending' && (
+               <ThemedText style={{ color: '#007AFF', fontSize: 12, marginLeft: 8 }}>• Posting...</ThemedText>
+            )}
+            {(post as any).localStatus === 'failed' && (
+               <TouchableOpacity onPress={async (e) => {
+                 e.stopPropagation();
+                 Alert.alert(
+                   'Post Failed',
+                   'Would you like to retry or delete this post?',
+                   [
+                     { text: 'Delete', style: 'destructive', onPress: () => deleteFailedPost(post.id) },
+                     { text: 'Retry', onPress: async () => {
+                       try {
+                         await retryPost(post.id);
+                       } catch (err) {
+                         Alert.alert('Error', 'Failed to post. Please try again.');
+                       }
+                     }},
+                     { text: 'Cancel', style: 'cancel' },
+                   ]
+                 );
+               }}>
+                 <ThemedText style={{ color: 'red', fontSize: 12, marginLeft: 8 }}>• Failed ↺</ThemedText>
+               </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 

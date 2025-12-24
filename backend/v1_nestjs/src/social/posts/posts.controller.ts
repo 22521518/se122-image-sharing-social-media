@@ -1,7 +1,8 @@
-import { Controller, Get, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Req, Post, Body } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags, ApiResponse } from '@nestjs/swagger';
+import { CreatePostDto } from './dto/create-post.dto';
 
 @ApiTags('posts')
 @ApiBearerAuth()
@@ -23,6 +24,16 @@ export class PostsController {
   async getRecentPosts(@Req() req: any) {
     const userId = req.user.id;
     return this.postsService.getRecentPosts(userId);
+  }
+  @Post()
+  @ApiOperation({ summary: 'Create a new post' })
+  @ApiResponse({ status: 201, description: 'The post has been successfully created.' })
+  async create(@Body() createPostDto: CreatePostDto, @Req() req: any) {
+    const userId = req.user.id;
+    return this.postsService.createPost({
+      ...createPostDto,
+      authorId: userId,
+    });
   }
 }
 

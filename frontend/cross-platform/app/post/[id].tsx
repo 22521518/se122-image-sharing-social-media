@@ -14,7 +14,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { LikeButton } from '@/components/social/LikeButton';
-import { CommentList } from '@/components/social/CommentList';
+import { CommentList, CommentListHandle } from '@/components/social/CommentList';
 import { CommentInput } from '@/components/social/CommentInput';
 import { useAuth } from '@/context/AuthContext';
 import { socialService, PostDetail, Comment as CommentType } from '@/services/social.service';
@@ -34,7 +34,7 @@ export default function PostDetailScreen() {
   const [commentCount, setCommentCount] = useState(0);
 
   // Ref to CommentList for adding new comments
-  const commentListRef = useRef<{ addComment: (comment: CommentType) => void } | null>(null);
+  const commentListRef = useRef<CommentListHandle>(null);
 
   const loadPost = useCallback(async (showRefresh = false) => {
     if (!id || !accessToken) return;
@@ -93,10 +93,19 @@ export default function PostDetailScreen() {
 
   const handleSubmitComment = async (content: string) => {
     if (!accessToken || !id) return;
+    
+    const trimmedContent = content.trim();
+    if (!trimmedContent) return;
 
-    const response = await socialService.createComment(id, content, accessToken);
-    handleCommentCountChange(response.commentCount);
-    // The CommentList will refresh or we can add optimistically
+    try {
+      const response = await socialService.createComment(id, trimmedContent, accessToken);
+      handleCommentCountChange(response.commentCount);
+      // Optimistically add the new comment to the list
+      commentListRef.current?.addComment(response.comment);
+    } catch (error) {
+      console.error('Failed to submit comment:', error);
+      // Optionally show alert
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -135,7 +144,7 @@ export default function PostDetailScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
       <Stack.Screen
@@ -150,78 +159,71 @@ export default function PostDetailScreen() {
         }}
       />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={() => loadPost(true)} />
-        }
-      >
-        {/* Author Header */}
-        <View style={styles.authorSection}>
-          {post.author.avatarUrl ? (
-            <Image source={{ uri: post.author.avatarUrl }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <ThemedText style={styles.avatarText}>
-                {post.author.name?.charAt(0)?.toUpperCase() || '?'}
-              </ThemedText>
+      <CommentList
+        ref={commentListRef}
+        itemId={post.id}
+        targetType="post"
+        accessToken={accessToken || undefined}
+        currentUserId={user?.id}
+        isAuthenticated={isAuthenticated}
+        onLoginRequired={handleLoginRequired}
+        onCommentCountChange={handleCommentCountChange}
+        ListHeaderComponent={
+          <View>
+             {/* Author Header */}
+            <View style={styles.authorSection}>
+              {post.author.avatarUrl ? (
+                <Image source={{ uri: post.author.avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <ThemedText style={styles.avatarText}>
+                    {post.author.name?.charAt(0)?.toUpperCase() || '?'}
+                  </ThemedText>
+                </View>
+              )}
+              <View style={styles.authorInfo}>
+                <ThemedText style={styles.authorName}>
+                  {post.author.name || 'Anonymous'}
+                </ThemedText>
+                <ThemedText style={styles.timestamp}>{formatDate(post.createdAt)}</ThemedText>
+              </View>
             </View>
-          )}
-          <View style={styles.authorInfo}>
-            <ThemedText style={styles.authorName}>
-              {post.author.name || 'Anonymous'}
-            </ThemedText>
-            <ThemedText style={styles.timestamp}>{formatDate(post.createdAt)}</ThemedText>
+
+            {/* Post Content */}
+            <View style={styles.contentSection}>
+              <ThemedText style={styles.postContent}>{post.content}</ThemedText>
+            </View>
+
+            {/* Interaction Bar */}
+            <View style={styles.interactionBar}>
+              <LikeButton
+                itemId={post.id}
+                targetType="post"
+                initialLiked={post.liked}
+                initialCount={post.likeCount}
+                isAuthenticated={isAuthenticated}
+                accessToken={accessToken || undefined}
+                onLikeChange={handleLikeChange}
+                onLoginRequired={handleLoginRequired}
+                size="large"
+                showCount
+              />
+              <View style={styles.commentCountContainer}>
+                <Ionicons name="chatbubble-outline" size={24} color="#666" />
+                <ThemedText style={styles.commentCountText}>{commentCount}</ThemedText>
+              </View>
+            </View>
+
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            {/* Comments Section Header */}
+            <View style={styles.commentsHeader}>
+              <ThemedText style={styles.sectionTitle}>Comments</ThemedText>
+            </View>
           </View>
-        </View>
-
-        {/* Post Content */}
-        <View style={styles.contentSection}>
-          <ThemedText style={styles.postContent}>{post.content}</ThemedText>
-        </View>
-
-        {/* Interaction Bar */}
-        <View style={styles.interactionBar}>
-          <LikeButton
-            itemId={post.id}
-            targetType="post"
-            initialLiked={post.liked}
-            initialCount={post.likeCount}
-            isAuthenticated={isAuthenticated}
-            accessToken={accessToken || undefined}
-            onLikeChange={handleLikeChange}
-            onLoginRequired={handleLoginRequired}
-            size="large"
-            showCount
-          />
-          <View style={styles.commentCountContainer}>
-            <Ionicons name="chatbubble-outline" size={24} color="#666" />
-            <ThemedText style={styles.commentCountText}>{commentCount}</ThemedText>
-          </View>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Comments Section Header */}
-        <View style={styles.commentsHeader}>
-          <ThemedText style={styles.sectionTitle}>Comments</ThemedText>
-        </View>
-
-        {/* Comments List */}
-        <View style={styles.commentsSection}>
-          <CommentList
-            itemId={post.id}
-            targetType="post"
-            accessToken={accessToken || undefined}
-            currentUserId={user?.id}
-            isAuthenticated={isAuthenticated}
-            onLoginRequired={handleLoginRequired}
-            onCommentCountChange={handleCommentCountChange}
-          />
-        </View>
-      </ScrollView>
+        }
+      />
 
       {/* Comment Input Fixed at Bottom */}
       <CommentInput

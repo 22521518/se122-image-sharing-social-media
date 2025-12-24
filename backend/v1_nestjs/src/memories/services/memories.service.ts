@@ -136,7 +136,8 @@ export class MemoriesService {
 
     // Upload to Cloudinary
     this.logger.log(`Uploading voice memory for user ${userId}`);
-    const mediaUrl = await this.mediaService.uploadFile(file, 'memories/voice');
+    const media = await this.mediaService.uploadFile(file, userId, 'memories/voice');
+    const mediaUrl = media.url;
 
     // Get user's default privacy setting if not specified
     let privacy = dto.privacy;
@@ -187,7 +188,8 @@ export class MemoriesService {
 
     // Upload to Cloudinary (photos folder)
     this.logger.log(`Uploading photo memory for user ${userId}`);
-    const mediaUrl = await this.mediaService.uploadFile(file, 'memories/photos');
+    const media = await this.mediaService.uploadFile(file, userId, 'memories/photos');
+    const mediaUrl = media.url;
 
     // Get user's default privacy setting if not specified
     let privacy = dto.privacy;
@@ -306,7 +308,8 @@ export class MemoriesService {
       this.logger.debug(`Received file with mimetype: ${file.mimetype}`);
       if (this.isValidAudioType(file.mimetype)) {
         type = MemoryType.voice;
-        mediaUrl = await this.mediaService.uploadFile(file, 'memories/voice');
+        const voiceMedia = await this.mediaService.uploadFile(file, userId, 'memories/voice');
+        mediaUrl = voiceMedia.url;
         // Duration validation (if duration is provided in future)
         // Note: Duration extraction from file metadata could be added here
       }

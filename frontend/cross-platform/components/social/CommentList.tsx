@@ -21,6 +21,7 @@ interface CommentListProps {
   isAuthenticated?: boolean;
   onLoginRequired?: () => void;
   onCommentCountChange?: (count: number) => void;
+  ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
 }
 
 interface CommentItemProps {
@@ -95,7 +96,12 @@ function CommentItem({ comment, onDelete, isDeleting }: CommentItemProps) {
   );
 }
 
-export function CommentList({
+export interface CommentListHandle {
+  addComment: (comment: CommentType) => void;
+  scrollToEnd: () => void;
+}
+
+export const CommentList = React.forwardRef<CommentListHandle, CommentListProps>(({
   itemId,
   targetType = 'post',
   accessToken,
@@ -103,12 +109,27 @@ export function CommentList({
   isAuthenticated = true,
   onLoginRequired,
   onCommentCountChange,
-}: CommentListProps) {
+  ListHeaderComponent,
+}, ref) => {
   const [comments, setComments] = useState<CommentType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const flatListRef = React.useRef<FlatList>(null);
+
+  React.useImperativeHandle(ref, () => ({
+    addComment: (comment: CommentType) => {
+      setComments((prev) => [...prev, comment]);
+      // Scroll to end after state update
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    },
+    scrollToEnd: () => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }
+  }));
 
   const loadComments = async (showRefresh = false) => {
     if (!accessToken) {
@@ -187,11 +208,6 @@ export function CommentList({
     }
   };
 
-  // Exposed method to add comment from parent
-  const addComment = (comment: CommentType) => {
-    setComments((prev) => [...prev, comment]);
-  };
-
   if (isLoading) {
     return (
       <View style={styles.centered}>
@@ -213,16 +229,31 @@ export function CommentList({
 
   if (comments.length === 0) {
     return (
-      <View style={styles.emptyState}>
-        <Ionicons name="chatbubble-outline" size={48} color="#ccc" />
-        <ThemedText style={styles.emptyText}>No comments yet</ThemedText>
-        <ThemedText style={styles.emptySubtext}>Be the first to comment!</ThemedText>
-      </View>
+      <FlatList
+        ref={flatListRef}
+        data={[]}
+        renderItem={null}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={() => loadComments(true)} />
+        }
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <>
+            {ListHeaderComponent}
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubble-outline" size={48} color="#ccc" />
+              <ThemedText style={styles.emptyText}>No comments yet</ThemedText>
+              <ThemedText style={styles.emptySubtext}>Be the first to comment!</ThemedText>
+            </View>
+          </>
+        }
+      />
     );
   }
 
   return (
     <FlatList
+      ref={flatListRef}
       data={comments}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
@@ -236,9 +267,10 @@ export function CommentList({
         <RefreshControl refreshing={isRefreshing} onRefresh={() => loadComments(true)} />
       }
       contentContainerStyle={styles.listContent}
+      ListHeaderComponent={ListHeaderComponent}
     />
   );
-}
+});
 
 const styles = StyleSheet.create({
   listContent: {

@@ -68,6 +68,59 @@ export class PostsService {
   /**
    * Get recent posts for development/testing feed
    */
+  async createPost(data: any): Promise<any> {
+    const { authorId, content, privacy } = data;
+
+    // Extract hashtags
+    const hashtagRegex = /#(\w+)/g;
+    const hashtags = [];
+    let match;
+
+    // Using a Set to avoid duplicate tags in same post
+    const uniqueTags = new Set<string>();
+
+    while ((match = hashtagRegex.exec(content)) !== null) {
+      // Limit to 10 hashtags
+      if (uniqueTags.size >= 10) break;
+      uniqueTags.add(match[1]); // match[1] is the group capture (without #)
+    }
+
+    // Use transaction to ensure atomicity
+    return this.prisma.$transaction(async (tx) => {
+      // Create post
+      const post = await tx.post.create({
+        data: {
+          authorId,
+          content,
+          privacy,
+          media: data.mediaIds?.length > 0 ? {
+            connect: data.mediaIds.map((id: string) => ({ id })),
+          } : undefined,
+        },
+      });
+
+      // Process hashtags
+      for (const tag of uniqueTags) {
+        // Upsert hashtag (create if new, get if exists)
+        const hashtag = await tx.hashtag.upsert({
+          where: { tag },
+          update: {},
+          create: { tag },
+        });
+
+        // Link to post
+        await tx.postHashtag.create({
+          data: {
+            postId: post.id,
+            hashtagId: hashtag.id,
+          },
+        });
+      }
+
+      return post;
+    });
+  }
+
   async getRecentPosts(currentUserId: string, limit: number = 20): Promise<PostDetailResult[]> {
     const posts = await this.prisma.post.findMany({
       where: {

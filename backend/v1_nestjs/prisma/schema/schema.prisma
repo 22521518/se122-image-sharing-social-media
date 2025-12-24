@@ -54,6 +54,7 @@ model User {
   posts           Post[]
   likes           Like[]
   comments        Comment[]
+  uploads         Media[]
 }
 
 model Follow {
@@ -143,9 +144,53 @@ model Post {
 
   likes    Like[]
   comments Comment[]
+  hashtags PostHashtag[]
+  media    Media[]
 
   @@map("posts")
   @@index([authorId])
+}
+
+model Media {
+  id        String   @id @default(uuid())
+  url       String
+  type      String   // 'image' | 'video' | 'audio'
+  mimeType  String?  @map("mime_type")
+  size      Int?
+  
+  uploaderId String  @map("uploader_id")
+  uploader   User    @relation(fields: [uploaderId], references: [id])
+  
+  postId    String?  @map("post_id")
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: SetNull)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@map("media")
+  @@index([uploaderId])
+  @@index([postId])
+}
+
+model Hashtag {
+  id        String        @id @default(uuid())
+  tag       String        @unique
+  posts     PostHashtag[]
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("hashtags")
+}
+
+model PostHashtag {
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  hashtagId String   @map("hashtag_id")
+  hashtag   Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, hashtagId])
+  @@map("post_hashtags")
+  @@index([hashtagId])
+  @@index([postId])
 }
 
 model Like {
