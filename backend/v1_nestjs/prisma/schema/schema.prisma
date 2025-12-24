@@ -149,6 +149,7 @@ model Post {
 
   @@map("posts")
   @@index([authorId])
+  @@index([authorId, createdAt]) // Feed query optimization (AC 3)
 }
 
 model Media {

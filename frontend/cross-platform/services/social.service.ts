@@ -57,6 +57,35 @@ export interface PostDetail {
   liked: boolean;
 }
 
+export interface FeedResponse {
+  posts: PostDetail[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface UserSearchResult {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
+}
+
+export interface HashtagResult {
+  id: string;
+  tag: string;
+  postCount: number;
+}
+
+export interface SearchResponse {
+  users: UserSearchResult[];
+  posts: PostDetail[];
+  hashtags: HashtagResult[];
+}
+
+export interface TrendingResponse {
+  posts: PostDetail[];
+}
+
 export const socialService = {
   // Follow/Unfollow
   async followUser(userId: string, token: string) {
@@ -74,6 +103,26 @@ export const socialService = {
 
   async getRecentPosts(token: string): Promise<PostDetail[]> {
     return api.get('/api/social/posts', token);
+  },
+
+  // Feed (Story 5.3 - Personalized following feed with cursor pagination)
+  async getFeed(token: string, cursor?: string, limit: number = 20): Promise<FeedResponse> {
+    const params = new URLSearchParams();
+    if (cursor) params.append('cursor', cursor);
+    params.append('limit', limit.toString());
+    return api.get(`/api/social/feed?${params.toString()}`, token);
+  },
+
+  // Discovery (Story 5.4 - Explore and Search)
+  async search(query: string, type: 'all' | 'users' | 'posts' | 'hashtags' = 'all'): Promise<SearchResponse> {
+    const params = new URLSearchParams();
+    params.append('q', query);
+    params.append('type', type);
+    return api.get(`/api/social/search?${params.toString()}`);
+  },
+
+  async getTrending(): Promise<TrendingResponse> {
+    return api.get('/api/social/explore/trending');
   },
 
   // Likes

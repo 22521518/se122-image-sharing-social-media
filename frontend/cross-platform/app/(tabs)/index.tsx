@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,7 +13,6 @@ import { ThemedText } from '@/components/themed-text';
 import { PostCard } from '@/components/social/PostCard';
 import { useAuth } from '@/context/AuthContext';
 import { useSocial } from '@/context/SocialContext';
-import { socialService, PostDetail } from '@/services/social.service';
 import { Ionicons } from '@expo/vector-icons';
 import CreatePostModal from '@/components/social/CreatePostModal';
 
@@ -21,7 +20,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { isAuthenticated, accessToken, user } = useAuth();
 
-  const { posts, refreshPosts, isLoading } = useSocial();
+  // AC 3, 4, 5: Feed with infinite scroll and pull-to-refresh
+  const { posts, refreshPosts, loadMorePosts, isLoading, isLoadingMore, hasMore } = useSocial();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
 
@@ -31,10 +31,18 @@ export default function HomeScreen() {
     }
   }, [isAuthenticated, refreshPosts]);
 
+  // AC 5: Pull-to-refresh
   const onRefresh = async () => {
     setIsRefreshing(true);
     await refreshPosts();
     setIsRefreshing(false);
+  };
+
+  // AC 5: Infinite scroll - load more when reaching end
+  const onEndReached = () => {
+    if (!isLoadingMore && hasMore) {
+      loadMorePosts();
+    }
   };
 
   const handleLogin = () => {
@@ -45,6 +53,16 @@ export default function HomeScreen() {
     setShowCreatePost(false);
     // Refresh posts after creating
     refreshPosts();
+  };
+
+  // Footer component for loading indicator
+  const renderFooter = () => {
+    if (!isLoadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color="#007AFF" />
+      </View>
+    );
   };
 
   if (!isAuthenticated) {
@@ -60,7 +78,7 @@ export default function HomeScreen() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && posts.length === 0) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -77,6 +95,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* AC 4, 5: Chronologically sorted with cursor-based pagination & infinite scroll */}
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
@@ -94,11 +113,14 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="create-outline" size={48} color="#ccc" style={{ marginBottom: 16 }} />
             <ThemedText style={styles.emptyText}>No posts yet.</ThemedText>
-            <ThemedText style={styles.emptySubtext}>Be the first to share something!</ThemedText>
+            <ThemedText style={styles.emptySubtext}>Follow friends or be the first to share!</ThemedText>
             <TouchableOpacity 
               style={[styles.button, { marginTop: 16 }]} 
               onPress={() => setShowCreatePost(true)}
@@ -217,5 +239,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
 });

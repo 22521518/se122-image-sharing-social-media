@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
-import { socialService, PostDetail } from '../services/social.service';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
+import { socialService, PostDetail, FeedResponse } from '../services/social.service';
 import { useAuth } from './AuthContext';
 
 export interface SocialPost extends PostDetail {
@@ -18,7 +18,10 @@ interface SocialContextType {
   retryPost: (postId: string) => Promise<void>;
   deleteFailedPost: (postId: string) => void;
   refreshPosts: () => Promise<void>;
+  loadMorePosts: () => Promise<void>;
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
 }
 
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
@@ -27,19 +30,42 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   const { accessToken, user } = useAuth();
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const nextCursorRef = useRef<string | null>(null);
 
+  // AC 5: Pull-to-refresh - refreshes feed from beginning
   const refreshPosts = useCallback(async () => {
     if (!accessToken) return;
     setIsLoading(true);
     try {
-      const fetched = await socialService.getRecentPosts(accessToken);
-      setPosts(fetched);
+      const response: FeedResponse = await socialService.getFeed(accessToken);
+      setPosts(response.posts);
+      nextCursorRef.current = response.nextCursor;
+      setHasMore(response.hasMore);
     } catch (e) {
-      console.error('Failed to fetch posts', e);
+      console.error('Failed to fetch feed', e);
     } finally {
       setIsLoading(false);
     }
   }, [accessToken]);
+
+  // AC 5: Infinite scroll - loads next page
+  const loadMorePosts = useCallback(async () => {
+    if (!accessToken || !hasMore || isLoadingMore || !nextCursorRef.current) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const response: FeedResponse = await socialService.getFeed(accessToken, nextCursorRef.current);
+      setPosts(prev => [...prev, ...response.posts]);
+      nextCursorRef.current = response.nextCursor;
+      setHasMore(response.hasMore);
+    } catch (e) {
+      console.error('Failed to load more posts', e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [accessToken, hasMore, isLoadingMore]);
 
   const createPost = async (
     content: string, 
@@ -111,7 +137,17 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SocialContext.Provider value={{ posts, createPost, retryPost, deleteFailedPost, refreshPosts, isLoading }}>
+    <SocialContext.Provider value={{ 
+      posts, 
+      createPost, 
+      retryPost, 
+      deleteFailedPost, 
+      refreshPosts, 
+      loadMorePosts,
+      isLoading,
+      isLoadingMore,
+      hasMore,
+    }}>
       {children}
     </SocialContext.Provider>
   );
