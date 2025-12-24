@@ -34,6 +34,11 @@ export class FeedService {
       };
     }
 
+    // Validate userId - this should never be undefined if JwtAuthGuard is working
+    if (!userId) {
+      throw new Error('User authentication required for feed access');
+    }
+
     // Get IDs of users being followed
     const followedUserIds = await this.prisma.follow.findMany({
       where: { followerId: userId },
@@ -43,7 +48,8 @@ export class FeedService {
     const followingIds = followedUserIds.map((f) => f.followingId);
 
     // Include own posts + posts from followed users
-    const authorFilter = [...followingIds, userId];
+    // Filter out any undefined/null values to prevent Prisma validation errors
+    const authorFilter = [...followingIds, userId].filter((id): id is string => id != null);
 
     // AC 3: Query posts from followed users + own posts
     // AC 4: Sorted by createdAt DESC with cursor pagination

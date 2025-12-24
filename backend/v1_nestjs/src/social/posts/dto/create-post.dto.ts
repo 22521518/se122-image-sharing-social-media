@@ -1,6 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEnum, IsOptional, MaxLength, IsArray, ArrayMaxSize } from 'class-validator';
+import { IsString, IsEnum, IsOptional, MaxLength, IsArray, ArrayMaxSize, ValidateNested, IsInt, Min, Max, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
 import { PrivacyLevel } from '@prisma/client';
+
+// Nested DTO for proper validation of media metadata items (Issue #1 Fix)
+export class MediaMetadataDto {
+  @ApiProperty({ description: 'Media ID (UUID)' })
+  @IsString()
+  @IsUUID()
+  mediaId: string;
+
+  @ApiProperty({ description: 'Caption for this media item', maxLength: 200, required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  caption?: string;
+
+  @ApiProperty({ description: 'Sort order (0-based index)', minimum: 0, maximum: 9 })
+  @IsInt()
+  @Min(0)
+  @Max(9)
+  sortOrder: number;
+}
 
 export class CreatePostDto {
   @ApiProperty({ description: 'Content of the post', maxLength: 2000 })
@@ -23,14 +44,13 @@ export class CreatePostDto {
   @ApiProperty({
     description: 'Metadata for each media item (caption, sortOrder)',
     required: false,
-    type: [Object],
+    type: [MediaMetadataDto],
     example: [{ mediaId: 'uuid', caption: 'My caption', sortOrder: 0 }]
   })
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MediaMetadataDto)
   @IsOptional()
-  mediaMetadata?: Array<{
-    mediaId: string;
-    caption?: string;
-    sortOrder: number;
-  }>;
+  @ArrayMaxSize(10)
+  mediaMetadata?: MediaMetadataDto[];
 }

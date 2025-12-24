@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
+import { Alert } from 'react-native';
 import { socialService, PostDetail, FeedResponse } from '../services/social.service';
 import { useAuth } from './AuthContext';
 
@@ -38,6 +39,8 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   const refreshPosts = useCallback(async () => {
     if (!accessToken) return;
     setIsLoading(true);
+    // Issue #7 Fix: Reset cursor on refresh to prevent stale state
+    nextCursorRef.current = null;
     try {
       const response: FeedResponse = await socialService.getFeed(accessToken);
       setPosts(response.posts);
@@ -45,6 +48,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       setHasMore(response.hasMore);
     } catch (e) {
       console.error('Failed to fetch feed', e);
+      Alert.alert('Error', 'Failed to load feed. Pull to refresh.');
     } finally {
       setIsLoading(false);
     }
@@ -62,6 +66,8 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       setHasMore(response.hasMore);
     } catch (e) {
       console.error('Failed to load more posts', e);
+      // Issue #6 Fix: User feedback on pagination error
+      Alert.alert('Error', 'Failed to load more posts. Please try again.');
     } finally {
       setIsLoadingMore(false);
     }

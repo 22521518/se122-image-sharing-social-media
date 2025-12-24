@@ -18,6 +18,6 @@ export class FeedController {
     @Request() req: any,
     @Query() query: FeedQueryDto,
   ): Promise<FeedResponse> {
-    return this.feedService.getFeed(req.user.sub, query);
+    return this.feedService.getFeed(req.user.id, query);
   }
 }

@@ -118,18 +118,18 @@ export function PostCard({
     >
       {/* Author Header */}
       <View style={styles.header}>
-        {post.author.avatarUrl ? (
-          <Image source={{ uri: post.author.avatarUrl }} style={styles.avatar} />
+        {post.author?.avatarUrl ? (
+          <Image source={{ uri: post.author?.avatarUrl }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarPlaceholder}>
             <ThemedText style={styles.avatarText}>
-              {post.author.name?.charAt(0)?.toUpperCase() || '?'}
+              {post.author?.name?.charAt(0)?.toUpperCase() || '?'}
             </ThemedText>
           </View>
         )}
         <View style={styles.authorInfo}>
           <ThemedText style={styles.authorName} numberOfLines={1}>
-            {post.author.name || 'Anonymous'}
+            {post.author?.name || 'Anonymous'}
           </ThemedText>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <ThemedText style={styles.timestamp}>{formatDate(post.createdAt)}</ThemedText>

@@ -20,6 +20,9 @@ export class DiscoveryService {
    */
   async search(query: SearchQueryDto): Promise<SearchResponse> {
     const { q, type = 'all', limit = 20 } = query;
+    // Note: For case-insensitive search in production (Postgres), use mode: 'insensitive'
+    // SQLite LIKE is case-insensitive by default for ASCII, but for full Unicode support
+    // consider Postgres full-text search or Elasticsearch
     const searchTerm = q.toLowerCase();
 
     const result: SearchResponse = {
@@ -29,6 +32,7 @@ export class DiscoveryService {
     };
 
     // Search Users (username/displayName)
+    // Issue #8 Fix: Using lowercase comparison for SQLite compatibility
     if (type === 'all' || type === 'users') {
       const users = await this.prisma.user.findMany({
         where: {

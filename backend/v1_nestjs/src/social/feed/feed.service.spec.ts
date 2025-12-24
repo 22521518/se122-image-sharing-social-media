@@ -4,7 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 describe('FeedService', () => {
   let service: FeedService;
-  let prisma: PrismaService;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  let _prisma: PrismaService; // Kept for potential future use
 
   const mockPrisma = {
     follow: {
@@ -24,7 +25,7 @@ describe('FeedService', () => {
     }).compile();
 
     service = module.get<FeedService>(FeedService);
-    prisma = module.get<PrismaService>(PrismaService);
+    _prisma = module.get<PrismaService>(PrismaService);
 
     jest.clearAllMocks();
   });

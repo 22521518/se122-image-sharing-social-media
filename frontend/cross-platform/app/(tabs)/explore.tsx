@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Image,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
@@ -62,6 +63,8 @@ export default function ExploreScreen() {
       setTrending(result.posts);
     } catch (error) {
       console.error('Failed to load trending', error);
+      // Issue #9 Fix: User-facing error feedback
+      Alert.alert('Error', 'Failed to load trending posts. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -86,6 +89,8 @@ export default function ExploreScreen() {
       setSearchResults(result);
     } catch (error) {
       console.error('Search failed', error);
+      // Issue #9 Fix: User-facing error feedback
+      Alert.alert('Search Error', 'Failed to search. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -107,8 +112,12 @@ export default function ExploreScreen() {
     router.push({ pathname: '/post/[id]', params: { id: postId } } as any);
   };
 
+  // Issue #3 Fix: Hashtag press now sets search query with # prefix
+  // This shows all posts with that hashtag via the search API
+  // (A dedicated hashtag feed page can be added in a future story)
   const handleHashtagPress = (tag: string) => {
     setSearchQuery(`#${tag}`);
+    setActiveTab('posts'); // Switch to posts tab to show hashtag results
   };
 
   // Render trending grid (AC 3)
