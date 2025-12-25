@@ -32,7 +32,7 @@ interface ImageWithMetadata {
 }
 
 export default function CreatePostModal({ visible, onClose }: CreatePostModalProps) {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const { createPost } = useSocial();
   const [content, setContent] = useState('');
   const [privacy, setPrivacy] = useState<'public' | 'friends' | 'private'>('friends');
@@ -102,7 +102,7 @@ export default function CreatePostModal({ visible, onClose }: CreatePostModalPro
       if (images.length > 0) {
         setUploading(true);
         const uploadPromises = images.map(img =>
-          mediaService.uploadMedia(img.uri, img.mimeType || 'image/jpeg')
+          mediaService.uploadMedia(img.uri, img.mimeType || 'image/jpeg', accessToken)
         );
         const uploadedMedia = await Promise.all(uploadPromises);
         mediaIds = uploadedMedia.map(m => m.id);

@@ -55,6 +55,10 @@ model User {
   likes           Like[]
   comments        Comment[]
   uploads         Media[]
+  
+  // Postcards (Epic 4)
+  sentPostcards     Postcard[] @relation("sentPostcards")
+  receivedPostcards Postcard[] @relation("receivedPostcards")
 }
 
 model Follow {
@@ -238,4 +242,49 @@ model Comment {
   @@index([postId])
   @@index([memoryId])
   @@index([userId])
+}
+
+// ===== POSTCARDS (Epic 4) =====
+
+enum PostcardStatus {
+  DRAFT      // User is still composing
+  LOCKED     // Sent but unlock condition not met
+  UNLOCKED   // Condition met, recipient can view
+}
+
+model Postcard {
+  id              String         @id @default(uuid())
+  
+  senderId        String         @map("sender_id")
+  sender          User           @relation("sentPostcards", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  recipientId     String         @map("recipient_id")
+  recipient       User           @relation("receivedPostcards", fields: [recipientId], references: [id], onDelete: Cascade)
+  
+  // Content (hidden in API response when status === LOCKED)
+  message         String?        // Text message
+  mediaUrl        String?        @map("media_url") // Photo/image URL
+  
+  // XOR unlock condition: exactly ONE must be set (enforced at service layer)
+  unlockDate      DateTime?      @map("unlock_date")    // Time-lock: opens on this date
+  unlockLatitude  Float?         @map("unlock_latitude")  // Geo-lock: GPS lat
+  unlockLongitude Float?         @map("unlock_longitude") // Geo-lock: GPS lng
+  unlockRadius    Float          @default(50) @map("unlock_radius") // Radius in meters (default 50m)
+  
+  status          PostcardStatus @default(DRAFT)
+  
+  // Notification tracking
+  notificationSent    Boolean   @default(false) @map("notification_sent")
+  unlockNotificationSent Boolean @default(false) @map("unlock_notification_sent")
+  
+  viewedAt        DateTime?      @map("viewed_at") // When recipient first opened unlocked postcard
+  
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  
+  @@map("postcards")
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([unlockDate]) // For cron job querying time-locked postcards
 }

@@ -40,7 +40,11 @@ export interface MapComponentProps {
 // Free OSM Raster Tile Style URL
 const OSM_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
-export function MapComponent({
+export interface MapComponentRef {
+  flyTo(region: MapRegion, duration?: number): void;
+}
+
+export const MapComponent = React.forwardRef<MapComponentRef, MapComponentProps>(({
   initialRegion,
   onRegionChangeComplete,
   onLongPress,
@@ -50,9 +54,20 @@ export function MapComponent({
   showTempPin,
   isLoading,
   containerStyle,
-}: MapComponentProps) {
+}, ref) => {
   const mapRef = useRef<MapViewRef>(null);
   const cameraRef = useRef<CameraRef>(null);
+
+  React.useImperativeHandle(ref, () => ({
+    flyTo: (region: MapRegion, duration = 2000) => {
+      cameraRef.current?.setCamera({
+        centerCoordinate: [region.longitude, region.latitude],
+        zoomLevel: Math.log2(360 / region.latitudeDelta) - 1,
+        animationDuration: duration,
+        animationMode: 'flyTo',
+      });
+    },
+  }));
 
   const handleRegionChange = async () => {
     if (!mapRef.current) return;
@@ -149,7 +164,7 @@ export function MapComponent({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   mapContainer: {

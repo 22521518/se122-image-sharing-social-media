@@ -29,6 +29,7 @@ interface MemoryDetailModalProps {
   memory: Memory | null;
   onClose: () => void;
   onLoginRequired?: () => void;
+  autoPlay?: boolean;
 }
 
 export function MemoryDetailModal({
@@ -36,6 +37,7 @@ export function MemoryDetailModal({
   memory,
   onClose,
   onLoginRequired,
+  autoPlay = false,
 }: MemoryDetailModalProps) {
   const { isAuthenticated, accessToken, user } = useAuth();
   const [commentCount, setCommentCount] = useState(memory?.commentCount || 0);
@@ -55,6 +57,14 @@ export function MemoryDetailModal({
       setIsPlaying(false);
     }
   }, [visible, audioPlayer]);
+
+  // Auto-play audio if requested
+  useEffect(() => {
+    if (visible && autoPlay && audioPlayer && memory?.type === 'voice') {
+      audioPlayer.play();
+      setIsPlaying(true);
+    }
+  }, [visible, autoPlay, audioPlayer, memory]);
 
   useEffect(() => {
     if (memory) {

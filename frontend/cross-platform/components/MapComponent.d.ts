@@ -20,4 +20,10 @@ export interface MapComponentProps {
   containerStyle?: StyleProp<ViewStyle>;
 }
 
-export declare function MapComponent(props: MapComponentProps): JSX.Element;
+export interface MapComponentRef {
+  flyTo(region: MapRegion, duration?: number): void;
+}
+
+export declare const MapComponent: React.ForwardRefExoticComponent<
+  MapComponentProps & React.RefAttributes<MapComponentRef>
+>;

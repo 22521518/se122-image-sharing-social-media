@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Mark user as onboarded
   const completeOnboarding = async () => {
     try {
-      await ApiService.patch('/api/users/me/onboarding', {});
+      await ApiService.patch('/api/users/me/onboarding', {}, accessToken);
       
       // Update local state
       if (user) {

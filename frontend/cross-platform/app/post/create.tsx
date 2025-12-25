@@ -113,7 +113,7 @@ export default function CreatePostScreen() {
       if (images.length > 0) {
         setUploading(true);
         const uploadPromises = images.map(img => 
-          mediaService.uploadMedia(img.uri, img.mimeType || 'image/jpeg')
+          mediaService.uploadMedia(img.uri, img.mimeType || 'image/jpeg', token)
         );
         const uploadedMedia = await Promise.all(uploadPromises);
         mediaIds = uploadedMedia.map(m => m.id);

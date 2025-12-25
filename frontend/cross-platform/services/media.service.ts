@@ -10,7 +10,7 @@ export interface Media {
 }
 
 export const mediaService = {
-  async uploadMedia(fileUri: string, mimeType: string): Promise<Media> {
+  async uploadMedia(fileUri: string, mimeType: string, token?: string | null): Promise<Media> {
     const formData = new FormData();
     const filename = fileUri.split('/').pop() || 'upload.jpg';
 
@@ -22,6 +22,6 @@ export const mediaService = {
       type: mimeType,
     });
 
-    return api.uploadFormData<Media>('/api/media/upload', formData);
+    return api.uploadFormData<Media>('/api/media/upload', formData, token);
   }
 };

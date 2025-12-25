@@ -482,6 +482,126 @@ export class MemoriesService {
       count: duplicates.length,
     };
   }
+
+  /**
+   * Get a random memory for the Teleport feature.
+   * Excludes recently teleported memories to avoid immediate repeats.
+   * 
+   * Story 4.1: Serendipitous Teleportation
+   * - Excludes IDs in the exclusion list (last 5 teleported)
+   * - If user has ≤5 memories, allow repeats but still randomize
+   * - Returns full memory object for camera animation and audio playback
+   */
+  async getRandomMemory(
+    userId: string,
+    excludeIds: string[] = [],
+  ): Promise<{
+    id: string;
+    latitude: number;
+    longitude: number;
+    voiceUrl: string | null;
+    imageUrl: string | null;
+    feeling: Feeling | null;
+    title: string | null;
+    liked: boolean;
+  } | null> {
+    // First, count user's total memories
+    const totalCount = await this.prisma.memory.count({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+    });
+
+    if (totalCount === 0) {
+      return null;
+    }
+
+    // If user has ≤5 memories or exclusion list would exclude all, allow repeats
+    let whereClause: any = {
+      userId,
+      deletedAt: null,
+    };
+
+    // Only apply exclusions if we have enough memories
+    if (excludeIds.length > 0 && totalCount > excludeIds.length) {
+      whereClause.id = {
+        notIn: excludeIds,
+      };
+    }
+
+    // Get count of available memories
+    const availableCount = await this.prisma.memory.count({
+      where: whereClause,
+    });
+
+    if (availableCount === 0) {
+      // All memories are excluded but user has memories - allow repeats
+      whereClause = {
+        userId,
+        deletedAt: null,
+      };
+    }
+
+    // Select a random offset
+    const finalCount = await this.prisma.memory.count({ where: whereClause });
+    const randomOffset = Math.floor(Math.random() * finalCount);
+
+    // Fetch the random memory
+    const memory = await this.prisma.memory.findFirst({
+      where: whereClause,
+      select: {
+        id: true,
+        latitude: true,
+        longitude: true,
+        mediaUrl: true,
+        type: true,
+        feeling: true,
+        title: true,
+        likes: {
+          where: { userId },
+          select: { id: true },
+        },
+      },
+      skip: randomOffset,
+      take: 1,
+    });
+
+    if (!memory) {
+      return null;
+    }
+
+    // Map mediaUrl to voiceUrl/imageUrl based on type
+    return {
+      id: memory.id,
+      latitude: memory.latitude,
+      longitude: memory.longitude,
+      voiceUrl: memory.type === MemoryType.voice || memory.type === MemoryType.mixed
+        ? memory.mediaUrl
+        : null,
+      imageUrl: memory.type === MemoryType.photo || memory.type === MemoryType.mixed
+        ? memory.mediaUrl
+        : null,
+      feeling: memory.feeling,
+      title: memory.title,
+      liked: memory.likes.length > 0,
+    };
+  }
+
+  /**
+   * Get the total count of user's memories.
+   * Used for empty state check before teleport.
+   * 
+   * Story 4.1: Serendipitous Teleportation (AC 6)
+   */
+  async getMemoryCount(userId: string): Promise<number> {
+    return this.prisma.memory.count({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+    });
+  }
 }
 
 

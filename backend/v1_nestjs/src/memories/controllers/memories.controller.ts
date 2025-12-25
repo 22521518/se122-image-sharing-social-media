@@ -16,7 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { MemoriesService } from '../services/memories.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto, CheckDuplicatesDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto, CheckDuplicatesDto, RandomMemoryQueryDto } from '../dto';
 import {
   ApiTags,
   ApiOperation,
@@ -318,6 +318,46 @@ export class MemoriesController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMyMemories(@Request() req: any) {
     return this.memoriesService.getMemoriesByUser(req.user.id);
+  }
+
+  @Get('random')
+  @ApiOperation({
+    summary: 'Get a random memory for teleport',
+    description: 'Returns a random memory for the "Teleport" feature. Excludes recently shown memories (passed as query param) to avoid immediate repeats. If user has ≤5 memories, allows repeats but still randomizes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Random memory for teleport',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Memory UUID' },
+        latitude: { type: 'number', description: 'GPS latitude' },
+        longitude: { type: 'number', description: 'GPS longitude' },
+        voiceUrl: { type: 'string', nullable: true, description: 'Audio URL for voice memories' },
+        imageUrl: { type: 'string', nullable: true, description: 'Image URL for photo memories' },
+        feeling: { type: 'string', nullable: true, enum: ['JOY', 'MELANCHOLY', 'ENERGETIC', 'CALM', 'INSPIRED'] },
+        title: { type: 'string', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 204, description: 'No memories found - user should create first memory' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getRandomMemory(
+    @Request() req: any,
+    @Query() query: RandomMemoryQueryDto,
+  ) {
+    const memory = await this.memoriesService.getRandomMemory(
+      req.user.id,
+      query.exclude || [],
+    );
+
+    if (!memory) {
+      // Return 204 No Content to indicate no memories (client will show empty state modal)
+      return null;
+    }
+
+    return memory;
   }
 
   @Get(':id')

@@ -23,13 +23,16 @@ import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { useMapViewport, MapRegion } from '@/hooks/useMapViewport';
 import { createInitialRegion } from '@/utils/geo';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 // Platform-agnostic map component - Metro resolves to .web.tsx or .native.tsx
-import { MapComponent } from '@/components/MapComponent';
+import { MapComponent, MapComponentRef } from '@/components/MapComponent';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { VisualMemoryCard } from '@/components/VisualMemoryCard';
 import { Filmstrip, FilmstripRef } from '@/components/map/Filmstrip';
+import { TeleportButton } from '@/components/map/TeleportButton';
+import { ShutterFlash } from '@/components/map/ShutterFlash';
+import { useTeleport } from '@/hooks/useTeleport';
 import { MemoryDetailModal } from '@/components/memories/MemoryDetailModal';
 import { getMemoryColor, getMemoryIcon, getTypeIcon } from '@/constants/MemoryUI';
 import { analytics } from '@/services/analytics';
@@ -146,6 +149,7 @@ export default function MapScreen() {
   const { accessToken, completeOnboarding } = useAuth();
   const isAuthenticated = !!accessToken;
   const params = useLocalSearchParams<{ onboardingMemory?: string }>();
+  const router = useRouter();
   const {
     mapMemories,
     uploadState,
@@ -162,6 +166,80 @@ export default function MapScreen() {
     debounceMs: 500, // AC: Debounce to avoid request spam
     limit: 50,
   });
+
+  // Story 4.1: Teleport Feature
+  const mapRef = useRef<MapComponentRef>(null);
+  const [isFlashing, setIsFlashing] = useState(false);
+  const { teleport, isLoading: isTeleporting } = useTeleport({
+    token: accessToken || null,
+    maxHistory: 5,
+  });
+
+  const handleTeleport = useCallback(async () => {
+    // 1. Get random memory
+    const memory = await teleport();
+    
+    if (!memory) {
+      Alert.alert(
+        'No Memories Found',
+        'Create your first memory to start teleporting!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Create Memory', 
+            onPress: () => {
+              // Open capture mode (default to voice)
+              setCaptureMode('voice');
+              // On mobile, ensure sheet is open if needed, or just relying on capture area visible
+              // If bottom sheet is covering, maybe snap to index 0?
+              // For now, simple activation is enough.
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    // 2. Trigger Flash
+    setIsFlashing(true);
+
+    // 3. Move Camera (Wait nicely for flash to peak)
+    setTimeout(() => {
+      mapRef.current?.flyTo({
+        latitude: memory.latitude,
+        longitude: memory.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 800); // 0.8s flight
+    }, 100);
+
+    // 4. Open Detail & Play Audio after flight lands
+    setTimeout(() => {
+      // Create full memory object from teleported partial
+      // We need to fetch full details or map it. 
+      // TeleportedMemory has most fields. Let's assume it's enough or fetch more.
+      // Based on AC, we return { id, lat, long, mediaUrl, feeling, title }.
+      // Memory type needs inference.
+      const type = memory.voiceUrl ? 'voice' : memory.imageUrl ? 'photo' : 'feeling';
+      const fullMemory: Memory = {
+         id: memory.id,
+         userId: '', // Not needed for display usually or we don't have it
+         type: type as any,
+         mediaUrl: memory.voiceUrl || memory.imageUrl || undefined,
+         feeling: memory.feeling || undefined,
+         title: memory.title || undefined,
+         latitude: memory.latitude,
+         longitude: memory.longitude,
+         createdAt: new Date().toISOString(),
+         privacy: 'public', // Assumed
+         likeCount: 0,
+         commentCount: 0,
+         liked: false
+      };
+      
+      setDetailMemory(fullMemory);
+    }, 900); // 100ms start + 800ms flight = 900ms total
+  }, [teleport]);
 
   // Track current map region
   const [currentRegion, setCurrentRegion] = useState<MapRegion>(
@@ -500,7 +578,9 @@ export default function MapScreen() {
   if (isWideScreen) {
     return (
       <SafeAreaView style={styles.container}>
+        <ShutterFlash isFlashing={isFlashing} onFlashComplete={() => setIsFlashing(false)} />
         <MapComponent
+          ref={mapRef}
           initialRegion={currentRegion}
           onRegionChangeComplete={(region) => {
             setCurrentRegion(region);
@@ -535,7 +615,30 @@ export default function MapScreen() {
               <ThemedText type="title" style={styles.headerTitle}>
                 My Living Map
               </ThemedText>
-              <UploadStatus state={uploadState} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <TeleportButton 
+                  onPress={handleTeleport} 
+                  isLoading={isTeleporting}
+                  variant="inline"
+                />
+                {/* Story 4.2: Postcard Creation */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    backgroundColor: '#5856D6',
+                    borderRadius: 8,
+                  }}
+                  onPress={() => router.push('/postcards/create' as any)}
+                >
+                  <Ionicons name="mail" size={18} color="#FFF" />
+                  <Text style={{ color: '#FFF', fontWeight: '600', fontSize: 14 }}>Postcard</Text>
+                </TouchableOpacity>
+                <UploadStatus state={uploadState} />
+              </View>
             </View>
             <ScrollView style={styles.memoriesListWide} showsVerticalScrollIndicator={false}>
               {mapMemories.length === 0 ? (
@@ -625,6 +728,7 @@ export default function MapScreen() {
           visible={!!detailMemory}
           memory={detailMemory}
           onClose={handleCloseDetail}
+          autoPlay={true} // Story 4.1 AC3
         />
       </SafeAreaView>
     );
@@ -637,7 +741,9 @@ export default function MapScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ShutterFlash isFlashing={isFlashing} onFlashComplete={() => setIsFlashing(false)} />
       <MapComponent
+        ref={mapRef}
         initialRegion={currentRegion}
         onRegionChangeComplete={(region) => {
           setCurrentRegion(region);
@@ -677,6 +783,40 @@ export default function MapScreen() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      <TeleportButton 
+        onPress={handleTeleport} 
+        isLoading={isTeleporting}
+        variant="fab"
+        style={{ bottom: 200 }} // Position above bottom sheet (higher to avoid overlap)
+      />
+
+      {/* Story 4.2: Postcard FAB - Always visible on mobile */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          left: 16,
+          bottom: 200,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: '#5856D6',
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+          elevation: 8,
+          zIndex: 100,
+        }}
+        onPress={() => router.push('/postcards/create' as any)}
+        activeOpacity={0.8}
+        accessibilityLabel="Create Postcard"
+        accessibilityRole="button"
+      >
+        <Ionicons name="mail" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
 
       {/* Overlay for Blocking Actions (Photo Confirm / Manual Pin) */}
       {activePanel !== 'none' ? (
@@ -788,6 +928,21 @@ export default function MapScreen() {
                   ]}
                 >
                   Feeling
+                </Text>
+              </TouchableOpacity>
+
+              {/* Story 4.2: Postcard Creation - Navigation to postcards screen */}
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => router.push('/postcards/create' as any)}
+              >
+                <Ionicons
+                  name="mail"
+                  size={18}
+                  color="#5856D6"
+                />
+                <Text style={styles.actionBtnText}>
+                  Postcard
                 </Text>
               </TouchableOpacity>
             </ScrollView>

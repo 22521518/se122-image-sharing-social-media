@@ -15,7 +15,7 @@ import { GraphService } from '../social/graph/graph.service';
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
-@UseGuards(OptionalJwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
