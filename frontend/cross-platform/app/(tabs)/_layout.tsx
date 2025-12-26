@@ -1,6 +1,7 @@
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Platform, StyleSheet, ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { AppShell } from '@/components/layout';
@@ -29,6 +30,9 @@ export default function TabLayout() {
     }
   }, [user, isLoading, segments]);
 
+  /* Safe Area Insets for bottom navigation */
+  const insets = useSafeAreaInsets();
+
   // Tab bar style - hidden on desktop web when sidebar is visible
   const tabBarStyle: ViewStyle = showSidebar
     ? { display: 'none' }
@@ -43,11 +47,15 @@ export default function TabLayout() {
         borderTopColor: colors.border,
         borderTopWidth: StyleSheet.hairlineWidth,
         height: Platform.select({
-          ios: 84,
-          android: 56,
+          ios: 84, // iOS usually handles safe area automatically, but explicit height might need adjustment if using custom views. Standard tab bar + safe area.
+          android: 56 + insets.bottom, // Add safe area inset for Android
           web: 56,
         }),
-        paddingBottom: Platform.OS === 'ios' ? 28 : 0,
+        paddingBottom: Platform.select({
+          ios: 28, // Keep existing iOS padding if it works
+          android: insets.bottom, // Use safe area inset for Android padding
+          web: 0,
+        }),
         // Blur effect simulation for web
         ...(Platform.OS === 'web' && {
           backdropFilter: 'blur(12px)',

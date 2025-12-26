@@ -8,6 +8,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
@@ -99,76 +100,84 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ThemedView style={styles.container}>
-        <Animated.View
-          style={StyleSheet.flatten([
-            styles.content,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ])}
-        >
-          <View style={styles.header}>
-            <ThemedText style={styles.emoji}>🌍✨</ThemedText>
-            <ThemedText type="title" style={styles.title}>Welcome to LifeMapped</ThemedText>
-            <ThemedText style={styles.subtitle}>
-              Let's start with a memory that matters to you
-            </ThemedText>
-          </View>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ThemedView style={styles.container}>
+          <Animated.View
+            style={StyleSheet.flatten([
+              styles.content,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ])}
+          >
+            <View style={styles.header}>
+              <ThemedText style={styles.emoji}>🌍✨</ThemedText>
+              <ThemedText type="title" style={styles.title}>Welcome to LifeMapped</ThemedText>
+              <ThemedText style={styles.subtitle}>
+                Let's start with a memory that matters to you
+              </ThemedText>
+            </View>
 
-          <View style={styles.promptContainer}>
-            <ThemedText type="subtitle" style={styles.prompt}>
-              Where did you feel most at home last year?
-            </ThemedText>
-            
-            <TextInput
-              style={StyleSheet.flatten([
-                styles.input,
-                { 
-                  backgroundColor: colorScheme === 'dark' ? '#1A1F3A' : '#F7FAFC',
-                  color: themeColors.text,
-                  borderColor: themeColors.icon
-                }
-              ])}
-              placeholder="Share your memory..."
-              placeholderTextColor="#999"
-              value={input}
-              onChangeText={setInput}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              autoFocus
-            />
-          </View>
+            <View style={styles.promptContainer}>
+              <ThemedText type="subtitle" style={styles.prompt}>
+                Where did you feel most at home last year?
+              </ThemedText>
+              
+              <TextInput
+                style={StyleSheet.flatten([
+                  styles.input,
+                  { 
+                    backgroundColor: colorScheme === 'dark' ? '#1A1F3A' : '#F7FAFC',
+                    color: themeColors.text,
+                    borderColor: themeColors.icon
+                  }
+                ])}
+                placeholder="Share your memory..."
+                placeholderTextColor="#999"
+                value={input}
+                onChangeText={setInput}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                autoFocus
+              />
+            </View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.button, { backgroundColor: themeColors.tint }, !input.trim() && styles.buttonDisabled])}
-              onPress={handleContinue}
-              disabled={!input.trim()}
-            >
-              <ThemedText style={styles.continueButtonText}>Continue</ThemedText>
-            </TouchableOpacity>
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={StyleSheet.flatten([styles.button, { backgroundColor: themeColors.tint }, !input.trim() && styles.buttonDisabled])}
+                onPress={handleContinue}
+                disabled={!input.trim()}
+              >
+                <ThemedText style={styles.continueButtonText}>Continue</ThemedText>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.button, styles.skipButton, { borderColor: themeColors.icon }])}
-              onPress={handleSkip}
-            >
-              <ThemedText style={{ color: themeColors.icon }}>Skip for now</ThemedText>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </ThemedView>
-    </KeyboardAvoidingView>
+              <TouchableOpacity
+                style={StyleSheet.flatten([styles.button, styles.skipButton, { borderColor: themeColors.icon }])}
+                onPress={handleSkip}
+              >
+                <ThemedText style={{ color: themeColors.icon }}>Skip for now</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </ThemedView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },

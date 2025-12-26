@@ -12,6 +12,7 @@ import {
   FlatList,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
@@ -351,194 +352,199 @@ export default function PostcardComposerScreen() {
       </View>
     );
   };
-
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={28} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Postcard</Text>
-        <TouchableOpacity onPress={handleSaveDraft} disabled={isSubmitting}>
-          <Text style={styles.draftButton}>Save Draft</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Image Selection */}
-      <TouchableOpacity style={styles.imageSection} onPress={handleSelectImage}>
-        {selectedImage ? (
-          <View style={styles.imagePreview}>
-            <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
-            {isUploading && (
-              <View style={styles.uploadingOverlay}>
-                <ActivityIndicator color="#fff" />
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Ionicons name="image-outline" size={48} color="#999" />
-            <Text style={styles.imagePlaceholderText}>Add a photo</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      {/* Message Input */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Message to Your Future Self</Text>
-        <TextInput
-          style={styles.messageInput}
-          placeholder="Write a message for when you open this postcard..."
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          maxLength={1000}
-        />
-        <Text style={styles.charCount}>{message.length}/1000</Text>
-      </View>
-
-      {/* Unlock Type Toggle */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Unlock When</Text>
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            style={StyleSheet.flatten([styles.toggleButton, unlockType === 'date' && styles.toggleActive])}
-            onPress={() => setUnlockType('date')}
-          >
-            <Ionicons 
-              name="calendar" 
-              size={20} 
-              color={unlockType === 'date' ? '#fff' : '#666'} 
-            />
-            <Text style={StyleSheet.flatten([styles.toggleText, unlockType === 'date' && styles.toggleTextActive])}>
-              By Date
-            </Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="close" size={28} color="#333" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={StyleSheet.flatten([styles.toggleButton, unlockType === 'location' && styles.toggleActive])}
-            onPress={() => setUnlockType('location')}
-          >
-            <Ionicons 
-              name="location" 
-              size={20} 
-              color={unlockType === 'location' ? '#fff' : '#666'} 
-            />
-            <Text style={StyleSheet.flatten([styles.toggleText, unlockType === 'location' && styles.toggleTextActive])}>
-              By Location
-            </Text>
+          <Text style={styles.headerTitle}>Create Postcard</Text>
+          <TouchableOpacity onPress={handleSaveDraft} disabled={isSubmitting}>
+            <Text style={styles.draftButton}>Save Draft</Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Date Picker (Simplified) */}
-      {unlockType === 'date' && (
+        {/* Image Selection */}
+        <TouchableOpacity style={styles.imageSection} onPress={handleSelectImage}>
+          {selectedImage ? (
+            <View style={styles.imagePreview}>
+              <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
+              {isUploading && (
+                <View style={styles.uploadingOverlay}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Ionicons name="image-outline" size={48} color="#999" />
+              <Text style={styles.imagePlaceholderText}>Add a photo</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Message Input */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Opens in how many days?</Text>
-          <View style={styles.daysContainer}>
-            {[7, 30, 90, 180, 365].map(days => (
-              <TouchableOpacity
-                key={days}
-                style={StyleSheet.flatten([styles.daysButton, daysFromNow === days && styles.daysButtonActive])}
-                onPress={() => setDaysFromNow(days)}
-              >
-                <Text style={StyleSheet.flatten([styles.daysButtonText, daysFromNow === days && styles.daysButtonTextActive])}>
-                  {days < 30 ? `${days}d` : days < 365 ? `${days / 30}mo` : '1yr'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.datePreview}>
-            Opens on: {getUnlockDate().toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </Text>
+          <Text style={styles.sectionLabel}>Message to Your Future Self</Text>
+          <TextInput
+            style={styles.messageInput}
+            placeholder="Write a message for when you open this postcard..."
+            value={message}
+            onChangeText={setMessage}
+            multiline
+            maxLength={1000}
+          />
+          <Text style={styles.charCount}>{message.length}/1000</Text>
         </View>
-      )}
 
-      {/* Location Picker */}
-      {unlockType === 'location' && (
+        {/* Unlock Type Toggle */}
         <View style={styles.section}>
-          <TouchableOpacity 
-            style={styles.locationButton}
-            onPress={handleUseCurrentLocation}
-          >
-            <Ionicons name="navigate" size={24} color="#007AFF" />
-            <Text style={styles.locationText}>
-              {unlockLatitude !== null 
-                ? `📍 Location Selected`
-                : 'Select unlock location'
-              }
-            </Text>
-          </TouchableOpacity>
-          
-          <View style={styles.radiusContainer}>
-            <Text style={styles.radiusLabel}>Unlock radius: {unlockRadius}m</Text>
-            <View style={styles.radiusButtons}>
-              {[50, 100, 200, 500].map(r => (
+          <Text style={styles.sectionLabel}>Unlock When</Text>
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={StyleSheet.flatten([styles.toggleButton, unlockType === 'date' && styles.toggleActive])}
+              onPress={() => setUnlockType('date')}
+            >
+              <Ionicons 
+                name="calendar" 
+                size={20} 
+                color={unlockType === 'date' ? '#fff' : '#666'} 
+              />
+              <Text style={StyleSheet.flatten([styles.toggleText, unlockType === 'date' && styles.toggleTextActive])}>
+                By Date
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={StyleSheet.flatten([styles.toggleButton, unlockType === 'location' && styles.toggleActive])}
+              onPress={() => setUnlockType('location')}
+            >
+              <Ionicons 
+                name="location" 
+                size={20} 
+                color={unlockType === 'location' ? '#fff' : '#666'} 
+              />
+              <Text style={StyleSheet.flatten([styles.toggleText, unlockType === 'location' && styles.toggleTextActive])}>
+                By Location
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Date Picker (Simplified) */}
+        {unlockType === 'date' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Opens in how many days?</Text>
+            <View style={styles.daysContainer}>
+              {[7, 30, 90, 180, 365].map(days => (
                 <TouchableOpacity
-                  key={r}
-                  style={StyleSheet.flatten([styles.radiusButton, unlockRadius === r && styles.radiusButtonActive])}
-                  onPress={() => setUnlockRadius(r)}
+                  key={days}
+                  style={StyleSheet.flatten([styles.daysButton, daysFromNow === days && styles.daysButtonActive])}
+                  onPress={() => setDaysFromNow(days)}
                 >
-                  <Text style={StyleSheet.flatten([styles.radiusButtonText, unlockRadius === r && styles.radiusButtonTextActive])}>
-                    {r}m
+                  <Text style={StyleSheet.flatten([styles.daysButtonText, daysFromNow === days && styles.daysButtonTextActive])}>
+                    {days < 30 ? `${days}d` : days < 365 ? `${days / 30}mo` : '1yr'}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+            <Text style={styles.datePreview}>
+              Opens on: {getUnlockDate().toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </Text>
           </View>
+        )}
+
+        {/* Location Picker */}
+        {unlockType === 'location' && (
+          <View style={styles.section}>
+            <TouchableOpacity 
+              style={styles.locationButton}
+              onPress={handleUseCurrentLocation}
+            >
+              <Ionicons name="navigate" size={24} color="#007AFF" />
+              <Text style={styles.locationText}>
+                {unlockLatitude !== null 
+                  ? `📍 Location Selected`
+                  : 'Select unlock location'
+                }
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={styles.radiusContainer}>
+              <Text style={styles.radiusLabel}>Unlock radius: {unlockRadius}m</Text>
+              <View style={styles.radiusButtons}>
+                {[50, 100, 200, 500].map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    style={StyleSheet.flatten([styles.radiusButton, unlockRadius === r && styles.radiusButtonActive])}
+                    onPress={() => setUnlockRadius(r)}
+                  >
+                    <Text style={StyleSheet.flatten([styles.radiusButtonText, unlockRadius === r && styles.radiusButtonTextActive])}>
+                      {r}m
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Recipient Selector */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Send To</Text>
+          <TouchableOpacity
+            style={styles.recipientSelector}
+            onPress={() => setShowFriendPicker(true)}
+          >
+            <Ionicons name="person" size={20} color="#007AFF" />
+            <Text style={styles.recipientText}>{recipientName}</Text>
+            <Ionicons name="chevron-down" size={20} color="#999" />
+          </TouchableOpacity>
         </View>
-      )}
 
-      {/* Recipient Selector */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Send To</Text>
-        <TouchableOpacity
-          style={styles.recipientSelector}
-          onPress={() => setShowFriendPicker(true)}
-        >
-          <Ionicons name="person" size={20} color="#007AFF" />
-          <Text style={styles.recipientText}>{recipientName}</Text>
-          <Ionicons name="chevron-down" size={20} color="#999" />
-        </TouchableOpacity>
-      </View>
+        {/* Action Buttons */}
+        <View style={styles.actions}>
+          <TouchableOpacity 
+            style={styles.previewButton}
+            onPress={() => setShowPreview(true)}
+          >
+            <Ionicons name="eye-outline" size={20} color="#007AFF" />
+            <Text style={styles.previewButtonText}>Preview</Text>
+          </TouchableOpacity>
 
-      {/* Action Buttons */}
-      <View style={styles.actions}>
-        <TouchableOpacity 
-          style={styles.previewButton}
-          onPress={() => setShowPreview(true)}
-        >
-          <Ionicons name="eye-outline" size={20} color="#007AFF" />
-          <Text style={styles.previewButtonText}>Preview</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={StyleSheet.flatten([styles.sendButton, isSubmitting && styles.sendButtonDisabled])}
+            onPress={handleSend}
+            disabled={isSubmitting || isUploading}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="send" size={20} color="#fff" />
+                <Text style={styles.sendButtonText}>Send Postcard</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity
-          style={StyleSheet.flatten([styles.sendButton, isSubmitting && styles.sendButtonDisabled])}
-          onPress={handleSend}
-          disabled={isSubmitting || isUploading}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="send" size={20} color="#fff" />
-              <Text style={styles.sendButtonText}>Send Postcard</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {renderFriendPicker()}
-      {renderPreview()}
-    </ScrollView>
+        {renderFriendPicker()}
+        {renderPreview()}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',

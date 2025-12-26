@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { FollowButton } from '../../components/social/FollowButton';
@@ -64,31 +65,37 @@ export default function UserProfileScreen() {
   // Show loading while redirecting to own profile
   if (isOwnProfile) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6366f1" />
-        <Text style={styles.redirectText}>Redirecting to your profile...</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.redirectText}>Redirecting to your profile...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#6366f1" />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (error || !profile) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error || 'User not found'}</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <Text style={styles.error}>{error || 'User not found'}</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <>
+    <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ title: profile.name || 'User Profile', headerBackTitle: 'Back' }} />
       <ScrollView style={styles.container}>
         <View style={styles.header}>
@@ -144,11 +151,15 @@ export default function UserProfileScreen() {
         onClose={() => setShowLoginPrompt(false)}
         message="Log in to follow users and see their latest updates in your feed."
       />
-    </>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0f0f0f',
+  },
   container: {
     flex: 1,
     backgroundColor: '#0f0f0f',

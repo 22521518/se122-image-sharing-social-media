@@ -15,12 +15,12 @@ import {
     ActivityIndicator,
     FlatList,
     RefreshControl,
-    SafeAreaView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type FilterTab = 'all' | 'locked' | 'unlocked';
 

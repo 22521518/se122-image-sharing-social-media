@@ -13,11 +13,11 @@ import {
     ActivityIndicator,
     FlatList,
     RefreshControl,
-    SafeAreaView,
     StyleSheet,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const router = useRouter();

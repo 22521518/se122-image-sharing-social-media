@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
@@ -159,148 +160,154 @@ export default function PostcardViewerScreen() {
   const isSender = postcard.senderId === user?.id;
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={28} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isLocked ? '🔒 Locked Postcard' : '📬 Postcard'}
-        </Text>
-        <View style={{ width: 28 }} />
-      </View>
-
-      {/* Sender Info */}
-      <View style={styles.senderInfo}>
-        <Ionicons name="person-circle" size={40} color="#ccc" />
-        <View style={styles.senderDetails}>
-          <Text style={styles.senderName}>
-            From: {postcard.sender?.name || 'Unknown'}
-          </Text>
-          <Text style={styles.sentDate}>
-            Sent on {formatDate(postcard.createdAt)}
-          </Text>
-        </View>
-      </View>
-
-      {/* Main Content Area */}
-      <View style={styles.contentArea}>
-        {/* Locked State - Envelope */}
-        {isLocked && !isSender && (
-          <TouchableOpacity 
-            activeOpacity={0.8} 
-            onPress={handleTapLocked}
-            style={styles.lockedContainer}
-          >
-            <Animated.View 
-              style={StyleSheet.flatten([
-                styles.envelope,
-                { transform: [{ translateX: lockShake }] }
-              ])}
-            >
-              <View style={styles.envelopeTop} />
-              <View style={styles.envelopeBody}>
-                <Ionicons name="lock-closed" size={48} color="#666" />
-                <Text style={styles.lockedText}>
-                  {postcard.unlockDate 
-                    ? `Opens on ${formatDate(postcard.unlockDate)}`
-                    : 'Opens when you arrive at the location'
-                  }
-                </Text>
-              </View>
-            </Animated.View>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={28} color="#333" />
           </TouchableOpacity>
-        )}
+          <Text style={styles.headerTitle}>
+            {isLocked ? '🔒 Locked Postcard' : '📬 Postcard'}
+          </Text>
+          <View style={{ width: 28 }} />
+        </View>
 
-        {/* Unlocked State - Reveal Animation */}
-        {postcard.status === 'UNLOCKED' && !hasRevealed && (
-          <TouchableOpacity 
-            activeOpacity={0.9}
-            onPress={handleTapLocked}
-            style={styles.revealContainer}
-          >
+        {/* Sender Info */}
+        <View style={styles.senderInfo}>
+          <Ionicons name="person-circle" size={40} color="#ccc" />
+          <View style={styles.senderDetails}>
+            <Text style={styles.senderName}>
+              From: {postcard.sender?.name || 'Unknown'}
+            </Text>
+            <Text style={styles.sentDate}>
+              Sent on {formatDate(postcard.createdAt)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Main Content Area */}
+        <View style={styles.contentArea}>
+          {/* Locked State - Envelope */}
+          {isLocked && !isSender && (
+            <TouchableOpacity 
+              activeOpacity={0.8} 
+              onPress={handleTapLocked}
+              style={styles.lockedContainer}
+            >
+              <Animated.View 
+                style={StyleSheet.flatten([
+                  styles.envelope,
+                  { transform: [{ translateX: lockShake }] }
+                ])}
+              >
+                <View style={styles.envelopeTop} />
+                <View style={styles.envelopeBody}>
+                  <Ionicons name="lock-closed" size={48} color="#666" />
+                  <Text style={styles.lockedText}>
+                    {postcard.unlockDate 
+                      ? `Opens on ${formatDate(postcard.unlockDate)}`
+                      : 'Opens when you arrive at the location'
+                    }
+                  </Text>
+                </View>
+              </Animated.View>
+            </TouchableOpacity>
+          )}
+
+          {/* Unlocked State - Reveal Animation */}
+          {postcard.status === 'UNLOCKED' && !hasRevealed && (
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={handleTapLocked}
+              style={styles.revealContainer}
+            >
+              <Animated.View 
+                style={StyleSheet.flatten([
+                  styles.envelope,
+                  { 
+                    transform: [
+                      { scale: envelopeScale },
+                      { rotateY: rotateInterpolate }
+                    ] 
+                  }
+                ])}
+              >
+                <View style={styles.envelopeTop} />
+                <View style={styles.envelopeBody}>
+                  <Ionicons name="gift-outline" size={48} color="#007AFF" />
+                  <Text style={styles.tapToReveal}>Tap to reveal!</Text>
+                </View>
+              </Animated.View>
+            </TouchableOpacity>
+          )}
+
+          {/* Revealed Content */}
+          {(hasRevealed || isSender) && postcard.status !== 'LOCKED' && (
             <Animated.View 
               style={StyleSheet.flatten([
-                styles.envelope,
-                { 
-                  transform: [
-                    { scale: envelopeScale },
-                    { rotateY: rotateInterpolate }
-                  ] 
+                styles.revealedContent,
+                {
+                  opacity: isSender ? 1 : contentOpacity,
+                  transform: [{ scale: isSender ? 1 : contentScale }]
                 }
               ])}
             >
-              <View style={styles.envelopeTop} />
-              <View style={styles.envelopeBody}>
-                <Ionicons name="gift-outline" size={48} color="#007AFF" />
-                <Text style={styles.tapToReveal}>Tap to reveal!</Text>
-              </View>
+              {postcard.mediaUrl && (
+                <Image 
+                  source={{ uri: postcard.mediaUrl }} 
+                  style={styles.postcardImage}
+                  resizeMode="cover"
+                />
+              )}
+              {postcard.message && (
+                <View style={styles.messageContainer}>
+                  <Text style={styles.message}>{postcard.message}</Text>
+                </View>
+              )}
             </Animated.View>
-          </TouchableOpacity>
-        )}
+          )}
 
-        {/* Revealed Content */}
-        {(hasRevealed || isSender) && postcard.status !== 'LOCKED' && (
-          <Animated.View 
-            style={StyleSheet.flatten([
-              styles.revealedContent,
-              {
-                opacity: isSender ? 1 : contentOpacity,
-                transform: [{ scale: isSender ? 1 : contentScale }]
-              }
-            ])}
-          >
-            {postcard.mediaUrl && (
-              <Image 
-                source={{ uri: postcard.mediaUrl }} 
-                style={styles.postcardImage}
-                resizeMode="cover"
-              />
-            )}
-            {postcard.message && (
-              <View style={styles.messageContainer}>
-                <Text style={styles.message}>{postcard.message}</Text>
-              </View>
-            )}
-          </Animated.View>
-        )}
+          {/* Sender preview of locked content */}
+          {isSender && isLocked && (
+            <View style={styles.senderPreview}>
+              <Text style={styles.senderPreviewLabel}>
+                (This is what they'll see after unlock)
+              </Text>
+              {postcard.mediaUrl && (
+                <Image 
+                  source={{ uri: postcard.mediaUrl }} 
+                  style={styles.postcardImage}
+                  resizeMode="cover"
+                />
+              )}
+              {postcard.message && (
+                <View style={styles.messageContainer}>
+                  <Text style={styles.message}>{postcard.message}</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
 
-        {/* Sender preview of locked content */}
-        {isSender && isLocked && (
-          <View style={styles.senderPreview}>
-            <Text style={styles.senderPreviewLabel}>
-              (This is what they'll see after unlock)
+        {/* Unlock Info Footer */}
+        <View style={styles.footer}>
+          {postcard.viewedAt && (
+            <Text style={styles.viewedAt}>
+              Viewed on {formatDate(postcard.viewedAt)}
             </Text>
-            {postcard.mediaUrl && (
-              <Image 
-                source={{ uri: postcard.mediaUrl }} 
-                style={styles.postcardImage}
-                resizeMode="cover"
-              />
-            )}
-            {postcard.message && (
-              <View style={styles.messageContainer}>
-                <Text style={styles.message}>{postcard.message}</Text>
-              </View>
-            )}
-          </View>
-        )}
+          )}
+        </View>
       </View>
-
-      {/* Unlock Info Footer */}
-      <View style={styles.footer}>
-        {postcard.viewedAt && (
-          <Text style={styles.viewedAt}>
-            Viewed on {formatDate(postcard.viewedAt)}
-          </Text>
-        )}
-      </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',

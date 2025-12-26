@@ -5,7 +5,8 @@
  * Displays a full-screen memory detail view with interactions.
  */
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { MemoryDetailModal } from '@/components/memories/MemoryDetailModal';
