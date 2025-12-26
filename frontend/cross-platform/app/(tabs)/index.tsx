@@ -1,23 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  FlatList,
-  ActivityIndicator,
-  RefreshControl,
-  TouchableOpacity,
-  SafeAreaView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
+import CreatePostModal from '@/components/social/CreatePostModal';
 import { PostCard } from '@/components/social/PostCard';
+import { ThemedText } from '@/components/themed-text';
+import { Colors } from '@/constants/Colors';
+import { Theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useSocial } from '@/context/SocialContext';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
-import CreatePostModal from '@/components/social/CreatePostModal';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
+    SafeAreaView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
   const { isAuthenticated, accessToken, user } = useAuth();
 
   // AC 3, 4, 5: Feed with infinite scroll and pull-to-refresh
@@ -60,19 +65,29 @@ export default function HomeScreen() {
     if (!isLoadingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#007AFF" />
+        <ActivityIndicator size="small" color={colors.primary} />
+        <ThemedText style={StyleSheet.flatten([styles.loadingMoreText, { color: colors.textSecondary }])}>
+          Loading more...
+        </ThemedText>
       </View>
     );
   };
 
   if (!isAuthenticated) {
     return (
-      <View style={styles.centered}>
-        <Ionicons name="people-outline" size={64} color="#ccc" />
-        <ThemedText style={styles.title}>Welcome to Social Feed</ThemedText>
-        <ThemedText style={styles.subtitle}>Please sign in to view posts</ThemedText>
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <ThemedText style={styles.buttonText}>Sign In</ThemedText>
+      <View style={StyleSheet.flatten([styles.centered, { backgroundColor: colors.background }])}>
+        <View style={StyleSheet.flatten([styles.iconContainer, { backgroundColor: colors.muted }])}>
+          <Ionicons name="people-outline" size={48} color={colors.primary} />
+        </View>
+        <ThemedText style={StyleSheet.flatten([styles.title, { color: colors.text }])}>Welcome to LifeMapped</ThemedText>
+        <ThemedText style={StyleSheet.flatten([styles.subtitle, { color: colors.textSecondary }])}>
+          Sign in to discover and share memories
+        </ThemedText>
+        <TouchableOpacity 
+          style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: colors.primary }])} 
+          onPress={handleLogin}
+        >
+          <ThemedText style={styles.primaryButtonText}>Sign In</ThemedText>
         </TouchableOpacity>
       </View>
     );
@@ -80,18 +95,22 @@ export default function HomeScreen() {
 
   if (isLoading && posts.length === 0) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={StyleSheet.flatten([styles.centered, { backgroundColor: colors.background }])}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <ThemedText style={styles.headerTitle}>Feed</ThemedText>
-        <TouchableOpacity onPress={() => setShowCreatePost(true)}>
-          <Ionicons name="add-circle-outline" size={28} color="#007AFF" />
+    <SafeAreaView style={StyleSheet.flatten([styles.container, { backgroundColor: colors.background }])}>
+      {/* Header */}
+      <View style={StyleSheet.flatten([styles.header, { borderBottomColor: colors.border }])}>
+        <ThemedText style={StyleSheet.flatten([styles.headerTitle, { color: colors.text }])}>Feed</ThemedText>
+        <TouchableOpacity 
+          style={StyleSheet.flatten([styles.headerButton, { backgroundColor: colors.muted }])}
+          onPress={() => setShowCreatePost(true)}
+        >
+          <Ionicons name="add" size={22} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -111,21 +130,29 @@ export default function HomeScreen() {
           />
         )}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={isRefreshing} 
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
         }
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="create-outline" size={48} color="#ccc" style={{ marginBottom: 16 }} />
-            <ThemedText style={styles.emptyText}>No posts yet.</ThemedText>
-            <ThemedText style={styles.emptySubtext}>Follow friends or be the first to share!</ThemedText>
+            <View style={StyleSheet.flatten([styles.emptyIconContainer, { backgroundColor: colors.muted }])}>
+              <Ionicons name="create-outline" size={40} color={colors.primary} />
+            </View>
+            <ThemedText style={StyleSheet.flatten([styles.emptyText, { color: colors.text }])}>No posts yet</ThemedText>
+            <ThemedText style={StyleSheet.flatten([styles.emptySubtext, { color: colors.textSecondary }])}>
+              Follow friends or be the first to share!
+            </ThemedText>
             <TouchableOpacity 
-              style={[styles.button, { marginTop: 16 }]} 
+              style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: colors.primary, marginTop: 20 }])} 
               onPress={() => setShowCreatePost(true)}
             >
-              <ThemedText style={styles.buttonText}>Create Post</ThemedText>
+              <ThemedText style={styles.primaryButtonText}>Create Post</ThemedText>
             </TouchableOpacity>
           </View>
         }
@@ -134,7 +161,7 @@ export default function HomeScreen() {
 
       {/* Floating Action Button */}
       <TouchableOpacity 
-        style={styles.fab} 
+        style={StyleSheet.flatten([styles.fab, { backgroundColor: colors.primary }, Theme.shadows.lg])} 
         onPress={() => setShowCreatePost(true)}
         activeOpacity={0.8}
       >
@@ -153,24 +180,28 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: Theme.typography.fontSizes.xxl,
+    fontWeight: Theme.typography.fontWeights.bold,
+  },
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: Theme.borderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 100,
   },
   centerContent: {
     flex: 1,
@@ -178,70 +209,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   postCard: {
-    marginBottom: 8,
+    marginBottom: 1,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
-    backgroundColor: '#fff',
+    padding: Theme.spacing.xxl,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: Theme.borderRadius.xxl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.xl,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginVertical: 16,
+    fontSize: Theme.typography.fontSizes.xxl,
+    fontWeight: Theme.typography.fontWeights.bold,
+    marginBottom: Theme.spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: Theme.typography.fontSizes.base,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: Theme.spacing.xl,
   },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+  primaryButton: {
+    paddingHorizontal: Theme.spacing.xxl,
+    paddingVertical: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.lg,
   },
-  buttonText: {
+  primaryButtonText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
+    fontWeight: Theme.typography.fontWeights.semibold,
+    fontSize: Theme.typography.fontSizes.base,
   },
   emptyState: {
     alignItems: 'center',
-    padding: 32,
+    padding: Theme.spacing.xxl,
+  },
+  emptyIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: Theme.borderRadius.xxl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.lg,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: Theme.typography.fontSizes.lg,
+    fontWeight: Theme.typography.fontWeights.semibold,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 8,
+    fontSize: Theme.typography.fontSizes.sm,
+    marginTop: Theme.spacing.xs,
+    textAlign: 'center',
   },
   fab: {
     position: 'absolute',
     bottom: 24,
     right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#007AFF',
+    width: Theme.sizes.fab.size,
+    height: Theme.sizes.fab.size,
+    borderRadius: Theme.sizes.fab.size / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
   },
   footerLoader: {
-    paddingVertical: 20,
+    paddingVertical: Theme.spacing.xl,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Theme.spacing.sm,
+  },
+  loadingMoreText: {
+    fontSize: Theme.typography.fontSizes.sm,
   },
 });

@@ -1,19 +1,26 @@
+import { ThemedText } from '@/components/themed-text';
+import { Colors } from '@/constants/Colors';
+import { Theme } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  ScrollView,
-  Image,
+  View
 } from 'react-native';
-import { router } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
-import { useUserProfile } from '@/hooks/useUserProfile';
 
 export default function ProfileScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
   const { accessToken, logout } = useAuth();
   const { 
     profile, 
@@ -26,6 +33,7 @@ export default function ProfileScreen() {
   
   const [name, setName] = useState(profile?.name || '');
   const [bio, setBio] = useState(profile?.bio || '');
+  const [isEditing, setIsEditing] = useState(false);
 
   // Sync local state when profile loads
   React.useEffect(() => {
@@ -40,6 +48,7 @@ export default function ProfileScreen() {
       name: name || undefined, 
       bio: bio || undefined 
     });
+    setIsEditing(false);
   };
 
   const handleLogout = async () => {
@@ -51,151 +60,285 @@ export default function ProfileScreen() {
     }
   };
 
+  const formatCount = (count: number = 0) => {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
+  };
+
   // Loading state
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
-        <Text style={styles.loadingText}>Loading profile...</Text>
-      </View>
+      <SafeAreaView style={StyleSheet.flatten([styles.loadingContainer, { backgroundColor: colors.background }])}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <ThemedText style={StyleSheet.flatten([styles.loadingText, { color: colors.textSecondary }])}>
+          Loading profile...
+        </ThemedText>
+      </SafeAreaView>
     );
   }
 
   // Not logged in
   if (!accessToken) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Please log in to view your profile</Text>
+      <SafeAreaView style={StyleSheet.flatten([styles.loadingContainer, { backgroundColor: colors.background }])}>
+        <View style={StyleSheet.flatten([styles.iconContainer, { backgroundColor: colors.muted }])}>
+          <Ionicons name="person-outline" size={48} color={colors.primary} />
+        </View>
+        <ThemedText style={StyleSheet.flatten([styles.errorText, { color: colors.textSecondary }])}>
+          Please log in to view your profile
+        </ThemedText>
         <TouchableOpacity 
-          style={styles.button}
+          style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: colors.primary }])}
           onPress={() => router.replace('/(auth)/login')}
         >
-          <Text style={styles.buttonText}>Go to Login</Text>
+          <ThemedText style={styles.primaryButtonText}>Go to Login</ThemedText>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Profile</Text>
+    <SafeAreaView style={StyleSheet.flatten([styles.container, { backgroundColor: colors.background }])}>
+      {/* Header */}
+      <View style={StyleSheet.flatten([styles.header, { borderBottomColor: colors.border }])}>
+        <ThemedText style={StyleSheet.flatten([styles.headerTitle, { color: colors.text }])}>Profile</ThemedText>
+        <TouchableOpacity 
+          style={StyleSheet.flatten([styles.headerButton, { backgroundColor: colors.muted }])}
+          onPress={() => router.push('/settings' as any)}
+        >
+          <Ionicons name="settings-outline" size={20} color={colors.text} />
+        </TouchableOpacity>
+      </View>
 
-        {/* Avatar */}
-        <View style={styles.avatarContainer}>
-          {profile?.avatarUrl ? (
-            <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>
-                {profile?.name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || '?'}
-              </Text>
-            </View>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Profile Header - Instagram style */}
+        <View style={styles.profileHeader}>
+          {/* Avatar */}
+          <View style={StyleSheet.flatten([styles.avatarRing, { borderColor: colors.primary }])}>
+            {profile?.avatarUrl ? (
+              <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={StyleSheet.flatten([styles.avatarPlaceholder, { backgroundColor: colors.primary }])}>
+                <ThemedText style={styles.avatarText}>
+                  {profile?.name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || '?'}
+                </ThemedText>
+              </View>
+            )}
+          </View>
+
+          {/* Name & Username */}
+          <ThemedText style={StyleSheet.flatten([styles.profileName, { color: colors.text }])}>
+            {profile?.name || 'User'}
+          </ThemedText>
+          <ThemedText style={StyleSheet.flatten([styles.email, { color: colors.textSecondary }])}>
+            @{profile?.email?.split('@')[0] || 'username'}
+          </ThemedText>
+
+          {/* Bio */}
+          {profile?.bio && (
+            <ThemedText style={StyleSheet.flatten([styles.bioText, { color: colors.text }])}>
+              {profile.bio}
+            </ThemedText>
           )}
+
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <ThemedText style={StyleSheet.flatten([styles.statNumber, { color: colors.text }])}>
+                {formatCount(0)}
+              </ThemedText>
+              <ThemedText style={StyleSheet.flatten([styles.statLabel, { color: colors.textSecondary }])}>
+                Posts
+              </ThemedText>
+            </View>
+            <View style={StyleSheet.flatten([styles.statDivider, { backgroundColor: colors.border }])} />
+            <View style={styles.statItem}>
+              <ThemedText style={StyleSheet.flatten([styles.statNumber, { color: colors.text }])}>
+                {formatCount(0)}
+              </ThemedText>
+              <ThemedText style={StyleSheet.flatten([styles.statLabel, { color: colors.textSecondary }])}>
+                Followers
+              </ThemedText>
+            </View>
+            <View style={StyleSheet.flatten([styles.statDivider, { backgroundColor: colors.border }])} />
+            <View style={styles.statItem}>
+              <ThemedText style={StyleSheet.flatten([styles.statNumber, { color: colors.text }])}>
+                {formatCount(0)}
+              </ThemedText>
+              <ThemedText style={StyleSheet.flatten([styles.statLabel, { color: colors.textSecondary }])}>
+                Following
+              </ThemedText>
+            </View>
+            <View style={StyleSheet.flatten([styles.statDivider, { backgroundColor: colors.border }])} />
+            <View style={styles.statItem}>
+              <ThemedText style={StyleSheet.flatten([styles.statNumber, { color: colors.text }])}>
+                {formatCount(0)}
+              </ThemedText>
+              <ThemedText style={StyleSheet.flatten([styles.statLabel, { color: colors.textSecondary }])}>
+                Memories
+              </ThemedText>
+            </View>
+          </View>
+
+          {/* Edit Profile Button */}
+          <TouchableOpacity 
+            style={StyleSheet.flatten([styles.editButton, { borderColor: colors.border }])}
+            onPress={() => setIsEditing(!isEditing)}
+          >
+            <Ionicons name={isEditing ? "close" : "create-outline"} size={18} color={colors.text} />
+            <ThemedText style={StyleSheet.flatten([styles.editButtonText, { color: colors.text }])}>
+              {isEditing ? 'Cancel' : 'Edit Profile'}
+            </ThemedText>
+          </TouchableOpacity>
         </View>
 
-        {/* Email */}
-        <Text style={styles.email}>{profile?.email || 'No email'}</Text>
+        {/* Edit Form */}
+        {isEditing && (
+          <View style={StyleSheet.flatten([styles.editForm, { backgroundColor: colors.card, borderColor: colors.border }])}>
+            {/* Error/Success Messages */}
+            {error && (
+              <View style={StyleSheet.flatten([styles.messageBox, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }])}>
+                <ThemedText style={{ color: colors.destructive }}>{error}</ThemedText>
+              </View>
+            )}
+            {success && (
+              <View style={StyleSheet.flatten([styles.messageBox, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }])}>
+                <ThemedText style={{ color: colors.success }}>{success}</ThemedText>
+              </View>
+            )}
 
-        {/* Error/Success Messages */}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {success ? <Text style={styles.success}>{success}</Text> : null}
+            {/* Display Name Input */}
+            <ThemedText style={StyleSheet.flatten([styles.label, { color: colors.textSecondary }])}>Display Name</ThemedText>
+            <TextInput
+              style={StyleSheet.flatten([styles.input, { 
+                backgroundColor: colors.muted, 
+                borderColor: colors.border,
+                color: colors.text 
+              }])}
+              placeholder="Enter your display name"
+              placeholderTextColor={colors.textSecondary}
+              value={name}
+              onChangeText={setName}
+              maxLength={50}
+              editable={!isSaving}
+            />
 
-        {/* Display Name Input */}
-        <Text style={styles.label}>Display Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your display name"
-          placeholderTextColor="#888"
-          value={name}
-          onChangeText={setName}
-          maxLength={50}
-          editable={!isSaving}
-        />
+            {/* Bio Input */}
+            <ThemedText style={StyleSheet.flatten([styles.label, { color: colors.textSecondary }])}>Bio</ThemedText>
+            <TextInput
+              style={StyleSheet.flatten([styles.input, styles.bioInput, { 
+                backgroundColor: colors.muted, 
+                borderColor: colors.border,
+                color: colors.text 
+              }])}
+              placeholder="Tell us about yourself"
+              placeholderTextColor={colors.textSecondary}
+              value={bio}
+              onChangeText={setBio}
+              multiline
+              numberOfLines={4}
+              editable={!isSaving}
+            />
 
-        {/* Bio Input */}
-        <Text style={styles.label}>Bio</Text>
-        <TextInput
-          style={[styles.input, styles.bioInput]}
-          placeholder="Tell us about yourself"
-          placeholderTextColor="#888"
-          value={bio}
-          onChangeText={setBio}
-          multiline
-          numberOfLines={4}
-          editable={!isSaving}
-        />
-
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.button, isSaving && styles.buttonDisabled]}
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Log Out</Text>
-        </TouchableOpacity>
-
-        {/* Debug Info (only in development) */}
-        {__DEV__ && (
-          <View style={styles.debugContainer}>
-            <Text style={styles.debugText}>
-              Debug Info:{'\n'}
-              Has Token: {String(!!accessToken)}{'\n'}
-              Has Profile: {String(!!profile)}{'\n'}
-              Profile Email: {profile?.email || 'N/A'}
-            </Text>
+            {/* Save Button */}
+            <TouchableOpacity
+              style={StyleSheet.flatten([
+                styles.primaryButton, 
+                { backgroundColor: colors.primary },
+                isSaving && styles.buttonDisabled
+              ])}
+              onPress={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <ThemedText style={styles.primaryButtonText}>Save Changes</ThemedText>
+              )}
+            </TouchableOpacity>
           </View>
         )}
-      </View>
-    </ScrollView>
+
+        {/* Logout Button */}
+        <TouchableOpacity 
+          style={StyleSheet.flatten([styles.logoutButton, { borderColor: colors.destructive }])} 
+          onPress={handleLogout}
+        >
+          <Ionicons name="log-out-outline" size={20} color={colors.destructive} />
+          <ThemedText style={StyleSheet.flatten([styles.logoutButtonText, { color: colors.destructive }])}>
+            Log Out
+          </ThemedText>
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f0f0f',
-    padding: 24,
+    padding: Theme.spacing.xl,
   },
   loadingText: {
-    color: '#888',
-    marginTop: 12,
-    fontSize: 14,
+    marginTop: Theme.spacing.md,
+    fontSize: Theme.typography.fontSizes.sm,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: Theme.borderRadius.xxl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.lg,
   },
   errorText: {
-    color: '#ef4444',
-    fontSize: 16,
+    fontSize: Theme.typography.fontSizes.base,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: Theme.spacing.xl,
   },
-  content: {
-    padding: 24,
-    paddingTop: 60,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 24,
-  },
-  avatarContainer: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: {
+    fontSize: Theme.typography.fontSizes.xxl,
+    fontWeight: Theme.typography.fontWeights.bold,
+  },
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: Theme.borderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: Theme.spacing.xl,
+    paddingHorizontal: Theme.spacing.lg,
+  },
+  avatarRing: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderWidth: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.lg,
   },
   avatar: {
     width: 100,
@@ -206,96 +349,119 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#6366f1',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 36,
-    fontWeight: 'bold',
+    fontSize: 40,
+    fontWeight: Theme.typography.fontWeights.bold,
     color: '#fff',
+  },
+  profileName: {
+    fontSize: Theme.typography.fontSizes.xl,
+    fontWeight: Theme.typography.fontWeights.bold,
   },
   email: {
-    fontSize: 16,
-    color: '#888',
+    fontSize: Theme.typography.fontSizes.sm,
+    marginTop: Theme.spacing.xs,
+  },
+  bioText: {
+    fontSize: Theme.typography.fontSizes.sm,
     textAlign: 'center',
-    marginBottom: 24,
+    marginTop: Theme.spacing.md,
+    maxWidth: 280,
+    lineHeight: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Theme.spacing.xl,
+    paddingHorizontal: Theme.spacing.lg,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: Theme.typography.fontSizes.lg,
+    fontWeight: Theme.typography.fontWeights.bold,
+  },
+  statLabel: {
+    fontSize: Theme.typography.fontSizes.xs,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Theme.spacing.xl,
+    paddingHorizontal: Theme.spacing.xl,
+    paddingVertical: Theme.spacing.sm,
+    borderRadius: Theme.borderRadius.lg,
+    borderWidth: 1,
+    gap: Theme.spacing.sm,
+  },
+  editButtonText: {
+    fontSize: Theme.typography.fontSizes.sm,
+    fontWeight: Theme.typography.fontWeights.medium,
+  },
+  editForm: {
+    marginHorizontal: Theme.spacing.lg,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.borderRadius.xl,
+    borderWidth: 1,
+  },
+  messageBox: {
+    padding: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.md,
+    marginBottom: Theme.spacing.md,
   },
   label: {
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 8,
-    marginTop: 8,
+    fontSize: Theme.typography.fontSizes.sm,
+    marginBottom: Theme.spacing.sm,
+    marginTop: Theme.spacing.sm,
   },
   input: {
-    backgroundColor: '#1a1a1a',
     borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#fff',
-    marginBottom: 16,
+    borderRadius: Theme.borderRadius.lg,
+    padding: Theme.spacing.md,
+    fontSize: Theme.typography.fontSizes.base,
+    marginBottom: Theme.spacing.md,
   },
   bioInput: {
     height: 100,
     textAlignVertical: 'top',
   },
-  button: {
-    backgroundColor: '#6366f1',
-    padding: 16,
-    borderRadius: 12,
+  primaryButton: {
+    padding: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: Theme.spacing.sm,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
-  buttonText: {
+  primaryButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: Theme.typography.fontSizes.base,
+    fontWeight: Theme.typography.fontWeights.semibold,
   },
   logoutButton: {
-    padding: 16,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
+    justifyContent: 'center',
+    padding: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.lg,
+    marginHorizontal: Theme.spacing.lg,
+    marginTop: Theme.spacing.xl,
     borderWidth: 1,
-    borderColor: '#ef4444',
+    gap: Theme.spacing.sm,
   },
   logoutButtonText: {
-    color: '#ef4444',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  error: {
-    color: '#ef4444',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  success: {
-    color: '#22c55e',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  debugContainer: {
-    marginTop: 32,
-    padding: 12,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  debugText: {
-    color: '#888',
-    fontSize: 12,
-    fontFamily: 'monospace',
+    fontSize: Theme.typography.fontSizes.base,
+    fontWeight: Theme.typography.fontWeights.semibold,
   },
 });

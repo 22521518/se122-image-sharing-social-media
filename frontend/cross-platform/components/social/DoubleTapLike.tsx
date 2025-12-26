@@ -27,7 +27,7 @@ interface DoubleTapLikeProps {
  * DoubleTapLike - Wraps content with double-tap gesture to trigger like action
  * Shows a heart animation overlay when double-tapped
  */
-export function DoubleTapLike({
+export function DoubleTapLike({ 
   children,
   onDoubleTap,
   disabled = false,
@@ -85,10 +85,10 @@ export function DoubleTapLike({
   }, [handleDoubleTap]);
 
   const content = (
-    <View style={[styles.container, style]}>
+    <View style={StyleSheet.flatten([styles.container, style])}>
       {children}
       {/* Heart Overlay Animation */}
-      <Animated.View style={[styles.heartOverlay, heartAnimatedStyle]} pointerEvents="none">
+      <Animated.View style={StyleSheet.flatten([styles.heartOverlay, heartAnimatedStyle])} pointerEvents="none">
         <Ionicons name="heart" size={80} color="#FF3B5C" style={styles.heartIcon} />
       </Animated.View>
     </View>
@@ -121,9 +121,16 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   heartIcon: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    ...Platform.select({
+      web: {
+        textShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+    }),
   },
 });

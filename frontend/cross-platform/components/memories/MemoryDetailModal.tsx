@@ -191,7 +191,7 @@ export function MemoryDetailModal({
                   {memory.type === 'photo' && memory.mediaUrl ? (
                     <Image source={{ uri: memory.mediaUrl }} style={styles.photo} resizeMode="cover" />
                   ) : memory.type === 'voice' ? (
-                    <View style={[styles.placeholder, { backgroundColor: '#333' }]}>
+                    <View style={StyleSheet.flatten([styles.placeholder, { backgroundColor: '#333' }])}>
                       <TouchableOpacity onPress={handleToggleAudio} style={styles.audioPlayButton}>
                         <Ionicons 
                           name={isPlaying ? 'pause-circle' : 'play-circle'} 
@@ -204,7 +204,7 @@ export function MemoryDetailModal({
                       </ThemedText>
                     </View>
                   ) : (
-                    <View style={[styles.placeholder, { backgroundColor: '#333' }]}>
+                    <View style={StyleSheet.flatten([styles.placeholder, { backgroundColor: '#333' }])}>
                       <Ionicons name="text" size={48} color="#fff" />
                     </View>
                   )}

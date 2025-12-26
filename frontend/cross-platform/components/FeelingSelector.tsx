@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Feeling enum matching backend
@@ -78,10 +78,10 @@ export function FeelingSelector({
             return (
               <TouchableOpacity
                 key={feeling}
-                style={[
+                style={StyleSheet.flatten([
                   styles.compactButton,
                   isSelected && { borderColor: config.colors[0], backgroundColor: config.colors[0] + '15' },
-                ]}
+                ])}
                 onPress={() => onFeelingSelect(feeling)}
                 activeOpacity={0.7}
               >
@@ -90,10 +90,10 @@ export function FeelingSelector({
                   size={22}
                   color={isSelected ? config.colors[0] : '#888'} 
                 />
-                <Text style={[
+                <Text style={StyleSheet.flatten([
                   styles.compactLabel,
                   isSelected && { color: config.colors[0], fontWeight: '700' },
-                ]}>
+                ])}>
                   {config.label}
                 </Text>
               </TouchableOpacity>
@@ -116,19 +116,19 @@ export function FeelingSelector({
           return (
             <TouchableOpacity
               key={feeling}
-              style={[
+              style={StyleSheet.flatten([
                 styles.gridButton,
                 isSelected && styles.gridButtonSelected,
                 isSelected && { borderColor: config.colors[0] },
-              ]}
+              ])}
               onPress={() => onFeelingSelect(feeling)}
               activeOpacity={0.7}
             >
               <View 
-                style={[
+                style={StyleSheet.flatten([
                   styles.gradientBar,
                   { backgroundColor: config.colors[0], opacity: isSelected ? 1 : 0.4 },
-                ]} 
+                ])} 
               />
               
               <Ionicons 
@@ -137,15 +137,15 @@ export function FeelingSelector({
                 color={isSelected ? config.colors[0] : '#666'} 
               />
               
-              <Text style={[
+              <Text style={StyleSheet.flatten([
                 styles.gridLabel,
                 isSelected && { color: config.colors[0], fontWeight: '700' },
-              ]}>
+              ])}>
                 {config.label}
               </Text>
               
               {isSelected && (
-                <Text style={[styles.description, { color: config.colors[1] }]}>
+                <Text style={StyleSheet.flatten([styles.description, { color: config.colors[1] }])}>
                   {config.description}
                 </Text>
               )}
@@ -236,11 +236,15 @@ const styles = StyleSheet.create({
   gridButtonSelected: {
     borderWidth: 2,
     backgroundColor: '#FAFAFA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.08)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
+          elevation: 2,
+        }),
   },
   gradientBar: {
     position: 'absolute',

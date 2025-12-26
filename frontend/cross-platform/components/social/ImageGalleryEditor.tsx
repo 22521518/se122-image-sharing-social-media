@@ -49,7 +49,7 @@ export default function ImageGalleryEditor({
         <TouchableOpacity
           onLongPress={drag}
           disabled={isActive}
-          style={[styles.imageCard, isActive && styles.imageCardActive]}
+          style={StyleSheet.flatten([styles.imageCard, isActive && styles.imageCardActive])}
         >
           <View style={styles.imageContainer}>
             <Image source={{ uri: item.uri }} style={styles.image} />
@@ -73,7 +73,7 @@ export default function ImageGalleryEditor({
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.actionButton, styles.removeButton]}
+                style={StyleSheet.flatten([styles.actionButton, styles.removeButton])}
                 onPress={() => onRemoveImage(images.indexOf(item))}
               >
                 <Ionicons name="close-circle" size={24} color="white" />
@@ -147,14 +147,14 @@ export default function ImageGalleryEditor({
 
             <View style={styles.modalButtons}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
+                style={StyleSheet.flatten([styles.modalButton, styles.cancelButton])}
                 onPress={() => setEditingIndex(null)}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.modalButton, styles.saveButton]}
+                style={StyleSheet.flatten([styles.modalButton, styles.saveButton])}
                 onPress={saveCaption}
               >
                 <Text style={styles.saveButtonText}>Save</Text>

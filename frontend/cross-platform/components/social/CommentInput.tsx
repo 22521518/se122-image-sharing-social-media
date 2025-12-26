@@ -73,11 +73,11 @@ export function CommentInput({
   };
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={StyleSheet.flatten([styles.container, style])}>
       <View style={styles.inputWrapper}>
         <TextInput
           ref={inputRef}
-          style={[styles.input, isOverLimit && styles.inputError]}
+          style={StyleSheet.flatten([styles.input, isOverLimit && styles.inputError])}
           value={content}
           onChangeText={setContent}
           placeholder={placeholder}
@@ -88,11 +88,11 @@ export function CommentInput({
           textAlignVertical="top"
         />
         <View style={styles.footer}>
-          <ThemedText style={[styles.counter, { color: getCounterColor() }]}>
+          <ThemedText style={StyleSheet.flatten([styles.counter, { color: getCounterColor() }])}>
             {charCount}/{maxLength}
           </ThemedText>
           <TouchableOpacity
-            style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+            style={StyleSheet.flatten([styles.submitButton, !canSubmit && styles.submitButtonDisabled])}
             onPress={handleSubmit}
             disabled={!canSubmit}
             accessibilityLabel="Post comment"

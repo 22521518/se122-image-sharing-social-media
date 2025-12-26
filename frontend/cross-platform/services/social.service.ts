@@ -96,6 +96,10 @@ export const socialService = {
     return api.delete(`/api/social/graph/unfollow/${userId}`, token);
   },
 
+  async getFollowing(token: string): Promise<UserSearchResult[]> {
+    return api.get('/api/social/graph/following', token);
+  },
+
   // Posts
   async getPost(postId: string, token: string): Promise<PostDetail> {
     return api.get(`/api/social/posts/${postId}`, token);

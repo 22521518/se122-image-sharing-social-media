@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Memory } from '@/context/MemoriesContext';
@@ -41,7 +41,7 @@ export function VisualMemoryCard({ memory, onPress }: VisualMemoryCardProps) {
       activeOpacity={0.9}
     >
       {/* Media Content */}
-      <View style={[styles.mediaContainer, { backgroundColor: color + '20' }]}>
+      <View style={StyleSheet.flatten([styles.mediaContainer, { backgroundColor: color + '20' }])}>
         {memory.mediaUrl && memory.type === 'photo' ? (
           <Image
             source={{ uri: memory.mediaUrl }}
@@ -61,7 +61,7 @@ export function VisualMemoryCard({ memory, onPress }: VisualMemoryCardProps) {
         
         {/* Feeling tag overlay */}
         {memory.feeling && (
-          <View style={[styles.feelingTag, { backgroundColor: color }]}>
+          <View style={StyleSheet.flatten([styles.feelingTag, { backgroundColor: color }])}>
             <Ionicons name="heart" size={12} color="#FFF" style={{ marginRight: 4 }} />
             <Text style={styles.feelingText}>{memory.feeling}</Text>
           </View>
@@ -90,11 +90,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderRadius: 20,
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 5,
+        }),
     overflow: 'hidden',
   },
   mediaContainer: {
@@ -123,11 +127,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 4,
+          elevation: 3,
+        }),
   },
   feelingText: {
     color: '#FFF',

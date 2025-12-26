@@ -9,7 +9,8 @@
 
 import { ApiResponse, ApiErrorDto, unwrapApiResponse } from '../types/api.types';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
+const BE_PORT = process.env.EXPO_PUBLIC_API_PORT || 3000;
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || `http://localhost:${BE_PORT}`;
 
 export class ApiService {
   private static token: string | null = null;

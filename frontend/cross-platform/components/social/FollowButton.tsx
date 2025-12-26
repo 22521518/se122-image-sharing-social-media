@@ -116,7 +116,7 @@ export function FollowButton({
 
   return (
     <TouchableOpacity
-      style={[styles.button, { backgroundColor }, style]}
+      style={StyleSheet.flatten([styles.button, { backgroundColor }, style])}
       onPress={onPress}
       disabled={isLoading}
       activeOpacity={0.7}
@@ -124,7 +124,7 @@ export function FollowButton({
       {isLoading ? (
         <ActivityIndicator size="small" color={textColor} />
       ) : (
-        <ThemedText style={[styles.text, { color: textColor }]}>
+        <ThemedText style={StyleSheet.flatten([styles.text, { color: textColor }])}>
           {isFollowing ? 'Following' : 'Follow'}
         </ThemedText>
       )}

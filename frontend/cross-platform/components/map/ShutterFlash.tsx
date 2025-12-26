@@ -58,7 +58,7 @@ export function ShutterFlash({ isFlashing, onFlashComplete, style }: ShutterFlas
 
   return (
     <Animated.View
-      style={[styles.flash, animatedStyle, style]}
+      style={StyleSheet.flatten([styles.flash, animatedStyle, style])}
       pointerEvents="none"
     />
   );

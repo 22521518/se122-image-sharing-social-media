@@ -151,7 +151,7 @@ export function LikeButton({
 
   return (
     <TouchableOpacity
-      style={[styles.container, style]}
+      style={StyleSheet.flatten([styles.container, style])}
       onPress={handleToggleLike}
       disabled={isLoading}
       activeOpacity={0.7}
@@ -162,10 +162,10 @@ export function LikeButton({
         <ActivityIndicator size="small" color="#FF3B5C" />
       ) : (
         <Animated.View
-          style={[
+          style={StyleSheet.flatten([
             styles.iconContainer,
             { transform: [{ scale: scaleAnim }] },
-          ]}
+          ])}
         >
           <Animated.Text style={{ color: heartColor }}>
             <Ionicons
@@ -177,10 +177,10 @@ export function LikeButton({
       )}
       {showCount && (
         <ThemedText
-          style={[
+          style={StyleSheet.flatten([
             styles.count,
             { fontSize: sizeConfig.fontSize, color: liked ? '#FF3B5C' : '#888' },
-          ]}
+          ])}
         >
           {count > 0 ? count : ''}
         </ThemedText>

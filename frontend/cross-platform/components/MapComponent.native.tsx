@@ -105,7 +105,7 @@ export const MapComponent = React.forwardRef<MapComponentRef, MapComponentProps>
   const initialZoom = Math.log2(360 / initialRegion.latitudeDelta) - 1;
 
   return (
-    <View style={[styles.mapContainer, containerStyle]}>
+    <View style={StyleSheet.flatten([styles.mapContainer, containerStyle])}>
       <MapLibreGL.MapView
         ref={mapRef}
         style={styles.map}
@@ -134,7 +134,7 @@ export const MapComponent = React.forwardRef<MapComponentRef, MapComponentProps>
             anchor={{ x: 0.5, y: 0.5 }}
             onSelected={() => onMemoryPress(memory)}
           >
-            <View style={[styles.markerContainer, { backgroundColor: getMemoryColor(memory) }]}>
+            <View style={StyleSheet.flatten([styles.markerContainer, { backgroundColor: getMemoryColor(memory) }])}>
               <Ionicons name={getMemoryIcon(memory)} size={16} color="#FFF" />
             </View>
           </MapLibreGL.PointAnnotation>

@@ -12,6 +12,7 @@ import {
 import { ThemedText } from '../themed-text';
 import { socialService, Comment as CommentType } from '../../services/social.service';
 import { Ionicons } from '@expo/vector-icons';
+import ReportModal from '@/components/moderation/ReportModal';
 
 interface CommentListProps {
   itemId: string;
@@ -28,9 +29,12 @@ interface CommentItemProps {
   comment: CommentType;
   onDelete: (commentId: string) => Promise<void>;
   isDeleting: boolean;
+  currentUserId?: string;
 }
 
-function CommentItem({ comment, onDelete, isDeleting }: CommentItemProps) {
+function CommentItem({ comment, onDelete, isDeleting, currentUserId }: CommentItemProps) {
+  const [showReportModal, setShowReportModal] = useState(false);
+  
   const handleDelete = () => {
     // Use window.confirm for web, Alert.alert for native
     if (typeof window !== 'undefined' && window.confirm) {
@@ -57,42 +61,59 @@ function CommentItem({ comment, onDelete, isDeleting }: CommentItemProps) {
   });
 
   return (
-    <View style={styles.commentItem}>
-      <View style={styles.avatarContainer}>
-        {comment.author.avatarUrl ? (
-          <Image source={{ uri: comment.author.avatarUrl }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <ThemedText style={styles.avatarText}>
-              {comment.author.name?.charAt(0)?.toUpperCase() || '?'}
-            </ThemedText>
-          </View>
-        )}
-      </View>
-      <View style={styles.commentContent}>
-        <View style={styles.commentHeader}>
-          <ThemedText style={styles.authorName}>
-            {comment.author.name || 'Anonymous'}
-          </ThemedText>
-          <ThemedText style={styles.timestamp}>{formattedDate}</ThemedText>
-        </View>
-        <ThemedText style={styles.commentText}>{comment.content}</ThemedText>
-      </View>
-      {comment.isOwner && (
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={handleDelete}
-          disabled={isDeleting}
-          accessibilityLabel="Delete comment"
-        >
-          {isDeleting ? (
-            <ActivityIndicator size="small" color="#FF3B30" />
+    <>
+      <View style={styles.commentItem}>
+        <View style={styles.avatarContainer}>
+          {comment.author.avatarUrl ? (
+            <Image source={{ uri: comment.author.avatarUrl }} style={styles.avatar} />
           ) : (
-            <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+            <View style={styles.avatarPlaceholder}>
+              <ThemedText style={styles.avatarText}>
+                {comment.author.name?.charAt(0)?.toUpperCase() || '?'}
+              </ThemedText>
+            </View>
           )}
-        </TouchableOpacity>
-      )}
-    </View>
+        </View>
+        <View style={styles.commentContent}>
+          <View style={styles.commentHeader}>
+            <ThemedText style={styles.authorName}>
+              {comment.author.name || 'Anonymous'}
+            </ThemedText>
+            <ThemedText style={styles.timestamp}>{formattedDate}</ThemedText>
+          </View>
+          <ThemedText style={styles.commentText}>{comment.content}</ThemedText>
+        </View>
+        {comment.isOwner ? (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDelete}
+            disabled={isDeleting}
+            accessibilityLabel="Delete comment"
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#FF3B30" />
+            ) : (
+              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+            )}
+          </TouchableOpacity>
+        ) : currentUserId !== comment.author.id ? (
+          <TouchableOpacity
+            style={styles.reportButton}
+            onPress={() => setShowReportModal(true)}
+            accessibilityLabel="Report comment"
+          >
+            <Ionicons name="flag-outline" size={16} color="#999" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetType="COMMENT"
+        targetId={comment.id}
+        showBlockOption={true}
+      />
+    </>
   );
 }
 
@@ -261,6 +282,7 @@ export const CommentList = React.forwardRef<CommentListHandle, CommentListProps>
           comment={item}
           onDelete={handleDelete}
           isDeleting={deletingId === item.id}
+          currentUserId={currentUserId}
         />
       )}
       refreshControl={
@@ -365,5 +387,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#aaa',
     marginTop: 4,
+  },
+  reportButton: {
+    padding: 6,
+    marginLeft: 4,
   },
 });

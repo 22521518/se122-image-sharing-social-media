@@ -7,6 +7,7 @@ import {
   Text,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from 'expo-audio';
 import * as Location from 'expo-location';
@@ -294,12 +295,12 @@ export function VoiceRecorder({ onRecordingComplete, onError }: VoiceRecorderPro
         disabled={isInitializing}
       >
         <Animated.View
-          style={[
+          style={StyleSheet.flatten([
             styles.recordButton,
             isRecording && styles.recordingButton,
             isInitializing && styles.initializingButton,
             { transform: [{ scale: pulseAnim }] },
-          ]}
+          ])}
         >
           {isInitializing ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -340,11 +341,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF6B6B',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 6,
+          elevation: 8,
+        }),
   },
   recordingButton: {
     backgroundColor: '#FF3B30',

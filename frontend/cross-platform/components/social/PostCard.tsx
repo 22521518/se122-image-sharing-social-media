@@ -14,6 +14,7 @@ import { DoubleTapLike } from './DoubleTapLike';
 import { socialService, PostDetail as PostDetailType } from '@/services/social.service';
 import { useSocial } from '@/context/SocialContext';
 import { Ionicons } from '@expo/vector-icons';
+import ReportModal from '@/components/moderation/ReportModal';
 
 interface PostCardProps {
   post: PostDetailType;
@@ -44,6 +45,7 @@ export function PostCard({
   const { retryPost, deleteFailedPost } = useSocial();
   const [liked, setLiked] = useState(post.liked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -108,11 +110,11 @@ export function PostCard({
 
   const cardContent = (
     <TouchableOpacity
-      style={[
+      style={StyleSheet.flatten([
         styles.container, 
         style,
         (post as any).localStatus === 'pending' && { opacity: 0.7 }
-      ]}
+      ])}
       onPress={handlePress}
       activeOpacity={0.9}
     >
@@ -160,6 +162,17 @@ export function PostCard({
             )}
           </View>
         </View>
+
+        {/* More options menu (Report) */}
+        {currentUserId !== post.author?.id && (
+          <TouchableOpacity
+            style={styles.moreButton}
+            onPress={() => setShowReportModal(true)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Content */}
@@ -205,7 +218,18 @@ export function PostCard({
     );
   }
 
-  return cardContent;
+  return (
+    <>
+      {cardContent}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetType="POST"
+        targetId={post.id}
+        showBlockOption={true}
+      />
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -278,5 +302,8 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
     minWidth: 20,
+  },
+  moreButton: {
+    padding: 8,
   },
 });

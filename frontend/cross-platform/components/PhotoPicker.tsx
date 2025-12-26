@@ -571,17 +571,17 @@ export function PhotoPicker({
   // Render photo thumbnail with remove button (3x3 grid - Subtask 1.4)
   const renderPhotoItem = (photo: SelectedPhoto, index: number, isAnchor?: boolean) => {
     // Use calculated grid item size for consistent 3x3 layout
-    const itemStyle = [styles.gridItem, { width: gridItemSize, height: gridItemSize }];
+    const itemStyle = StyleSheet.flatten([styles.gridItem, { width: gridItemSize, height: gridItemSize }]);
 
     return (
       <View key={photo.id} style={itemStyle}>
         <Image source={{ uri: photo.uri }} style={styles.thumbnail} />
         
         {/* Location indicator */}
-        <View style={[
+        <View style={StyleSheet.flatten([
           styles.locationBadge,
           { backgroundColor: photo.hasLocation ? '#34C759' : '#FF9500' }
-        ]}>
+        ])}>
           <Ionicons
             name={photo.hasLocation ? 'location' : 'location-outline'}
             size={10}
@@ -597,7 +597,7 @@ export function PhotoPicker({
           </View>
         )}
         {photo.exif && !photo.exif.timestamp && (
-          <View style={[styles.statusBadge, { top: 26 }]}>
+          <View style={StyleSheet.flatten([styles.statusBadge, { top: 26 }])}>
             <Ionicons name="calendar-outline" size={12} color="#FFF" />
             <Text style={styles.statusBadgeText}>Date Fallback</Text>
           </View>
@@ -677,13 +677,13 @@ export function PhotoPicker({
       {selectedPhotos.length > 0 && (
         <View style={styles.viewToggleContainer}>
           <TouchableOpacity 
-            style={[styles.viewToggleButton, viewMode === 'grid' && styles.viewToggleButtonActive]}
+            style={StyleSheet.flatten([styles.viewToggleButton, viewMode === 'grid' && styles.viewToggleButtonActive])}
             onPress={() => setViewMode('grid')}
           >
             <Ionicons name="grid-outline" size={20} color={viewMode === 'grid' ? '#FFF' : '#666'} />
           </TouchableOpacity>
           <TouchableOpacity 
-             style={[styles.viewToggleButton, viewMode === 'clusters' && styles.viewToggleButtonActive]}
+             style={StyleSheet.flatten([styles.viewToggleButton, viewMode === 'clusters' && styles.viewToggleButtonActive])}
              onPress={() => setViewMode('clusters')}
           >
             <Ionicons name="layers-outline" size={20} color={viewMode === 'clusters' ? '#FFF' : '#666'} />
@@ -696,10 +696,10 @@ export function PhotoPicker({
         // Empty state with drag-and-drop (web only)
         <View 
           {...(isWeb && useDropzone ? getRootProps() : {})}
-          style={[
+          style={StyleSheet.flatten([
             styles.emptyState,
             isDragActive && styles.emptyStateDragActive
-          ]}
+          ])}
         >
           {isWeb && useDropzone && <input {...getInputProps()} />}
           <Ionicons 
@@ -707,10 +707,10 @@ export function PhotoPicker({
             size={48} 
             color={isDragActive ? '#5856D6' : '#999'} 
           />
-          <Text style={[
+          <Text style={StyleSheet.flatten([
             styles.emptyText,
             isDragActive && styles.emptyTextDragActive
-          ]}>
+          ])}>
             {isDragActive ? 'Drop files here' : 'No photos selected'}
           </Text>
           <Text style={styles.emptySubtext}>
@@ -721,13 +721,13 @@ export function PhotoPicker({
         </View>
       ) : (
         // 3x3 Grid Layout for both web and mobile (Story 3.2 Subtask 1.4)
-        <View style={[
+        <View style={StyleSheet.flatten([
           styles.gridContainer,
           { 
             maxWidth: maxContainerWidth,
             gap: GRID_GAP,
           }
-        ]}>
+        ])}>
           {selectedPhotos.map((photo, index) => renderPhotoItem(photo, index))}
         </View>
       )}
@@ -769,7 +769,7 @@ export function PhotoPicker({
                   </View>
                   
                    {expandedClusters.has(cluster.id) && (
-                       <View style={[styles.gridContainer, { gap: GRID_GAP }]}>
+                       <View style={StyleSheet.flatten([styles.gridContainer, { gap: GRID_GAP }])}>
                            {cluster.photos.map((p, idx) => {
                               const photo = selectedPhotos.find(sp => sp.id === p.id);
                               const isAnchor = p.id === cluster.anchorPhotoId;
@@ -783,10 +783,10 @@ export function PhotoPicker({
                             <Image 
                                key={p.id} 
                                source={{ uri: p.uri }} 
-                               style={[
+                               style={StyleSheet.flatten([
                                   styles.stackImage, 
                                   { zIndex: 3-idx, top: idx*5, left: idx*5 }
-                               ]} 
+                               ])} 
                             />
                          ))}
                       </View>
@@ -851,11 +851,11 @@ export function PhotoPicker({
 
       {/* Add More Button */}
       {selectedPhotos.length < 9 && (<TouchableOpacity
-        style={[
+        style={StyleSheet.flatten([
           styles.addButton,
           selectedPhotos.length >= maxPhotos && styles.addButtonDisabled,
           isProcessing && styles.addButtonDisabled
-        ]}
+        ])}
         onPress={pickImages}
         activeOpacity={0.8}
         disabled={selectedPhotos.length >= maxPhotos || isProcessing}
@@ -865,10 +865,10 @@ export function PhotoPicker({
           size={24}
           color={selectedPhotos.length >= maxPhotos || isProcessing ? '#999' : '#5856D6'}
         />
-        <Text style={[
+        <Text style={StyleSheet.flatten([
           styles.addButtonText,
           (selectedPhotos.length >= maxPhotos || isProcessing) && styles.addButtonTextDisabled
-        ]}>
+        ])}>
           {isProcessing 
             ? `Processing... (${processingProgress.current}/${processingProgress.total})`
             : selectedPhotos.length === 0 ? 'Add Photos' : 'Add More'}
@@ -881,14 +881,14 @@ export function PhotoPicker({
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
             <View 
-              style={[
+              style={StyleSheet.flatten([
                 styles.progressFill,
                 { 
                   width: processingProgress.total > 0 
                     ? `${(processingProgress.current / processingProgress.total) * 100}%` 
                     : '0%' 
                 }
-              ]} 
+              ])} 
             />
           </View>
           <Text style={styles.progressText}>
@@ -924,7 +924,7 @@ export function PhotoPicker({
           {selectedPhotos.filter(p => p.status === 'duplicate').length > 0 && (
             <View style={styles.statItem}>
               <Ionicons name="copy-outline" size={14} color="#FF3B30" />
-              <Text style={[styles.statText, { color: '#FF3B30' }]}>
+              <Text style={StyleSheet.flatten([styles.statText, { color: '#FF3B30' }])}>
                 {selectedPhotos.filter(p => p.status === 'duplicate').length} duplicates
               </Text>
             </View>
@@ -935,10 +935,10 @@ export function PhotoPicker({
       {/* Confirm Upload Button - handles upload directly (Story 3.2 Subtask 3.4) */}
       {showConfirmPanel && selectedPhotos.length > 0 && !isProcessing && (
         <TouchableOpacity
-          style={[
+          style={StyleSheet.flatten([
             styles.confirmUploadButton,
             (isUploading || uploadState === 'uploading') && styles.confirmButtonDisabled
-          ]}
+          ])}
           onPress={() => handleDirectUpload(selectedPhotos[0])}
           activeOpacity={0.8}
           disabled={isUploading || uploadState === 'uploading'}
@@ -973,11 +973,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#5856D6',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 6,
+          elevation: 8,
+        }),
   },
   pickButtonInner: {
     alignItems: 'center',
@@ -1068,11 +1072,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }),
   },
   clusterHeader: {
     flexDirection: 'row',
@@ -1341,11 +1349,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E5EA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }),
   },
   confirmPanelTitle: {
     fontSize: 18,

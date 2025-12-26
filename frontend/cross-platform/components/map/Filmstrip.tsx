@@ -58,11 +58,11 @@ function FilmstripItem({ memory, onPress, onLongPress, isSelected }: FilmstripIt
 
   return (
     <TouchableOpacity
-      style={[
+      style={StyleSheet.flatten([
         styles.thumbnailContainer,
         isSelected && styles.thumbnailSelected,
         isSelected && { borderColor: color },
-      ]}
+      ])}
       onPress={onPress}
       onLongPress={onLongPress}
       activeOpacity={0.8}
@@ -75,13 +75,13 @@ function FilmstripItem({ memory, onPress, onLongPress, isSelected }: FilmstripIt
           transition={150}
         />
       ) : (
-        <View style={[styles.thumbnailPlaceholder, { backgroundColor: color + '30' }]}>
+        <View style={StyleSheet.flatten([styles.thumbnailPlaceholder, { backgroundColor: color + '30' }])}>
           <Ionicons name={icon} size={28} color={color} />
         </View>
       )}
 
       {/* Type indicator badge */}
-      <View style={[styles.typeBadge, { backgroundColor: color }]}>
+      <View style={StyleSheet.flatten([styles.typeBadge, { backgroundColor: color }])}>
         <Ionicons name={typeIcon} size={10} color="#FFF" />
       </View>
 
@@ -236,11 +236,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 10,
+        }),
   },
   listContent: {
     paddingHorizontal: 16,
@@ -280,11 +284,15 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.2)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2,
+          elevation: 2,
+        }),
   },
   voiceIndicator: {
     position: 'absolute',

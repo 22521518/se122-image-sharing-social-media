@@ -105,13 +105,13 @@ export default function OnboardingScreen() {
     >
       <ThemedView style={styles.container}>
         <Animated.View
-          style={[
+          style={StyleSheet.flatten([
             styles.content,
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
             },
-          ]}
+          ])}
         >
           <View style={styles.header}>
             <ThemedText style={styles.emoji}>🌍✨</ThemedText>
@@ -127,14 +127,14 @@ export default function OnboardingScreen() {
             </ThemedText>
             
             <TextInput
-              style={[
+              style={StyleSheet.flatten([
                 styles.input,
                 { 
                   backgroundColor: colorScheme === 'dark' ? '#1A1F3A' : '#F7FAFC',
                   color: themeColors.text,
                   borderColor: themeColors.icon
                 }
-              ]}
+              ])}
               placeholder="Share your memory..."
               placeholderTextColor="#999"
               value={input}
@@ -148,7 +148,7 @@ export default function OnboardingScreen() {
 
           <View style={styles.actions}>
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: themeColors.tint }, !input.trim() && styles.buttonDisabled]}
+              style={StyleSheet.flatten([styles.button, { backgroundColor: themeColors.tint }, !input.trim() && styles.buttonDisabled])}
               onPress={handleContinue}
               disabled={!input.trim()}
             >
@@ -156,7 +156,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.button, styles.skipButton, { borderColor: themeColors.icon }]}
+              style={StyleSheet.flatten([styles.button, styles.skipButton, { borderColor: themeColors.icon }])}
               onPress={handleSkip}
             >
               <ThemedText style={{ color: themeColors.icon }}>Skip for now</ThemedText>

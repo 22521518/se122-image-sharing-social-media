@@ -153,10 +153,10 @@ export default function CreatePostModal({ visible, onClose }: CreatePostModalPro
               {submitting ? (
                 <ActivityIndicator size="small" color="#007AFF" />
               ) : (
-                <Text style={[
+                <Text style={StyleSheet.flatten([
                   styles.postButtonText, 
                   (!content.trim() && images.length === 0) && styles.disabled
-                ]}>
+                ])}>
                   Post
                 </Text>
               )}

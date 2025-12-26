@@ -13,7 +13,8 @@ import {
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const BE_PORT = process.env.EXPO_PUBLIC_API_PORT || 3000;
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || `http://localhost:${BE_PORT}`;
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -96,7 +97,7 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity
-          style={[styles.button, isLoading && styles.buttonDisabled]}
+          style={StyleSheet.flatten([styles.button, isLoading && styles.buttonDisabled])}
           onPress={handleLogin}
           disabled={isLoading}
         >
@@ -114,7 +115,7 @@ export default function LoginScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
+          style={StyleSheet.flatten([styles.googleButton, isGoogleLoading && styles.buttonDisabled])}
           onPress={handleGoogleSignIn}
           disabled={isGoogleLoading}
         >

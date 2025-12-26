@@ -9,6 +9,7 @@ import {
   Easing,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -193,10 +194,10 @@ export default function PostcardViewerScreen() {
             style={styles.lockedContainer}
           >
             <Animated.View 
-              style={[
+              style={StyleSheet.flatten([
                 styles.envelope,
                 { transform: [{ translateX: lockShake }] }
-              ]}
+              ])}
             >
               <View style={styles.envelopeTop} />
               <View style={styles.envelopeBody}>
@@ -220,7 +221,7 @@ export default function PostcardViewerScreen() {
             style={styles.revealContainer}
           >
             <Animated.View 
-              style={[
+              style={StyleSheet.flatten([
                 styles.envelope,
                 { 
                   transform: [
@@ -228,7 +229,7 @@ export default function PostcardViewerScreen() {
                     { rotateY: rotateInterpolate }
                   ] 
                 }
-              ]}
+              ])}
             >
               <View style={styles.envelopeTop} />
               <View style={styles.envelopeBody}>
@@ -242,13 +243,13 @@ export default function PostcardViewerScreen() {
         {/* Revealed Content */}
         {(hasRevealed || isSender) && postcard.status !== 'LOCKED' && (
           <Animated.View 
-            style={[
+            style={StyleSheet.flatten([
               styles.revealedContent,
               {
                 opacity: isSender ? 1 : contentOpacity,
                 transform: [{ scale: isSender ? 1 : contentScale }]
               }
-            ]}
+            ])}
           >
             {postcard.mediaUrl && (
               <Image 
@@ -382,11 +383,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f0e6',
     borderRadius: 8,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 5,
+        }),
   },
   envelopeTop: {
     height: '25%',
@@ -427,11 +432,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 2,
+        }),
   },
   message: {
     fontSize: 16,

@@ -288,3 +288,75 @@ model Postcard {
   @@index([status])
   @@index([unlockDate]) // For cron job querying time-locked postcards
 }
+
+// ===== MODERATION (Epic 7) =====
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+enum TargetType {
+  POST
+  COMMENT
+  USER
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  
+  reporterId  String       @map("reporter_id")
+  
+  targetType  TargetType   @map("target_type")
+  targetId    String       @map("target_id")
+  
+  reason      ReportReason
+  description String?      // Optional additional details
+  
+  status      ReportStatus @default(PENDING)
+  
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  
+  // Unique constraint: one user can only report same content once
+  @@unique([reporterId, targetType, targetId])
+  @@map("reports")
+  @@index([status])
+  @@index([targetType, targetId])
+}
+
+enum ModerationAction {
+  APPROVE   // Dismiss report, content is OK
+  HIDE      // Soft delete - hide from public view
+  DELETE    // Hard delete - remove content
+  LOCK      // Lock comments on a post
+}
+
+model ModerationLog {
+  id           String           @id @default(uuid())
+  
+  moderatorId  String           @map("moderator_id")
+  
+  reportId     String?          @map("report_id")
+  
+  targetType   TargetType       @map("target_type")
+  targetId     String           @map("target_id")
+  
+  action       ModerationAction
+  notes        String?          // Optional notes about the action
+  
+  createdAt    DateTime         @default(now()) @map("created_at")
+  
+  @@map("moderation_logs")
+  @@index([moderatorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}

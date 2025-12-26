@@ -154,7 +154,7 @@ export default function CreatePostScreen() {
           {submitting ? (
             <ActivityIndicator size="small" color="#007AFF" />
           ) : (
-            <Text style={[styles.postButton, (!content.trim() && images.length === 0) && styles.disabled]}>Post</Text>
+            <Text style={StyleSheet.flatten([styles.postButton, (!content.trim() && images.length === 0) && styles.disabled])}>Post</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -187,7 +187,7 @@ export default function CreatePostScreen() {
 
         {/* Content Input Area with Hashtag Highlighting */}
         <View style={styles.inputContainer}>
-          <Text style={[styles.input, styles.overlayText]} suppressHighlighting>
+          <Text style={StyleSheet.flatten([styles.input, styles.overlayText])} suppressHighlighting>
              {content.split(/(#\w+)/).map((part, index) => {
                if (part.match(/^#\w+$/)) {
                  return <Text key={index} style={styles.hashtag}>{part}</Text>;
@@ -196,7 +196,7 @@ export default function CreatePostScreen() {
              })}
           </Text>
           <TextInput
-            style={[styles.input, styles.transparentInput]}
+            style={StyleSheet.flatten([styles.input, styles.transparentInput])}
             multiline
             placeholder="What's on your mind?"
             placeholderTextColor="#999"

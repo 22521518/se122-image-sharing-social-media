@@ -37,7 +37,8 @@ class MockXMLHttpRequest {
 
 describe('BatchUploadQueue', () => {
   let queue: BatchUploadQueue;
-  const mockApiUrl = 'http://localhost:3000';
+  const BE_PORT = process.env.EXPO_PUBLIC_API_PORT || 3000;
+  const mockApiUrl = `http://localhost:${BE_PORT}`;
   const mockAuthToken = 'test-token-123';
 
   beforeEach(() => {

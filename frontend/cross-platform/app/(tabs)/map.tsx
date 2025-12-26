@@ -1,41 +1,54 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
-import {
-  View,
-  StyleSheet,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Image,
-  TextInput,
-  useWindowDimensions,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feeling, FeelingSelector } from '@/components/FeelingSelector';
+import { PhotoPicker } from '@/components/PhotoPicker';
+import { VoiceRecorder } from '@/components/VoiceRecorder';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { useAuth } from '@/context/AuthContext';
+import { Memory, MemoryUploadState, useMemories } from '@/context/MemoriesContext';
+import { MapRegion, useMapViewport } from '@/hooks/useMapViewport';
+import { createInitialRegion } from '@/utils/geo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { VoiceRecorder } from '@/components/VoiceRecorder';
-import { PhotoPicker } from '@/components/PhotoPicker';
-import { FeelingSelector, Feeling } from '@/components/FeelingSelector';
-import { useMemories, Memory, MemoryUploadState } from '@/context/MemoriesContext';
-import { useAuth } from '@/context/AuthContext';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useMapViewport, MapRegion } from '@/hooks/useMapViewport';
-import { createInitialRegion } from '@/utils/geo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 // Platform-agnostic map component - Metro resolves to .web.tsx or .native.tsx
 import { MapComponent, MapComponentRef } from '@/components/MapComponent';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { VisualMemoryCard } from '@/components/VisualMemoryCard';
 import { Filmstrip, FilmstripRef } from '@/components/map/Filmstrip';
-import { TeleportButton } from '@/components/map/TeleportButton';
 import { ShutterFlash } from '@/components/map/ShutterFlash';
-import { useTeleport } from '@/hooks/useTeleport';
+import { TeleportButton } from '@/components/map/TeleportButton';
 import { MemoryDetailModal } from '@/components/memories/MemoryDetailModal';
-import { getMemoryColor, getMemoryIcon, getTypeIcon } from '@/constants/MemoryUI';
+import { getMemoryColor, getMemoryIcon } from '@/constants/MemoryUI';
+import { useTeleport } from '@/hooks/useTeleport';
 import { analytics } from '@/services/analytics';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native-gesture-handler';
+
+// Feeling filter constants (matching web UI)
+const FEELINGS = ['JOY', 'CALM', 'ENERGETIC', 'INSPIRED', 'MELANCHOLY'] as const;
+type FeelingType = typeof FEELINGS[number] | 'ALL';
+
+const feelingEmojis: Record<typeof FEELINGS[number], string> = {
+  JOY: '😊',
+  CALM: '😌',
+  ENERGETIC: '⚡',
+  INSPIRED: '✨',
+  MELANCHOLY: '🌧️',
+};
 
 type CaptureMode = 'voice' | 'photo' | 'feeling';
 type ActivePanel = 'none' | 'photo-confirm' | 'feeling-pin';
@@ -66,7 +79,7 @@ function UploadStatus({ state }: { state: MemoryUploadState }) {
   const config = statusConfig[state];
 
   return (
-    <View style={[styles.uploadStatus, { backgroundColor: config.color }]}>
+    <View style={StyleSheet.flatten([styles.uploadStatus, { backgroundColor: config.color }])}>
       <Ionicons name={config.icon} size={16} color="#FFFFFF" />
       <Text style={styles.uploadStatusText}>{config.text}</Text>
     </View>
@@ -84,34 +97,34 @@ function CaptureModeToggle({
   disabled?: boolean;
 }) {
   return (
-    <View style={[styles.modeToggle, disabled && styles.modeToggleDisabled]}>
+    <View style={StyleSheet.flatten([styles.modeToggle, disabled && styles.modeToggleDisabled])}>
       <TouchableOpacity
-        style={[styles.modeButton, mode === 'voice' && styles.modeButtonActive]}
+        style={StyleSheet.flatten([styles.modeButton, mode === 'voice' && styles.modeButtonActive])}
         onPress={() => onModeChange('voice')}
         disabled={disabled}
       >
         <Ionicons name="mic" size={20} color={mode === 'voice' ? '#FFFFFF' : '#666'} />
-        <Text style={[styles.modeButtonText, mode === 'voice' && styles.modeButtonTextActive]}>
+        <Text style={StyleSheet.flatten([styles.modeButtonText, mode === 'voice' && styles.modeButtonTextActive])}>
           Voice
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.modeButton, mode === 'photo' && styles.modeButtonActive]}
+        style={StyleSheet.flatten([styles.modeButton, mode === 'photo' && styles.modeButtonActive])}
         onPress={() => onModeChange('photo')}
         disabled={disabled}
       >
         <Ionicons name="image" size={20} color={mode === 'photo' ? '#FFFFFF' : '#666'} />
-        <Text style={[styles.modeButtonText, mode === 'photo' && styles.modeButtonTextActive]}>
+        <Text style={StyleSheet.flatten([styles.modeButtonText, mode === 'photo' && styles.modeButtonTextActive])}>
           Photo
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.modeButton, mode === 'feeling' && styles.modeButtonActive]}
+        style={StyleSheet.flatten([styles.modeButton, mode === 'feeling' && styles.modeButtonActive])}
         onPress={() => onModeChange('feeling')}
         disabled={disabled}
       >
         <Ionicons name="heart" size={20} color={mode === 'feeling' ? '#FFFFFF' : '#666'} />
-        <Text style={[styles.modeButtonText, mode === 'feeling' && styles.modeButtonTextActive]}>
+        <Text style={StyleSheet.flatten([styles.modeButtonText, mode === 'feeling' && styles.modeButtonTextActive])}>
           Feeling
         </Text>
       </TouchableOpacity>
@@ -125,7 +138,7 @@ function MemoryListItem({ memory }: { memory: Memory }) {
   const getColor = () => getMemoryColor(memory);
 
   return (
-    <View style={[styles.memoryItem, { borderLeftColor: getColor() }]}>
+    <View style={StyleSheet.flatten([styles.memoryItem, { borderLeftColor: getColor() }])}>
       <Ionicons name={getIcon()} size={18} color={getColor()} />
       <View style={styles.memoryItemInfo}>
         {memory.title && <Text style={styles.memoryItemTitle}>{memory.title}</Text>}
@@ -134,8 +147,8 @@ function MemoryListItem({ memory }: { memory: Memory }) {
         </Text>
       </View>
       {memory.feeling && (
-        <View style={[styles.feelingBadge, { backgroundColor: getColor() + '20' }]}>
-          <Text style={[styles.feelingBadgeText, { color: getColor() }]}>{memory.feeling}</Text>
+        <View style={StyleSheet.flatten([styles.feelingBadge, { backgroundColor: getColor() + '20' }])}>
+          <Text style={StyleSheet.flatten([styles.feelingBadgeText, { color: getColor() }])}>{memory.feeling}</Text>
         </View>
       )}
     </View>
@@ -225,7 +238,7 @@ export default function MapScreen() {
          id: memory.id,
          userId: '', // Not needed for display usually or we don't have it
          type: type as any,
-         mediaUrl: memory.voiceUrl || memory.imageUrl || undefined,
+         mediaUrl: memory.voiceUrl || memory.imageUrl || null,
          feeling: memory.feeling || undefined,
          title: memory.title || undefined,
          latitude: memory.latitude,
@@ -234,7 +247,8 @@ export default function MapScreen() {
          privacy: 'public', // Assumed
          likeCount: 0,
          commentCount: 0,
-         liked: false
+         liked: false,
+         updatedAt: new Date().toISOString()
       };
       
       setDetailMemory(fullMemory);
@@ -271,6 +285,20 @@ export default function MapScreen() {
   const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
   // Story 6.5: Memory detail modal from map marker press
   const [detailMemory, setDetailMemory] = useState<Memory | null>(null);
+
+  // Feeling filter and search state (matching web UI)
+  const [feelingFilter, setFeelingFilter] = useState<FeelingType>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filtered memories based on feeling and search
+  const filteredMemories = useMemo(() => {
+    return mapMemories.filter(m => {
+      const matchesFeeling = feelingFilter === 'ALL' || m.feeling === feelingFilter;
+      const matchesSearch = !searchQuery || 
+        m.title?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesFeeling && matchesSearch;
+    });
+  }, [mapMemories, feelingFilter, searchQuery]);
   const filmstripRef = useRef<FilmstripRef>(null);
 
   // Initialize viewport on mount and when authenticated
@@ -505,7 +533,7 @@ export default function MapScreen() {
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.confirmButton, !selectedFeeling && styles.buttonDisabled]}
+              style={StyleSheet.flatten([styles.confirmButton, !selectedFeeling && styles.buttonDisabled])}
               onPress={handleConfirmFeelingPin}
               disabled={!selectedFeeling || uploadState === 'uploading'}
             >
@@ -611,7 +639,7 @@ export default function MapScreen() {
 
         <View style={styles.desktopOverlayContainer} pointerEvents="box-none">
           <View style={styles.desktopLeftPanelWide}>
-            <View style={[styles.header, { borderBottomWidth: 0, paddingBottom: 0 }]}>
+            <View style={StyleSheet.flatten([styles.header, { borderBottomWidth: 0, paddingBottom: 0 }])}>
               <ThemedText type="title" style={styles.headerTitle}>
                 My Living Map
               </ThemedText>
@@ -670,10 +698,10 @@ export default function MapScreen() {
                     <View style={styles.desktopPostContent}>
                       <View style={styles.desktopPostHeader}>
                         <View
-                          style={[
+                          style={StyleSheet.flatten([
                             styles.desktopPostIcon,
                             { backgroundColor: memory.type === 'voice' ? '#FF6B6B' : memory.type === 'photo' ? '#5856D6' : '#A855F7' },
-                          ]}
+                          ])}
                         >
                           <Ionicons
                             name={memory.type === 'voice' ? 'mic' : memory.type === 'photo' ? 'image' : 'heart'}
@@ -685,7 +713,7 @@ export default function MapScreen() {
                           {memory.title || `${memory.type === 'voice' ? 'Voice' : memory.type === 'photo' ? 'Photo' : 'Feeling'} Memory`}
                         </Text>
                         {memory.feeling && (
-                          <View style={[styles.desktopPostFeeling, { backgroundColor: '#F0EFFF' }]}>
+                          <View style={StyleSheet.flatten([styles.desktopPostFeeling, { backgroundColor: '#F0EFFF' }])}>
                             <Text style={styles.desktopPostFeelingText}>{memory.feeling}</Text>
                           </View>
                         )}
@@ -700,7 +728,7 @@ export default function MapScreen() {
             </ScrollView>
           </View>
 
-          <View style={[styles.desktopRightPanel, !isActionPanelOpen && styles.desktopRightPanelCollapsed]}>
+          <View style={StyleSheet.flatten([styles.desktopRightPanel, !isActionPanelOpen && styles.desktopRightPanelCollapsed])}>
             <TouchableOpacity
               style={styles.actionPanelToggle}
               onPress={() => setIsActionPanelOpen(!isActionPanelOpen)}
@@ -830,7 +858,77 @@ export default function MapScreen() {
           style={{ zIndex: 100 }}
         >
           <BottomSheetView style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Memories</Text>
+            {/* Filmstrip Header - Matching web UI */}
+            <View style={styles.filmstripHeader}>
+              {/* Title Row with Memory Count */}
+              <View style={styles.filmstripTitleRow}>
+                <Text style={styles.sheetTitle}>Your Memories</Text>
+                <Text style={styles.memoryCount}>
+                  {filteredMemories.length} memories
+                </Text>
+              </View>
+
+              {/* Feeling Filter Badges */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterBadgesContainer}
+                style={styles.filterBadgesScroll}
+              >
+                <TouchableOpacity
+                  style={StyleSheet.flatten([
+                    styles.filterBadge,
+                    feelingFilter === 'ALL' && styles.filterBadgeActive,
+                  ])}
+                  onPress={() => setFeelingFilter('ALL')}
+                >
+                  <Text
+                    style={StyleSheet.flatten([
+                      styles.filterBadgeText,
+                      feelingFilter === 'ALL' && styles.filterBadgeTextActive,
+                    ])}
+                  >
+                    All
+                  </Text>
+                </TouchableOpacity>
+                {FEELINGS.map((feeling) => (
+                  <TouchableOpacity
+                    key={feeling}
+                    style={StyleSheet.flatten([
+                      styles.filterBadge,
+                      feelingFilter === feeling && styles.filterBadgeActive,
+                    ])}
+                    onPress={() => setFeelingFilter(feeling)}
+                  >
+                    <Text
+                      style={StyleSheet.flatten([
+                        styles.filterBadgeText,
+                        feelingFilter === feeling && styles.filterBadgeTextActive,
+                      ])}
+                    >
+                      {feelingEmojis[feeling]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Search Input */}
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={16} color="#999" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search memories..."
+                  placeholderTextColor="#999"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <Ionicons name="close-circle" size={18} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </BottomSheetView>
 
           {/* Di chuyển ScrollView xuống đây, ngoài BottomSheetView */}
@@ -845,7 +943,7 @@ export default function MapScreen() {
               bounces={false}
             >
               <TouchableOpacity
-                style={[styles.actionBtn, activeMobileTab === 'posts' && styles.actionBtnActive]}
+                style={StyleSheet.flatten([styles.actionBtn, activeMobileTab === 'posts' && styles.actionBtnActive])}
                 onPress={() =>
                   setActiveMobileTab(activeMobileTab === 'posts' ? 'browse' : 'posts')
                 }
@@ -856,17 +954,17 @@ export default function MapScreen() {
                   color={activeMobileTab === 'posts' ? '#FFF' : '#5856D6'}
                 />
                 <Text
-                  style={[
+                  style={StyleSheet.flatten([
                     styles.actionBtnText,
                     activeMobileTab === 'posts' && styles.actionBtnTextActive,
-                  ]}
+                  ])}
                 >
                   Posts
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.actionBtn, activeMobileTab === 'voice' && styles.actionBtnActive]}
+                style={StyleSheet.flatten([styles.actionBtn, activeMobileTab === 'voice' && styles.actionBtnActive])}
                 onPress={() =>
                   setActiveMobileTab(activeMobileTab === 'voice' ? 'browse' : 'voice')
                 }
@@ -877,17 +975,17 @@ export default function MapScreen() {
                   color={activeMobileTab === 'voice' ? '#FFF' : '#5856D6'}
                 />
                 <Text
-                  style={[
+                  style={StyleSheet.flatten([
                     styles.actionBtnText,
                     activeMobileTab === 'voice' && styles.actionBtnTextActive,
-                  ]}
+                  ])}
                 >
                   Voice
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.actionBtn, activeMobileTab === 'photo' && styles.actionBtnActive]}
+                style={StyleSheet.flatten([styles.actionBtn, activeMobileTab === 'photo' && styles.actionBtnActive])}
                 onPress={() =>
                   setActiveMobileTab(activeMobileTab === 'photo' ? 'browse' : 'photo')
                 }
@@ -898,20 +996,20 @@ export default function MapScreen() {
                   color={activeMobileTab === 'photo' ? '#FFF' : '#5856D6'}
                 />
                 <Text
-                  style={[
+                  style={StyleSheet.flatten([
                     styles.actionBtnText,
                     activeMobileTab === 'photo' && styles.actionBtnTextActive,
-                  ]}
+                  ])}
                 >
                   Photo
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[
+                style={StyleSheet.flatten([
                   styles.actionBtn,
                   activeMobileTab === 'feeling' && styles.actionBtnActive,
-                ]}
+                ])}
                 onPress={() =>
                   setActiveMobileTab(activeMobileTab === 'feeling' ? 'browse' : 'feeling')
                 }
@@ -922,10 +1020,10 @@ export default function MapScreen() {
                   color={activeMobileTab === 'feeling' ? '#FFF' : '#5856D6'}
                 />
                 <Text
-                  style={[
+                  style={StyleSheet.flatten([
                     styles.actionBtnText,
                     activeMobileTab === 'feeling' && styles.actionBtnTextActive,
-                  ]}
+                  ])}
                 >
                   Feeling
                 </Text>
@@ -958,8 +1056,8 @@ export default function MapScreen() {
                 snapToInterval={SNAP_INTERVAL}
                 snapToAlignment="center"
               >
-                {mapMemories.length === 0 ? (
-                  <View style={[styles.emptyPostsContainer, { width: width - INSET_X * 2 }]}>
+                {filteredMemories.length === 0 ? (
+                  <View style={StyleSheet.flatten([styles.emptyPostsContainer, { width: width - INSET_X * 2 }])}>
                     <Ionicons name="newspaper-outline" size={48} color="#CCC" />
                     <Text style={styles.emptyPostsText}>No posts yet</Text>
                     <Text style={styles.emptyPostsSubtext}>
@@ -967,7 +1065,7 @@ export default function MapScreen() {
                     </Text>
                   </View>
                 ) : (
-                  mapMemories.map((m) => (
+                  filteredMemories.map((m) => (
                     <VisualMemoryCard
                       key={m.id}
                       memory={m}
@@ -1016,7 +1114,7 @@ export default function MapScreen() {
                       How are you feeling right now?
                     </ThemedText>
                     <TouchableOpacity
-                      style={[styles.dropPinButton, { width: '100%' }]}
+                      style={StyleSheet.flatten([styles.dropPinButton, { width: '100%' }])}
                       onPress={() => {
                         handleDropFeelingPin();
                         setActiveMobileTab('browse');
@@ -1043,7 +1141,7 @@ export default function MapScreen() {
                 snapToInterval={SNAP_INTERVAL}
                 snapToAlignment="center"
               >
-                {mapMemories.map((m) => (
+                {filteredMemories.map((m) => (
                   <VisualMemoryCard
                     key={m.id}
                     memory={m}
@@ -1153,11 +1251,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }),
   },
   mapLoadingText: {
     fontSize: 12,
@@ -1203,11 +1305,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
     margin: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.15,
+          shadowRadius: 12,
+          elevation: 8,
+        }),
     maxHeight: '90%',
   },
   memoriesListWide: {
@@ -1221,11 +1327,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          elevation: 3,
+        }),
   },
   desktopPostImage: {
     width: '100%',
@@ -1311,11 +1421,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderLeftWidth: 4,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 1,
+        }),
   },
   memoryItemInfo: {
     flex: 1,
@@ -1570,11 +1684,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     padding: 12,
     borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 4,
+          elevation: 5,
+        }),
     zIndex: 50,
   },
   sheetHeader: {
@@ -1620,11 +1738,15 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 20,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.2)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 20,
+        }),
     zIndex: 200,
   },
   mobileCardsContainer: {
@@ -1650,11 +1772,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 8,
+        }),
     display: 'flex',
     flexDirection: 'column',
     maxHeight: '100%',
@@ -1665,11 +1791,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     alignSelf: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 8,
+        }),
   },
   mobileHeaderRow: {
     flexDirection: 'row',
@@ -1759,11 +1889,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 2,
+        }),
   },
   postItemHeader: {
     flexDirection: 'row',
@@ -1800,5 +1934,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#5856D6',
+  },
+
+  // Filmstrip Header Styles (matching web UI)
+  filmstripHeader: {
+    gap: 12,
+  },
+  filmstripTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  memoryCount: {
+    fontSize: 12,
+    color: '#888',
+  },
+  
+  // Filter Badges
+  filterBadgesScroll: {
+    flexGrow: 0,
+  },
+  filterBadgesContainer: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  filterBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    backgroundColor: '#FFF',
+  },
+  filterBadgeActive: {
+    backgroundColor: '#5856D6',
+    borderColor: '#5856D6',
+  },
+  filterBadgeText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+  },
+  filterBadgeTextActive: {
+    color: '#FFF',
+  },
+
+  // Search Input
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 36,
+    gap: 8,
+  },
+  searchIcon: {
+    marginRight: 4,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    padding: 0,
   },
 });

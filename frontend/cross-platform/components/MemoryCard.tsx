@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Feeling, getFeelingGradient, getFeelingConfig } from './FeelingSelector';
@@ -96,9 +96,9 @@ export function MemoryCard({
   const feelingConfig = feeling ? getFeelingConfig(feeling) : null;
   
   const cardContent = (
-    <View style={[styles.card, compact && styles.cardCompact]}>
+    <View style={StyleSheet.flatten([styles.card, compact && styles.cardCompact])}>
       {/* Visual area - either gradient placeholder or would be image */}
-      <View style={[styles.visualContainer, compact && styles.visualContainerCompact]}>
+      <View style={StyleSheet.flatten([styles.visualContainer, compact && styles.visualContainerCompact])}>
         {needsPlaceholder ? (
           <LinearGradient
             colors={gradientColors}
@@ -108,8 +108,8 @@ export function MemoryCard({
           >
             {/* Abstract decorative elements */}
             <View style={styles.abstractDecor}>
-              <View style={[styles.circle, styles.circle1, { opacity: 0.3 }]} />
-              <View style={[styles.circle, styles.circle2, { opacity: 0.2 }]} />
+              <View style={StyleSheet.flatten([styles.circle, styles.circle1, { opacity: 0.3 }])} />
+              <View style={StyleSheet.flatten([styles.circle, styles.circle2, { opacity: 0.2 }])} />
             </View>
             
             {/* Feeling icon */}
@@ -146,9 +146,9 @@ export function MemoryCard({
           
           <View style={styles.metaRow}>
             {feelingConfig && (
-              <View style={[styles.feelingTag, { backgroundColor: `${gradientColors[0]}20` }]}>
+              <View style={StyleSheet.flatten([styles.feelingTag, { backgroundColor: `${gradientColors[0]}20` }])}>
                 <Ionicons name={feelingConfig.icon} size={12} color={gradientColors[0]} />
-                <Text style={[styles.feelingTagText, { color: gradientColors[0] }]}>
+                <Text style={StyleSheet.flatten([styles.feelingTagText, { color: gradientColors[0] }])}>
                   {feelingConfig.label}
                 </Text>
               </View>
@@ -188,11 +188,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 4,
+        }),
     marginBottom: 16,
   },
   cardCompact: {

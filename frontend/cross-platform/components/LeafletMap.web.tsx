@@ -143,7 +143,7 @@ export default function LeafletMap({
   const initialZoom = getZoomFromDelta(initialRegion.latitudeDelta);
 
   return (
-    <View style={[styles.mapContainer, containerStyle]}>
+    <View style={StyleSheet.flatten([styles.mapContainer, containerStyle])}>
       <MapContainer
         center={[initialRegion.latitude, initialRegion.longitude]}
         zoom={initialZoom}
@@ -252,10 +252,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    // @ts-ignore - web-only boxShadow
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     zIndex: 1000,
   },
   mapLoadingText: {

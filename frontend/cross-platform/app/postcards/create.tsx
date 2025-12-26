@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  FlatList,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -16,6 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 import postcardsService, { CreatePostcardData } from '../../services/postcards.service';
 import * as ImagePicker from 'expo-image-picker';
 import { mediaService } from '../../services/media.service';
+import { socialService, UserSearchResult } from '../../services/social.service';
 
 type UnlockType = 'date' | 'location';
 
@@ -28,6 +31,13 @@ export default function PostcardComposerScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  
+  // Recipient selection
+  const [recipientId, setRecipientId] = useState<string | null>(null);
+  const [recipientName, setRecipientName] = useState<string>('Yourself');
+  const [showFriendPicker, setShowFriendPicker] = useState(false);
+  const [following, setFollowing] = useState<UserSearchResult[]>([]);
+  const [isLoadingFriends, setIsLoadingFriends] = useState(false);
   
   // Unlock condition
   const [unlockType, setUnlockType] = useState<UnlockType>('date');
@@ -43,6 +53,26 @@ export default function PostcardComposerScreen() {
   // Submission
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Load following list when friend picker is opened
+  useEffect(() => {
+    if (showFriendPicker && following.length === 0 && !isLoadingFriends) {
+      loadFollowing();
+    }
+  }, [showFriendPicker]);
+
+  const loadFollowing = async () => {
+    try {
+      setIsLoadingFriends(true);
+      if (!accessToken) return;
+      const users = await socialService.getFollowing(accessToken);
+      setFollowing(users);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load friends list');
+    } finally {
+      setIsLoadingFriends(false);
+    }
+  };
 
   const getUnlockDate = () => {
     const date = new Date();
@@ -131,7 +161,7 @@ export default function PostcardComposerScreen() {
       const data: CreatePostcardData = {
         message: message || undefined,
         mediaUrl: mediaUrl || undefined,
-        // Self-postcard (no recipientId means self)
+        recipientId: recipientId || undefined, // null = self
       };
 
       if (unlockType === 'date') {
@@ -146,10 +176,10 @@ export default function PostcardComposerScreen() {
 
       Alert.alert(
         '🎉 Postcard Sent!',
-        `Your postcard to yourself has been locked and will be delivered ${
+        `Your postcard to ${recipientName} has been locked and will be delivered ${
           unlockType === 'date' 
             ? `in ${daysFromNow} days` 
-            : 'when you arrive at the location'
+            : 'when they arrive at the location'
         }.`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
@@ -184,6 +214,105 @@ export default function PostcardComposerScreen() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSelectFriend = (friend: UserSearchResult) => {
+    setRecipientId(friend.id);
+    setRecipientName(friend.name || 'Friend');
+    setShowFriendPicker(false);
+  };
+
+  const handleSelectSelf = () => {
+    setRecipientId(null);
+    setRecipientName('Yourself');
+    setShowFriendPicker(false);
+  };
+
+  // Friend Picker Modal
+  const renderFriendPicker = () => {
+    if (!showFriendPicker) return null;
+
+    return (
+      <Modal
+        visible={showFriendPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFriendPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.friendPickerModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Recipient</Text>
+              <TouchableOpacity onPress={() => setShowFriendPicker(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Self option */}
+            <TouchableOpacity
+              style={StyleSheet.flatten([styles.friendItem, !recipientId && styles.friendItemSelected])}
+              onPress={handleSelectSelf}
+            >
+              <View style={styles.friendAvatar}>
+                {(user as any)?.avatarUrl ? (
+                  <Image source={{ uri: (user as any).avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Ionicons name="person" size={24} color="#999" />
+                )}
+              </View>
+              <View style={styles.friendInfo}>
+                <Text style={styles.friendName}>{user?.name || 'You'} (Self)</Text>
+                <Text style={styles.friendBio}>Send to your future self</Text>
+              </View>
+              {!recipientId && (
+                <Ionicons name="checkmark-circle" size={24} color="#007AFF" />
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {isLoadingFriends ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text style={styles.loadingText}>Loading friends...</Text>
+              </View>
+            ) : following.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="people-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No friends yet</Text>
+                <Text style={styles.emptySubtext}>Follow users to send them postcards!</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={following}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={StyleSheet.flatten([styles.friendItem, recipientId === item.id && styles.friendItemSelected])}
+                    onPress={() => handleSelectFriend(item)}
+                  >
+                    <View style={styles.friendAvatar}>
+                      {item.avatarUrl ? (
+                        <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} />
+                      ) : (
+                        <Ionicons name="person" size={24} color="#999" />
+                      )}
+                    </View>
+                    <View style={styles.friendInfo}>
+                      <Text style={styles.friendName}>{item.name || 'Anonymous'}</Text>
+                      {item.bio && <Text style={styles.friendBio}>{item.bio}</Text>}
+                    </View>
+                    {recipientId === item.id && (
+                      <Ionicons name="checkmark-circle" size={24} color="#007AFF" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   // Preview Modal
@@ -273,7 +402,7 @@ export default function PostcardComposerScreen() {
         <Text style={styles.sectionLabel}>Unlock When</Text>
         <View style={styles.toggleContainer}>
           <TouchableOpacity
-            style={[styles.toggleButton, unlockType === 'date' && styles.toggleActive]}
+            style={StyleSheet.flatten([styles.toggleButton, unlockType === 'date' && styles.toggleActive])}
             onPress={() => setUnlockType('date')}
           >
             <Ionicons 
@@ -281,12 +410,12 @@ export default function PostcardComposerScreen() {
               size={20} 
               color={unlockType === 'date' ? '#fff' : '#666'} 
             />
-            <Text style={[styles.toggleText, unlockType === 'date' && styles.toggleTextActive]}>
+            <Text style={StyleSheet.flatten([styles.toggleText, unlockType === 'date' && styles.toggleTextActive])}>
               By Date
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.toggleButton, unlockType === 'location' && styles.toggleActive]}
+            style={StyleSheet.flatten([styles.toggleButton, unlockType === 'location' && styles.toggleActive])}
             onPress={() => setUnlockType('location')}
           >
             <Ionicons 
@@ -294,7 +423,7 @@ export default function PostcardComposerScreen() {
               size={20} 
               color={unlockType === 'location' ? '#fff' : '#666'} 
             />
-            <Text style={[styles.toggleText, unlockType === 'location' && styles.toggleTextActive]}>
+            <Text style={StyleSheet.flatten([styles.toggleText, unlockType === 'location' && styles.toggleTextActive])}>
               By Location
             </Text>
           </TouchableOpacity>
@@ -309,10 +438,10 @@ export default function PostcardComposerScreen() {
             {[7, 30, 90, 180, 365].map(days => (
               <TouchableOpacity
                 key={days}
-                style={[styles.daysButton, daysFromNow === days && styles.daysButtonActive]}
+                style={StyleSheet.flatten([styles.daysButton, daysFromNow === days && styles.daysButtonActive])}
                 onPress={() => setDaysFromNow(days)}
               >
-                <Text style={[styles.daysButtonText, daysFromNow === days && styles.daysButtonTextActive]}>
+                <Text style={StyleSheet.flatten([styles.daysButtonText, daysFromNow === days && styles.daysButtonTextActive])}>
                   {days < 30 ? `${days}d` : days < 365 ? `${days / 30}mo` : '1yr'}
                 </Text>
               </TouchableOpacity>
@@ -351,10 +480,10 @@ export default function PostcardComposerScreen() {
               {[50, 100, 200, 500].map(r => (
                 <TouchableOpacity
                   key={r}
-                  style={[styles.radiusButton, unlockRadius === r && styles.radiusButtonActive]}
+                  style={StyleSheet.flatten([styles.radiusButton, unlockRadius === r && styles.radiusButtonActive])}
                   onPress={() => setUnlockRadius(r)}
                 >
-                  <Text style={[styles.radiusButtonText, unlockRadius === r && styles.radiusButtonTextActive]}>
+                  <Text style={StyleSheet.flatten([styles.radiusButtonText, unlockRadius === r && styles.radiusButtonTextActive])}>
                     {r}m
                   </Text>
                 </TouchableOpacity>
@@ -364,12 +493,17 @@ export default function PostcardComposerScreen() {
         </View>
       )}
 
-      {/* Note about self-postcards */}
-      <View style={styles.infoBox}>
-        <Ionicons name="information-circle-outline" size={20} color="#666" />
-        <Text style={styles.infoText}>
-          This postcard will be sent to yourself. Friend recipients coming soon!
-        </Text>
+      {/* Recipient Selector */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>Send To</Text>
+        <TouchableOpacity
+          style={styles.recipientSelector}
+          onPress={() => setShowFriendPicker(true)}
+        >
+          <Ionicons name="person" size={20} color="#007AFF" />
+          <Text style={styles.recipientText}>{recipientName}</Text>
+          <Ionicons name="chevron-down" size={20} color="#999" />
+        </TouchableOpacity>
       </View>
 
       {/* Action Buttons */}
@@ -383,7 +517,7 @@ export default function PostcardComposerScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.sendButton, isSubmitting && styles.sendButtonDisabled]}
+          style={StyleSheet.flatten([styles.sendButton, isSubmitting && styles.sendButtonDisabled])}
           onPress={handleSend}
           disabled={isSubmitting || isUploading}
         >
@@ -398,6 +532,7 @@ export default function PostcardComposerScreen() {
         </TouchableOpacity>
       </View>
 
+      {renderFriendPicker()}
       {renderPreview()}
     </ScrollView>
   );
@@ -678,5 +813,107 @@ const styles = StyleSheet.create({
   previewCloseText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  // Friend Picker Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  friendPickerModal: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  friendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  friendItemSelected: {
+    backgroundColor: '#f0f7ff',
+  },
+  friendAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  friendInfo: {
+    flex: 1,
+  },
+  friendName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  friendBio: {
+    fontSize: 13,
+    color: '#666',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginVertical: 8,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#666',
+    fontSize: 14,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#999',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 4,
+  },
+  recipientSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  recipientText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
   },
 });

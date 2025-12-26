@@ -59,7 +59,7 @@ Clients connect to the `/notifications` namespace:
 // Frontend (React Native / Web)
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:3000/notifications', {
+const socket = io(`http://localhost:${process.env.PORT || 3000}/notifications`, {
   auth: { token: 'jwt-token-here' },
 });
 

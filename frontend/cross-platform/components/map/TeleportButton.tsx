@@ -50,11 +50,11 @@ export function TeleportButton({
   if (variant === 'inline') {
     return (
       <TouchableOpacity
-        style={[
+        style={StyleSheet.flatten([
           styles.inlineButton,
           disabled && styles.buttonDisabled,
           style,
-        ]}
+        ])}
         onPress={onPress}
         disabled={disabled || isLoading}
         activeOpacity={0.8}
@@ -76,11 +76,11 @@ export function TeleportButton({
   // FAB variant (mobile)
   return (
     <TouchableOpacity
-      style={[
+      style={StyleSheet.flatten([
         styles.fabButton,
         disabled && styles.buttonDisabled,
         style,
-      ]}
+      ])}
       onPress={onPress}
       disabled={disabled || isLoading}
       activeOpacity={0.8}
@@ -108,11 +108,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#5856D6',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 8,
+        }),
   },
   // Inline variant (desktop/web)
   inlineButton: {
@@ -124,12 +128,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-    // Web-specific hover effect via CSS would be nice but RN doesn't support it
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.15)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
+          elevation: 4,
+        }),
   },
   inlineButtonText: {
     color: '#FFFFFF',
