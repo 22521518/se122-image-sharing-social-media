@@ -74,7 +74,7 @@ describe('PostcardsService', () => {
 
       await expect(service.create(senderId, dto)).rejects.toThrow(BadRequestException);
       await expect(service.create(senderId, dto)).rejects.toThrow(
-        'Unlock date must be at least tomorrow'
+        'Unlock date must be at least by now'
       );
     });
 

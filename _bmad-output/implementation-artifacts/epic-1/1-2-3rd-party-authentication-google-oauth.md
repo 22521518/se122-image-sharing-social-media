@@ -1,6 +1,6 @@
 # Story 1.2: 3rd Party Authentication (Google/OAuth)
 
-Status: done
+Status: reivew
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

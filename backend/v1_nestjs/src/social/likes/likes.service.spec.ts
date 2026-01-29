@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { LikesService } from './likes.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('LikesService', () => {
@@ -22,6 +23,13 @@ describe('LikesService', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ name: 'Test User' }),
+    },
+  };
+
+  const mockNotificationsService = {
+    create: jest.fn().mockResolvedValue({ id: 'notif-1' }),
   };
 
   beforeEach(async () => {
@@ -31,6 +39,10 @@ describe('LikesService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: NotificationsService,
+          useValue: mockNotificationsService,
         },
       ],
     }).compile();
@@ -66,6 +78,28 @@ describe('LikesService', () => {
         where: { id: postId },
         data: { likeCount: { increment: 1 } },
       });
+      // Verify notification was sent (AC 5)
+      expect(mockNotificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'author-789',
+          type: 'LIKE',
+          title: 'New Like',
+        })
+      );
+    });
+
+    it('should NOT send notification when user likes their own post', async () => {
+      const selfPostId = 'self-post-456';
+      const selfMockPost = { id: selfPostId, authorId: userId, likeCount: 5 }; // authorId === userId
+
+      mockPrismaService.post.findUnique.mockResolvedValue(selfMockPost);
+      mockPrismaService.like.findUnique.mockResolvedValue(null);
+      mockPrismaService.like.create.mockResolvedValue({ id: 'like-1', userId, postId: selfPostId });
+
+      await service.toggleLike(userId, selfPostId);
+
+      // Notification should NOT be called for self-likes
+      expect(mockNotificationsService.create).not.toHaveBeenCalled();
     });
 
     it('should delete a like if exists (unlike action)', async () => {

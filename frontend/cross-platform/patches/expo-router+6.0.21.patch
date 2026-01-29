@@ -1,0 +1,13 @@
+diff --git a/_ctx.web.js b/_ctx.web.js
+index 1234567..abcdefg 100644
+--- a/_ctx.web.js
++++ b/_ctx.web.js
+@@ -1,6 +1,6 @@
+ export const ctx = require.context(
+-  process.env.EXPO_ROUTER_APP_ROOT,
++  "../../app",
+   true,
+   /^(?:\.\/)(?!(?:(?:(?:.*\+api)|(?:\+middleware)|(?:\+(html|native-intent))))\.[tj]sx?$).*(?:\.android|\.ios|\.native)?\.[tj]sx?$/,
+-  process.env.EXPO_ROUTER_IMPORT_MODE
++  "sync"
+ );

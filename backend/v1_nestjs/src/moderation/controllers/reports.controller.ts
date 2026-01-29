@@ -71,11 +71,11 @@ export class ReportsController {
     const report = await this.reportsService.createReport(userId, dto);
 
     // AC 5: Handle optional user blocking
-    // Note: Block functionality will be implemented via the social graph module
-    // For now, we just acknowledge the request
+    // Note: Block functionality requires a Block model and is deferred to a future epic.
+    // The blockUser flag is accepted in the DTO but not yet implemented.
+    // When implemented: await this.graphService.blockUser(userId, targetUserId);
     if (dto.blockUser) {
-      // TODO: Integrate with social graph block functionality when available
-      // This would be: await this.graphService.blockUser(userId, targetUserId);
+      // Block implementation pending - flag is acknowledged but action is deferred
     }
 
     return {

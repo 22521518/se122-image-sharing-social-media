@@ -22,8 +22,8 @@ const MOBILE_BREAKPOINT = 640;
 const TABLET_BREAKPOINT = 1024;
 
 function getPlatformInfo(width: number): PlatformInfo {
-  // On native platforms, always treat as mobile
-  if (Platform.OS !== 'web') {
+  // On native mobile platforms (iOS/Android), treat as mobile
+  if (Platform.OS === 'ios' || Platform.OS === 'android') {
     return {
       platform: 'mobile',
       isMobile: true,
@@ -35,7 +35,7 @@ function getPlatformInfo(width: number): PlatformInfo {
     };
   }
 
-  // On web, use breakpoints
+  // On web, windows, and macos, use breakpoints
   const isMobile = width < MOBILE_BREAKPOINT;
   const isTablet = width >= MOBILE_BREAKPOINT && width < TABLET_BREAKPOINT;
   const isDesktop = width >= TABLET_BREAKPOINT;
@@ -49,8 +49,8 @@ function getPlatformInfo(width: number): PlatformInfo {
     isMobile,
     isTablet,
     isDesktop,
-    isWeb: true,
-    isNative: false,
+    isWeb: Platform.OS === 'web',
+    isNative: Platform.OS !== 'web',
     screenWidth: width,
   };
 }
@@ -62,8 +62,8 @@ export function usePlatform(): PlatformInfo {
   });
 
   useEffect(() => {
-    // Only listen for resize on web
-    if (Platform.OS !== 'web') return;
+    // Only listen for resize on non-mobile platforms
+    if (Platform.OS === 'ios' || Platform.OS === 'android') return;
 
     const handleResize = () => {
       const width = Dimensions.get('window').width;

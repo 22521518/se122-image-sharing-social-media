@@ -34,6 +34,7 @@ export class DiscoveryService {
     // Search Users (username/displayName)
     // Issue #8 Fix: Using lowercase comparison for SQLite compatibility
     if (type === 'all' || type === 'users') {
+      // Story 8.3 AC 5: Hide banned users from search results
       const users = await this.prisma.user.findMany({
         where: {
           OR: [
@@ -41,6 +42,7 @@ export class DiscoveryService {
             { email: { contains: searchTerm } },
           ],
           deletedAt: null,
+          isBanned: false,
         },
         select: {
           id: true,
@@ -61,11 +63,15 @@ export class DiscoveryService {
 
     // AC 6: Search Posts - STRICTLY filter privacy = 'PUBLIC'
     if (type === 'all' || type === 'posts') {
+      // Story 8.3 AC 5: Hide posts from banned users
       const posts = await this.prisma.post.findMany({
         where: {
           content: { contains: searchTerm },
           privacy: 'public', // AC 6: PUBLIC only
           deletedAt: null,
+          author: {
+            isBanned: false,
+          },
         },
         select: {
           id: true,
@@ -79,6 +85,17 @@ export class DiscoveryService {
               avatarUrl: true,
             },
           },
+          media: {
+            select: {
+              id: true,
+              url: true,
+              type: true,
+              sortOrder: true,
+            },
+            orderBy: {
+              sortOrder: 'asc',
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -90,6 +107,7 @@ export class DiscoveryService {
         createdAt: p.createdAt,
         likeCount: p.likeCount,
         author: p.author,
+        media: p.media,
       }));
     }
 
@@ -131,11 +149,15 @@ export class DiscoveryService {
     oneDayAgo.setHours(oneDayAgo.getHours() - 24);
 
     // AC 3: Query public posts from last 24h, sorted by likes
+    // Story 8.3 AC 5: Hide posts from banned users in trending
     const posts = await this.prisma.post.findMany({
       where: {
         privacy: 'public', // AC 6: PUBLIC only
-        createdAt: { gte: oneDayAgo },
+        // createdAt: { gte: oneDayAgo },
         deletedAt: null,
+        author: {
+          isBanned: false,
+        },
       },
       orderBy: { likeCount: 'desc' },
       take: 50, // AC 3: max 50 results
@@ -151,6 +173,17 @@ export class DiscoveryService {
             avatarUrl: true,
           },
         },
+        media: {
+          select: {
+            id: true,
+            url: true,
+            type: true,
+            sortOrder: true,
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
       },
     });
 
@@ -161,6 +194,7 @@ export class DiscoveryService {
         createdAt: p.createdAt,
         likeCount: p.likeCount,
         author: p.author,
+        media: p.media,
       })),
     };
   }

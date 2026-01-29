@@ -1,309 +1,255 @@
-import React, { useState, useCallback } from 'react';
 import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  ViewStyle,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { LikeButton } from './LikeButton';
-import { DoubleTapLike } from './DoubleTapLike';
-import { socialService, PostDetail as PostDetailType } from '@/services/social.service';
-import { useSocial } from '@/context/SocialContext';
+    ActionMenu,
+    DoubleTapLike,
+    ImageCarousel,
+    LikeButton,
+    ReportModal,
+    UserAvatar
+} from '@/components/shared';
+import { EditPostModal } from '@/components/social/EditPostModal';
+import { useAuth } from '@/context/AuthContext';
+import type { PostDetail } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
-import ReportModal from '@/components/moderation/ReportModal';
+import { formatDistanceToNow } from 'date-fns';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface PostCardProps {
-  post: PostDetailType;
-  accessToken?: string;
-  isAuthenticated?: boolean;
-  currentUserId?: string;
-  onLoginRequired?: () => void;
-  onPress?: () => void;
-  showDoubleTapLike?: boolean;
-  style?: ViewStyle;
+  post: PostDetail;
+  onLike: (postId: string) => void;
+  onComment?: (postId: string) => void;
+  onShare?: (postId: string) => void;
+  onReport?: (postId: string) => void;
+  onUpdated?: () => void;
 }
 
-/**
- * PostCard - Displays a post with author info, content, and interaction buttons
- * Supports double-tap to like on mobile
- */
-export function PostCard({
-  post,
-  accessToken,
-  isAuthenticated = false,
-  currentUserId,
-  onLoginRequired,
-  onPress,
-  showDoubleTapLike = true,
-  style,
-}: PostCardProps) {
+export function PostCard({ post, onLike, onComment, onReport, onUpdated }: PostCardProps) {
   const router = useRouter();
-  const { retryPost, deleteFailedPost } = useSocial();
-  const [liked, setLiked] = useState(post.liked);
+  const { user: currentUser } = useAuth();
+  const [isLiked, setIsLiked] = useState(post.liked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
+  const [showMenu, setShowMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const isOwnPost = currentUser?.id === post.author.id;
 
-    if (diffHours < 1) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      return diffMins <= 1 ? 'Just now' : `${diffMins}m ago`;
-    }
-    if (diffHours < 24) {
-      return `${diffHours}h ago`;
-    }
-    if (diffDays < 7) {
-      return `${diffDays}d ago`;
-    }
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // Defensive check for missing author
+  if (!post.author) {
+    console.warn('PostCard: post.author is undefined for post', post.id);
+    return null;
+  }
+
+  const handleLike = () => {
+    const newLiked = !isLiked;
+    setIsLiked(newLiked);
+    setLikeCount((prev) => (newLiked ? prev + 1 : prev - 1));
+    onLike(post.id);
   };
 
-  const handleDoubleTapLike = useCallback(async () => {
-    if (!isAuthenticated || !accessToken) {
-      onLoginRequired?.();
-      return;
-    }
-
-    // If not liked, like it (double-tap always likes, never unlikes)
-    if (!liked) {
-      // Optimistic update
-      setLiked(true);
-      setLikeCount((prev) => prev + 1);
-
-      try {
-        const response = await socialService.toggleLike(post.id, accessToken);
-        setLiked(response.liked);
-        setLikeCount(response.likeCount);
-      } catch (error) {
-        // Rollback
-        setLiked(false);
-        setLikeCount((prev) => Math.max(0, prev - 1));
-      }
-    }
-  }, [liked, isAuthenticated, accessToken, post.id, onLoginRequired]);
-
-  const handleLikeChange = (newLiked: boolean, newCount: number) => {
-    setLiked(newLiked);
-    setLikeCount(newCount);
-  };
-
-  const handlePress = () => {
-    if (onPress) {
-      onPress();
-    } else {
-      router.push({ pathname: '/post/[id]', params: { id: post.id } } as any);
+  const handleDoubleTap = () => {
+    if (!isLiked) {
+      handleLike();
     }
   };
 
-  const handleCommentPress = () => {
-    router.push({ pathname: '/post/[id]', params: { id: post.id } } as any);
-  };
+  const goToPost = () => router.push({ pathname: '/(tabs)/post/[id]', params: { id: post.id } });
+  const goToProfile = () =>
+    router.push({ pathname: '/(tabs)/user/[id]', params: { id: post.author.id } });
 
-  const cardContent = (
-    <TouchableOpacity
-      style={StyleSheet.flatten([
-        styles.container, 
-        style,
-        (post as any).localStatus === 'pending' && { opacity: 0.7 }
-      ])}
-      onPress={handlePress}
-      activeOpacity={0.9}
-    >
-      {/* Author Header */}
+  console.log("PostCard id: ", post.id);
+  console.log("PostCard: ", post);
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        {post.author?.avatarUrl ? (
-          <Image source={{ uri: post.author?.avatarUrl }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <ThemedText style={styles.avatarText}>
-              {post.author?.name?.charAt(0)?.toUpperCase() || '?'}
-            </ThemedText>
+        <Pressable style={styles.authorInfo} onPress={goToProfile}>
+          <UserAvatar src={post.author.avatarUrl} name={post.author.name || 'User'} size="sm" />
+          <View>
+            <Text style={styles.authorName}>{post.author.name}</Text>
+            <Text style={styles.timestamp}>
+              {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+            </Text>
           </View>
-        )}
-        <View style={styles.authorInfo}>
-          <ThemedText style={styles.authorName} numberOfLines={1}>
-            {post.author?.name || 'Anonymous'}
-          </ThemedText>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <ThemedText style={styles.timestamp}>{formatDate(post.createdAt)}</ThemedText>
-            {(post as any).localStatus === 'pending' && (
-               <ThemedText style={{ color: '#007AFF', fontSize: 12, marginLeft: 8 }}>• Posting...</ThemedText>
-            )}
-            {(post as any).localStatus === 'failed' && (
-               <TouchableOpacity onPress={async (e) => {
-                 e.stopPropagation();
-                 Alert.alert(
-                   'Post Failed',
-                   'Would you like to retry or delete this post?',
-                   [
-                     { text: 'Delete', style: 'destructive', onPress: () => deleteFailedPost(post.id) },
-                     { text: 'Retry', onPress: async () => {
-                       try {
-                         await retryPost(post.id);
-                       } catch (err) {
-                         Alert.alert('Error', 'Failed to post. Please try again.');
-                       }
-                     }},
-                     { text: 'Cancel', style: 'cancel' },
-                   ]
-                 );
-               }}>
-                 <ThemedText style={{ color: 'red', fontSize: 12, marginLeft: 8 }}>• Failed ↺</ThemedText>
-               </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        </Pressable>
 
-        {/* More options menu (Report) */}
-        {currentUserId !== post.author?.id && (
-          <TouchableOpacity
-            style={styles.moreButton}
-            onPress={() => setShowReportModal(true)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
-          </TouchableOpacity>
-        )}
+        <Pressable
+          style={styles.menuButton}
+          onPress={() => setShowMenu(!showMenu)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="ellipsis-horizontal" size={16} color="#737373" />
+        </Pressable>
+      </View>
+
+      {/* Image(s) with carousel */}
+      {post.imageUrls && post.imageUrls.length > 0 && (
+        <DoubleTapLike onDoubleTap={handleDoubleTap}>
+          <ImageCarousel
+            images={post.imageUrls}
+            aspectRatio="square"
+            maxHeight={400}
+            onImagePress={goToPost}
+          />
+        </DoubleTapLike>
+      )}
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        <View style={styles.leftActions}>
+          <LikeButton isLiked={isLiked} likeCount={likeCount} onToggle={handleLike} />
+          <Pressable style={styles.actionButton} onPress={goToPost}>
+            <Ionicons name="chatbubble-outline" size={20} color="#737373" />
+            <Text style={styles.actionCount}>{post.commentCount}</Text>
+          </Pressable>
+        </View>
+        <Pressable style={styles.actionButton}>
+          <Ionicons name="bookmark-outline" size={20} color="#737373" />
+        </Pressable>
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
-        <ThemedText style={styles.postText} numberOfLines={5}>
+      <Pressable style={styles.content} onPress={goToPost}>
+        <Text style={styles.contentText}>
+          <Text style={styles.username} onPress={goToProfile}>
+            {post.author.name}{' '}
+          </Text>
           {post.content}
-        </ThemedText>
-      </View>
+        </Text>
 
-      {/* Interaction Bar */}
-      <View style={styles.interactionBar}>
-        <LikeButton
-          itemId={post.id}
-          targetType="post"
-          initialLiked={liked}
-          initialCount={likeCount}
-          isAuthenticated={isAuthenticated}
-          accessToken={accessToken}
-          onLikeChange={handleLikeChange}
-          onLoginRequired={onLoginRequired}
-          size="medium"
-          showCount
-        />
-        <TouchableOpacity style={styles.commentButton} onPress={handleCommentPress}>
-          <Ionicons name="chatbubble-outline" size={20} color="#666" />
-          <ThemedText style={styles.commentCount}>
-            {post.commentCount > 0 ? post.commentCount : ''}
-          </ThemedText>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+        {post.commentCount > 0 && (
+          <Text style={styles.viewComments}>View all {post.commentCount} comments</Text>
+        )}
+      </Pressable>
 
-  // Wrap with DoubleTapLike for mobile double-tap functionality
-  if (showDoubleTapLike) {
-    return (
-      <DoubleTapLike
-        onDoubleTap={handleDoubleTapLike}
-        disabled={!isAuthenticated}
-      >
-        {cardContent}
-      </DoubleTapLike>
-    );
-  }
+      {/* Action Menu */}
+      <ActionMenu
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        items={[
+          ...(isOwnPost
+            ? [
+                {
+                  label: 'Edit Post',
+                  icon: 'create-outline',
+                  onPress: () => setShowEditModal(true),
+                },
+                {
+                  label: 'Delete Post',
+                  icon: 'trash-outline',
+                  onPress: () => {
+                    // TODO: Implement delete post
+                  },
+                  destructive: true,
+                },
+              ]
+            : [
+                {
+                  label: 'Report Post',
+                  icon: 'flag-outline',
+                  onPress: () => setShowReportModal(true),
+                  destructive: true,
+                },
+              ]),
+          {
+            label: 'Copy Link',
+            icon: 'link-outline',
+            onPress: () => {
+              // TODO: Copy post link
+            },
+          },
+        ]}
+      />
 
-  return (
-    <>
-      {cardContent}
+      {/* Report Modal */}
       <ReportModal
         visible={showReportModal}
         onClose={() => setShowReportModal(false)}
         targetType="POST"
         targetId={post.id}
-        showBlockOption={true}
+        onReported={() => {
+          onReport?.(post.id);
+        }}
       />
-    </>
+
+      {/* Edit Post Modal */}
+      <EditPostModal
+        visible={showEditModal}
+        postId={post.id}
+        onClose={() => setShowEditModal(false)}
+        onUpdated={onUpdated}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 12,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#e0e0e0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
   authorInfo: {
-    marginLeft: 10,
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   authorName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#171717',
   },
   timestamp: {
     fontSize: 12,
-    color: '#888',
-    marginTop: 2,
+    color: '#737373',
+  },
+  menuButton: {
+    padding: 8,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  leftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 6,
+  },
+  actionCount: {
+    fontSize: 14,
+    color: '#737373',
   },
   content: {
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
-  postText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#333',
-  },
-  interactionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-    gap: 16,
-  },
-  commentButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 4,
-    gap: 4,
-  },
-  commentCount: {
+  contentText: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-    minWidth: 20,
+    color: '#171717',
+    lineHeight: 20,
   },
-  moreButton: {
-    padding: 8,
+  username: {
+    fontWeight: '600',
+  },
+  viewComments: {
+    fontSize: 14,
+    color: '#737373',
+    marginTop: 4,
   },
 });

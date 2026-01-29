@@ -49,14 +49,14 @@ export const moderationService = {
    * Get post moderation queue
    */
   async getPostQueue(status: ReportStatus = 'PENDING'): Promise<QueuedReport[]> {
-    return ApiService.get<QueuedReport[]>(`/moderation/queue/posts?status=${status}`);
+    return ApiService.get<QueuedReport[]>(`/api/moderation/queue/posts?status=${status}`);
   },
 
   /**
    * Get comment moderation queue  
    */
   async getCommentQueue(status: ReportStatus = 'PENDING'): Promise<QueuedReport[]> {
-    return ApiService.get<QueuedReport[]>(`/moderation/queue/comments?status=${status}`);
+    return ApiService.get<QueuedReport[]>(`/api/moderation/queue/comments?status=${status}`);
   },
 
   /**
@@ -67,7 +67,7 @@ export const moderationService = {
     request: ResolveReportRequest,
   ): Promise<ResolveReportResponse> {
     return ApiService.post<ResolveReportRequest, ResolveReportResponse>(
-      `/moderation/resolve/${reportId}`,
+      `/api/moderation/resolve/${reportId}`,
       request,
     );
   },
@@ -77,7 +77,7 @@ export const moderationService = {
    */
   async lockPostComments(postId: string): Promise<{ success: boolean; message: string }> {
     return ApiService.post<{}, { success: boolean; message: string }>(
-      `/moderation/posts/${postId}/lock-comments`,
+      `/api/moderation/posts/${postId}/lock-comments`,
       {},
     );
   },

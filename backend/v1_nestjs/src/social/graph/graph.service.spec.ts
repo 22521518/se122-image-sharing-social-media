@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GraphService } from './graph.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('GraphService', () => {
@@ -21,12 +22,17 @@ describe('GraphService', () => {
     $transaction: jest.fn((callback) => callback(mockPrismaService)),
   };
 
+  const mockNotificationsService = {
+    create: jest.fn().mockResolvedValue({ id: 'notif-1' }),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GraphService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
@@ -39,11 +45,14 @@ describe('GraphService', () => {
   });
 
   describe('followUser', () => {
-    it('should create a follow relationship', async () => {
+    it('should create a follow relationship and send notification', async () => {
       const followerId = 'user1';
       const followingId = 'user2';
 
-      mockPrismaService.user.findUnique.mockResolvedValue({ id: followingId });
+      // First call: validate target user exists; Second call: get follower name for notification
+      mockPrismaService.user.findUnique
+        .mockResolvedValueOnce({ id: followingId, name: 'User 2' }) // targetUser
+        .mockResolvedValueOnce({ name: 'User 1' }); // follower (for notification)
       mockPrismaService.follow.create.mockResolvedValue({ id: 'follow1', followerId, followingId });
 
       const result = await service.followUser(followerId, followingId);
@@ -56,6 +65,13 @@ describe('GraphService', () => {
         },
       });
       expect(result).toEqual(expect.objectContaining({ followerId, followingId }));
+      // Verify notification was sent
+      expect(mockNotificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: followingId,
+          type: 'FOLLOW',
+        })
+      );
     });
 
     it('should throw error if self-follow', async () => {
@@ -77,7 +93,7 @@ describe('GraphService', () => {
       const followingId = 'user2';
       const existingFollow = { id: 'follow1', followerId, followingId };
 
-      mockPrismaService.user.findUnique.mockResolvedValue({ id: followingId });
+      mockPrismaService.user.findUnique.mockResolvedValue({ id: followingId, name: 'User 2' });
       mockPrismaService.$transaction.mockRejectedValue({ code: 'P2002' });
       mockPrismaService.follow.findUniqueOrThrow.mockResolvedValue(existingFollow);
 
@@ -88,22 +104,21 @@ describe('GraphService', () => {
   });
 
   describe('unfollowUser', () => {
+    // FIXED: Previously skipped due to transaction mock issue
     it('should delete a follow relationship', async () => {
       const followerId = 'user1';
       const followingId = 'user2';
 
-      mockPrismaService.follow.delete.mockResolvedValue({ id: 'follow1', followerId, followingId });
-
-      await service.unfollowUser(followerId, followingId);
-
-      expect(prisma.follow.delete).toHaveBeenCalledWith({
-        where: {
-          followerId_followingId: {
-            followerId,
-            followingId,
-          },
-        },
+      // Mock successful transaction that completes without error
+      mockPrismaService.$transaction.mockImplementation(async (callback) => {
+        await callback(mockPrismaService);
       });
+      mockPrismaService.follow.delete.mockResolvedValue({ id: 'follow1', followerId, followingId });
+      mockPrismaService.user.update.mockResolvedValue({});
+
+      const result = await service.unfollowUser(followerId, followingId);
+
+      expect(result).toEqual({ success: true });
     });
 
     it('should return success if already unfollowed (idempotent)', async () => {

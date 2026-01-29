@@ -25,6 +25,13 @@ export interface UserResult {
   bio: string | null;
 }
 
+export interface MediaResult {
+  id: string;
+  url: string;
+  type: string;
+  sortOrder: number | null;
+}
+
 export interface PostResult {
   id: string;
   content: string;
@@ -35,6 +42,7 @@ export interface PostResult {
     name: string | null;
     avatarUrl: string | null;
   };
+  media?: MediaResult[];
 }
 
 export interface HashtagResult {

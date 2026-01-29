@@ -342,8 +342,13 @@ export class ModerationService {
       throw new NotFoundException('Post not found');
     }
 
-    // Note: We'd need to add a 'commentsLocked' field to the Post model
-    // For now, log the action
+    // Set commentsLocked flag to prevent new comments
+    await this.prisma.post.update({
+      where: { id: postId },
+      data: { commentsLocked: true },
+    });
+
+    // Log the action for audit trail
     await this.prisma.moderationLog.create({
       data: {
         moderatorId,

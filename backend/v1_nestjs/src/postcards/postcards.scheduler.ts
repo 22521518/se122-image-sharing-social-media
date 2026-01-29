@@ -1,13 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
-import { PostcardStatus } from '@prisma/client';
+import { PostcardStatus, NotificationType } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PostcardsScheduler {
   private readonly logger = new Logger(PostcardsScheduler.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) { }
+
+  // Helper to get display name from user
+  private getDisplayName(user: { name: string | null; email: string }): string {
+    if (user.name) return user.name;
+    // Use part before @ from email as fallback
+    return user.email.split('@')[0];
+  }
 
   /**
    * Cron job: Run every 15 minutes to check for time-locked postcards that should unlock
@@ -30,10 +41,10 @@ export class PostcardsScheduler {
       },
       include: {
         sender: {
-          select: { id: true, name: true },
+          select: { id: true, name: true, email: true },
         },
         recipient: {
-          select: { id: true, name: true },
+          select: { id: true, name: true, email: true },
         },
       },
     });
@@ -57,11 +68,23 @@ export class PostcardsScheduler {
         });
 
         this.logger.log(
-          `Unlocked postcard ${postcard.id} for recipient ${postcard.recipient.name}`
+          `Unlocked postcard ${postcard.id} for recipient ${this.getDisplayName(postcard.recipient)}`,
         );
 
-        // TODO: Send push notification to recipient
-        // "Your postcard from {senderName} has been unlocked!"
+        // Story 4.3 AC 4: Send notification to recipient
+        const senderName = this.getDisplayName(postcard.sender);
+        await this.notificationsService.create({
+          userId: postcard.recipientId,
+          type: NotificationType.POSTCARD_UNLOCKED,
+          title: 'Postcard Unlocked! 💌',
+          message: `Your postcard from ${senderName} has been unlocked!`,
+          data: {
+            postcardId: postcard.id,
+            senderId: postcard.senderId,
+            senderName,
+          },
+        });
+        this.logger.debug(`Sent POSTCARD_UNLOCKED notification for ${postcard.id}`);
       } catch (error) {
         this.logger.error(`Failed to unlock postcard ${postcard.id}:`, error);
       }
@@ -78,7 +101,7 @@ export class PostcardsScheduler {
     lat1: number,
     lon1: number,
     lat2: number,
-    lon2: number
+    lon2: number,
   ): number {
     const R = 6371e3; // Earth radius in meters
     const φ1 = (lat1 * Math.PI) / 180;
@@ -101,7 +124,7 @@ export class PostcardsScheduler {
   async checkGeoLockUnlock(
     userId: string,
     userLatitude: number,
-    userLongitude: number
+    userLongitude: number,
   ) {
     // Find all LOCKED postcards for this user with geo-lock conditions
     const geoLockedPostcards = await this.prisma.postcard.findMany({
@@ -113,19 +136,23 @@ export class PostcardsScheduler {
       },
       include: {
         sender: {
-          select: { id: true, name: true },
+          select: { id: true, name: true, email: true },
         },
       },
     });
 
-    const unlockedPostcards: { id: string; senderName: string | null; distance: number }[] = [];
+    const unlockedPostcards: {
+      id: string;
+      senderName: string;
+      distance: number;
+    }[] = [];
 
     for (const postcard of geoLockedPostcards) {
       const distance = this.calculateDistance(
         userLatitude,
         userLongitude,
         postcard.unlockLatitude!,
-        postcard.unlockLongitude!
+        postcard.unlockLongitude!,
       );
 
       if (distance <= postcard.unlockRadius) {
@@ -138,15 +165,25 @@ export class PostcardsScheduler {
           },
         });
 
+        const senderName = this.getDisplayName(postcard.sender);
         unlockedPostcards.push({
           id: postcard.id,
-          senderName: postcard.sender.name,
+          senderName,
           distance: Math.round(distance),
         });
 
         this.logger.log(
-          `Geo-unlocked postcard ${postcard.id} for user ${userId} (distance: ${distance.toFixed(1)}m)`
+          `Geo-unlocked postcard ${postcard.id} for user ${userId} (distance: ${distance.toFixed(1)}m)`,
         );
+
+        // Story 4.3 AC 4: Send notification for geo-unlock
+        await this.notificationsService.create({
+          userId: userId,
+          type: NotificationType.POSTCARD_UNLOCKED,
+          title: 'Postcard Unlocked! 📍',
+          message: `You've arrived! Your postcard from ${senderName} has been unlocked.`,
+          data: { postcardId: postcard.id, senderId: postcard.senderId, senderName, distance: Math.round(distance) },
+        });
       }
     }
 

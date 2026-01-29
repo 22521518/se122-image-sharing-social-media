@@ -23,11 +23,18 @@ describe('UsersService', () => {
     googleId: null,
     defaultPrivacy: 'private' as PrivacyLevel,
     role: 'user' as UserRole,
+    isLocked: false,
+    isBanned: false,
+    bannedUntil: null,
+    tokenVersion: 0,
     hasOnboarded: false,
     privacySettings: {},
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
+    followerCount: 0,
+    followingCount: 0,
+    friendCount: 0,
   };
 
   beforeEach(async () => {

@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Like } from '@prisma/client';
+import { Like, NotificationType } from '@prisma/client';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 export interface ToggleLikeResult {
   liked: boolean;
@@ -9,7 +10,12 @@ export interface ToggleLikeResult {
 
 @Injectable()
 export class LikesService {
-  constructor(private prisma: PrismaService) { }
+  private readonly logger = new Logger(LikesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) { }
 
   /**
    * Toggle like on a post - creates if not exists, deletes if exists
@@ -69,8 +75,23 @@ export class LikesService {
         });
       });
 
-      // TODO: Trigger notification if userId !== post.authorId (Subtask 1.4)
-      // This will be implemented when notification system is ready
+      // Story 6.2 AC 5: Trigger notification if userId !== post.authorId
+      if (userId !== post.authorId) {
+        const liker = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true },
+        });
+        const likerName = liker?.name || 'Someone';
+
+        await this.notificationsService.create({
+          userId: post.authorId,
+          type: NotificationType.LIKE,
+          title: 'New Like',
+          message: `${likerName} liked your post`,
+          data: { postId, actorId: userId, actorName: likerName },
+        });
+        this.logger.debug(`Sent LIKE notification for post ${postId} to ${post.authorId}`);
+      }
 
       return {
         liked: true,
@@ -167,7 +188,23 @@ export class LikesService {
         });
       });
 
-      // TODO: Notification triggered here later
+      // Story 6.2: Trigger notification if userId !== memory owner
+      if (userId !== memory.userId) {
+        const liker = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true },
+        });
+        const likerName = liker?.name || 'Someone';
+
+        await this.notificationsService.create({
+          userId: memory.userId,
+          type: NotificationType.LIKE,
+          title: 'New Like',
+          message: `${likerName} liked your memory`,
+          data: { memoryId, actorId: userId, actorName: likerName },
+        });
+        this.logger.debug(`Sent LIKE notification for memory ${memoryId} to ${memory.userId}`);
+      }
 
       return {
         liked: true,

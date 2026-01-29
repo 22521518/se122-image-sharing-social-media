@@ -1,6 +1,6 @@
 # Story 1.4: Privacy and Account Settings
 
-Status: done
+Status: reivew
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

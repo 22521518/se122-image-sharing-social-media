@@ -1,159 +1,116 @@
-import React, { useState, useRef } from 'react';
-import {
-  View,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  ViewStyle,
-  Platform,
-  KeyboardAvoidingView,
-} from 'react-native';
-import { ThemedText } from '../themed-text';
+import { UserAvatar } from '@/components/shared';
+import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 interface CommentInputProps {
   onSubmit: (content: string) => Promise<void>;
-  isAuthenticated?: boolean;
-  onLoginRequired?: () => void;
   placeholder?: string;
-  style?: ViewStyle;
-  maxLength?: number;
+  autoFocus?: boolean;
+  style?: object;
 }
 
 export function CommentInput({
   onSubmit,
-  isAuthenticated = true,
-  onLoginRequired,
   placeholder = 'Add a comment...',
+  autoFocus = false,
   style,
-  maxLength = 500,
 }: CommentInputProps) {
+  const { user } = useAuth();
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  const charCount = content.length;
-  const isOverLimit = charCount > maxLength;
-  const canSubmit = content.trim().length > 0 && !isOverLimit && !isSubmitting;
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [autoFocus]);
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
-
-    if (!isAuthenticated) {
-      onLoginRequired?.();
-      return;
-    }
+    if (!content.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
-
     try {
       await onSubmit(content.trim());
       setContent('');
-      inputRef.current?.blur();
-    } catch (error: any) {
-      if (
-        error?.status === 401 ||
-        error?.message?.includes('401') ||
-        error?.message?.includes('Unauthorized')
-      ) {
-        onLoginRequired?.();
-      } else {
-        Alert.alert('Error', 'Failed to post comment.');
-      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getCounterColor = () => {
-    if (isOverLimit) return '#FF3B30';
-    if (charCount >= maxLength - 50) return '#FF9500';
-    return '#888';
-  };
+  if (!user) {
+    return (
+      <View style={[styles.container, style]}>
+        <Text style={styles.signInText}>Sign in to comment</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={StyleSheet.flatten([styles.container, style])}>
-      <View style={styles.inputWrapper}>
-        <TextInput
-          ref={inputRef}
-          style={StyleSheet.flatten([styles.input, isOverLimit && styles.inputError])}
-          value={content}
-          onChangeText={setContent}
-          placeholder={placeholder}
-          placeholderTextColor="#999"
-          multiline
-          maxLength={maxLength + 50} // Allow typing over to show error
-          editable={!isSubmitting}
-          textAlignVertical="top"
-        />
-        <View style={styles.footer}>
-          <ThemedText style={StyleSheet.flatten([styles.counter, { color: getCounterColor() }])}>
-            {charCount}/{maxLength}
-          </ThemedText>
-          <TouchableOpacity
-            style={StyleSheet.flatten([styles.submitButton, !canSubmit && styles.submitButtonDisabled])}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            accessibilityLabel="Post comment"
-          >
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <ThemedText style={styles.submitText}>Post</ThemedText>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+    <View style={[styles.container, style]}>
+      <UserAvatar name={user.email?.charAt(0).toUpperCase() || 'U'} size="sm" />
+
+      <TextInput
+        ref={inputRef}
+        value={content}
+        onChangeText={setContent}
+        placeholder={placeholder}
+        placeholderTextColor="#737373"
+        style={styles.input}
+        editable={!isSubmitting}
+        onSubmitEditing={handleSubmit}
+        returnKeyType="send"
+      />
+
+      <Pressable
+        onPress={handleSubmit}
+        disabled={!content.trim() || isSubmitting}
+        style={[
+          styles.submitButton,
+          (!content.trim() || isSubmitting) && styles.submitButtonDisabled,
+        ]}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        {isSubmitting ? (
+          <ActivityIndicator size="small" color={Colors.light.primary} />
+        ) : (
+          <Ionicons name="send" size={20} color={content.trim() ? Colors.light.primary : '#737373'} />
+        )}
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: '#e5e5e5',
     backgroundColor: '#fff',
   },
-  inputWrapper: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    padding: 12,
-  },
   input: {
-    fontSize: 15,
-    lineHeight: 20,
-    minHeight: 60,
-    maxHeight: 120,
-    color: '#333',
-  },
-  inputError: {
-    color: '#FF3B30',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  counter: {
-    fontSize: 12,
+    flex: 1,
+    height: 40,
+    paddingHorizontal: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    fontSize: 14,
+    color: '#171717',
   },
   submitButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    minWidth: 60,
-    alignItems: 'center',
+    padding: 8,
   },
   submitButtonDisabled: {
-    backgroundColor: '#ccc',
+    opacity: 0.5,
   },
-  submitText: {
-    color: '#fff',
+  signInText: {
     fontSize: 14,
-    fontWeight: '600',
+    color: '#737373',
   },
 });

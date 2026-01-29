@@ -44,20 +44,65 @@ export class FeedService {
       where: { followerId: userId },
       select: { followingId: true },
     });
-
     const followingIds = followedUserIds.map((f) => f.followingId);
 
-    // Include own posts + posts from followed users
+    // Get Friends (Accepted Friendships)
+    const friendships = await this.prisma.friendship.findMany({
+      where: {
+        OR: [{ requesterId: userId }, { addresseeId: userId }],
+        status: 'ACCEPTED', // Using hardcoded 'ACCEPTED' string if enum import is tricky, or import FriendshipStatus
+      },
+      select: { requesterId: true, addresseeId: true },
+    });
+
+    const friendIds = friendships.map(f =>
+      f.requesterId === userId ? f.addresseeId : f.requesterId
+    );
+
+    // Include own posts + posts from followed users + posts from friends
     // Filter out any undefined/null values to prevent Prisma validation errors
-    const authorFilter = [...followingIds, userId].filter((id): id is string => id != null);
+    // Use Set to remove duplicates (e.g. if I follow a friend)
+    const authorFilter = Array.from(new Set([...followingIds, ...friendIds, userId])).filter((id): id is string => id != null);
 
     // AC 3: Query posts from followed users + own posts
     // AC 4: Sorted by createdAt DESC with cursor pagination
+    // Story 8.3 AC 5: Exclude posts from banned users
+    // Privacy filter:
+    // - PUBLIC: visible to everyone in feed (from followed/friends)
+    // - FRIENDS: visible only to friends (friendIds) and owner
+    // - PRIVATE: visible only to owner
+    //
+    // Logic: Show post if:
+    // 1. It's my own post (any privacy), OR
+    // 2. It's public, OR  
+    // 3. It's friends-only AND author is my friend
     const posts = await this.prisma.post.findMany({
       where: {
-        authorId: { in: authorFilter },
-        deletedAt: null,
-        ...cursorCondition,
+        AND: [
+          // Base filter: from followed/friends, not deleted, author not banned
+          {
+            authorId: { in: authorFilter },
+            deletedAt: null,
+            author: {
+              isBanned: false,
+            },
+          },
+          // Privacy filter
+          {
+            OR: [
+              { authorId: userId }, // Own posts - all privacy levels
+              { privacy: 'public' }, // Public posts
+              {
+                AND: [
+                  { privacy: 'friends' },
+                  { authorId: { in: friendIds } },
+                ],
+              },
+            ],
+          },
+          // Cursor condition for pagination
+          ...(Object.keys(cursorCondition).length > 0 ? [cursorCondition] : []),
+        ],
       },
       orderBy: [
         { createdAt: 'desc' },

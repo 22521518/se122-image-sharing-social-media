@@ -1,293 +1,385 @@
-/**
- * Postcards Tab Screen
- * Lists user's sent and received time-locked postcards
- */
-
+import {
+    CreatePostcardModal,
+    LockedPostcardModal,
+    PostcardDetail,
+    PostcardEnvelope,
+} from '@/components/postcards';
+import { EmptyState, FloatingActionButton } from '@/components/shared';
 import { Colors } from '@/constants/Colors';
-import { Theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Postcard, postcardsService } from '@/services/postcards.service';
+import { useIsMobileView, useShouldShowSidebar } from '@/hooks/usePlatform';
+import { postcardsService } from '@/services/postcards.service';
+import type { CreatePostcardDto, Postcard } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
-    RefreshControl,
+    Pressable,
     StyleSheet,
     Text,
-    TouchableOpacity,
+    useWindowDimensions,
     View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-type FilterTab = 'all' | 'locked' | 'unlocked';
-
-export default function PostcardsScreen() {
-  const router = useRouter();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  const { isAuthenticated, accessToken } = useAuth();
-
+export default function PostcardsPage() {
+  const isMobile = useIsMobileView();
+  const showSidebar = useShouldShowSidebar();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { accessToken, isAuthenticated } = useAuth();
   const [postcards, setPostcards] = useState<Postcard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'locked' | 'unlocked'>('all');
 
-  const loadPostcards = useCallback(async () => {
+  // Modals state
+  const [selectedPostcard, setSelectedPostcard] = useState<Postcard | null>(null);
+  const [selectedLockedPostcard, setSelectedLockedPostcard] = useState<Postcard | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  // Responsive Layout Calculation
+  const getLayoutSettings = () => {
+    // Adjust breakpoints based on available content width (screen width - sidebar)
+    const availableSpace = width - (showSidebar ? 256 : 0);
+
+    if (availableSpace < 600) return { numColumns: 2, gap: 12, padding: 16 };
+    if (availableSpace < 900) return { numColumns: 3, gap: 16, padding: 24 };
+    if (availableSpace < 1200) return { numColumns: 4, gap: 20, padding: 32 };
+    return { numColumns: 5, gap: 24, padding: 40 };
+  };
+
+  const { numColumns, gap, padding } = getLayoutSettings();
+
+  // Subtract scrollbar width (20px) on desktop to prevent horizontal overflow
+  // Also subtract sidebar width if visible
+  const availableWidth = width - (showSidebar ? 256 : 0) - (isMobile ? 0 : 20);
+  const itemWidth = (availableWidth - padding * 2 - gap * (numColumns - 1)) / numColumns;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated && accessToken) {
+        loadPostcards();
+      }
+    }, [isAuthenticated, accessToken])
+  );
+
+  const loadPostcards = async () => {
     if (!accessToken) return;
-    
+
+    setIsLoading(true);
     try {
-      // Fetch both sent and received postcards
+      // Load both received and sent postcards
       const [received, sent] = await Promise.all([
         postcardsService.getReceivedPostcards(accessToken),
         postcardsService.getSentPostcards(accessToken),
       ]);
-      
-      // Combine and deduplicate (in case self-sent)
-      const allPostcards = [...received, ...sent];
-      const uniquePostcards = allPostcards.filter(
-        (p, index, arr) => arr.findIndex(x => x.id === p.id) === index
+
+      // Deduplicate postcards
+      const uniquePostcards = Array.from(
+        new Map([...received, ...sent].map((p) => [p.id, p])).values(),
       );
-      
-      // Filter by status based on active tab
-      let filtered = uniquePostcards;
-      if (activeTab === 'locked') {
-        filtered = uniquePostcards.filter((p) => p.status === 'LOCKED');
-      } else if (activeTab === 'unlocked') {
-        filtered = uniquePostcards.filter((p) => p.status === 'UNLOCKED');
-      }
-      
-      // Sort by created date, newest first
-      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
-      setPostcards(filtered);
-    } catch (error) {
-      console.error('Failed to load postcards:', error);
+
+      // Store all postcards, filtering happens in render
+      setPostcards(uniquePostcards);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
-  }, [accessToken, activeTab]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadPostcards();
-    }
-  }, [isAuthenticated, loadPostcards]);
-
-  const onRefresh = async () => {
-    setIsRefreshing(true);
-    await loadPostcards();
   };
 
-  const navigateToCreate = () => {
-    router.push('/postcards/create');
-  };
+  const filteredPostcards = useMemo(() => {
+    if (activeTab === 'locked') return postcards.filter((p) => p.status === 'LOCKED');
+    if (activeTab === 'unlocked') return postcards.filter((p) => p.status === 'UNLOCKED');
+    return postcards;
+  }, [postcards, activeTab]);
 
-  const navigateToPostcard = (id: string) => {
-    router.push(`/postcards/${id}`);
-  };
+  const handlePostcardOpen = useCallback(
+    async (postcard: Postcard) => {
+      if (postcard.status === 'LOCKED') {
+        // Fetch fresh data from API - this triggers on-demand unlock check
+        try {
+          const freshPostcard = await postcardsService.getPostcard(postcard.id, accessToken);
 
-  const lockedCount = postcards.filter(p => p.status === 'LOCKED').length;
-  const unlockedCount = postcards.filter(p => p.status === 'UNLOCKED').length;
+          // Update the postcard in local state
+          setPostcards((prev) => prev.map((p) => (p.id === freshPostcard.id ? freshPostcard : p)));
 
-  if (!isAuthenticated) {
-    return (
-      <View style={StyleSheet.flatten([styles.centered, { backgroundColor: colors.background }])}>
-        <View style={StyleSheet.flatten([styles.iconContainer, { backgroundColor: colors.muted }])}>
-          <Ionicons name="mail-outline" size={48} color={colors.primary} />
-        </View>
-        <Text style={StyleSheet.flatten([styles.title, { color: colors.text }])}>Time-Locked Postcards</Text>
-        <Text style={StyleSheet.flatten([styles.subtitle, { color: colors.textSecondary }])}>
-          Sign in to send and receive postcards
-        </Text>
-        <TouchableOpacity 
-          style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: colors.primary }])} 
-          onPress={() => router.push('/(auth)/login')}
-        >
-          <Text style={styles.primaryButtonText}>Sign In</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const renderPostcard = ({ item }: { item: Postcard }) => (
-    <TouchableOpacity
-      style={StyleSheet.flatten([styles.postcardCard, { backgroundColor: colors.card, borderColor: colors.border }])}
-      onPress={() => navigateToPostcard(item.id)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.postcardHeader}>
-        <View style={StyleSheet.flatten([
-          styles.statusBadge, 
-          { backgroundColor: item.status === 'LOCKED' ? colors.warning + '20' : colors.success + '20' }
-        ])}>
-          <Ionicons 
-            name={item.status === 'LOCKED' ? 'lock-closed' : 'lock-open'} 
-            size={14} 
-            color={item.status === 'LOCKED' ? colors.warning : colors.success} 
-          />
-          <Text style={StyleSheet.flatten([
-            styles.statusText, 
-            { color: item.status === 'LOCKED' ? colors.warning : colors.success }
-          ])}>
-            {item.status === 'LOCKED' ? 'Locked' : 'Unlocked'}
-          </Text>
-        </View>
-        <Text style={StyleSheet.flatten([styles.dateText, { color: colors.textSecondary }])}>
-          {new Date(item.createdAt).toLocaleDateString()}
-        </Text>
-      </View>
-      
-      {item.message && (
-        <Text style={StyleSheet.flatten([styles.messagePreview, { color: colors.text }])} numberOfLines={2}>
-          {item.message}
-        </Text>
-      )}
-      
-      <View style={styles.postcardFooter}>
-        {item.unlockDate && (
-          <Text style={StyleSheet.flatten([styles.unlockText, { color: colors.textSecondary }])}>
-            {item.status === 'LOCKED' 
-              ? `Unlocks ${new Date(item.unlockDate).toLocaleDateString()}`
-              : `Opened ${new Date(item.unlockDate).toLocaleDateString()}`
-            }
-          </Text>
-        )}
-      </View>
-    </TouchableOpacity>
+          // Show appropriate modal based on fresh status
+          if (freshPostcard.status === 'UNLOCKED') {
+            setSelectedPostcard(freshPostcard);
+          } else {
+            setSelectedLockedPostcard(freshPostcard);
+          }
+        } catch (error) {
+          console.error('Failed to fetch postcard:', error);
+          // Fallback to cached data
+          setSelectedLockedPostcard(postcard);
+        }
+      } else {
+        setSelectedPostcard(postcard);
+      }
+    },
+    [accessToken],
   );
 
+  const handlePostcardFlip = async (postcard: Postcard) => {
+    // Note: unlockPostcard method needs to be added to service if needed
+    // For now, just open the postcard detail
+    handlePostcardOpen(postcard);
+  };
+
+  const handleCreatePostcard = async (data: CreatePostcardDto) => {
+    try {
+      const newPostcard = await postcardsService.createPostcard(data, accessToken);
+      setPostcards((prev) => [newPostcard, ...prev]);
+      setCreateModalOpen(false);
+    } catch {
+      console.error('Failed to create postcard');
+    }
+  };
+
+  const lockedCount = postcards.filter((p) => p.status === 'LOCKED').length;
+  const unlockedCount = postcards.filter((p) => p.status === 'UNLOCKED').length;
+
+  const renderPostcard = ({ item }: { item: Postcard }) => (
+    <View style={{ width: itemWidth, marginBottom: gap }}>
+      <PostcardEnvelope postcard={item} onOpen={handlePostcardOpen} onFlip={handlePostcardFlip} />
+    </View>
+  );
+
+  const handleTestGeoUnlock = async () => {
+    try {
+      // Hardcoded testing coords (Saigon)
+      await postcardsService.checkGeoLock(10.7769, 106.7009, accessToken);
+      loadPostcards();
+      alert('Checked Geo Unlock!');
+    } catch (e) {
+      console.error(e);
+      alert('Geo Check Failed');
+    }
+  };
+
+  const handleTestTimeUnlock = async () => {
+    try {
+      await postcardsService.triggerTimeUnlock(accessToken);
+      loadPostcards();
+      alert('Triggered Time Unlock!');
+    } catch (e) {
+      console.error(e);
+      alert('Time Trigger Failed');
+    }
+  };
+
   return (
-    <SafeAreaView style={StyleSheet.flatten([styles.container, { backgroundColor: colors.background }])}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={StyleSheet.flatten([styles.header, { borderBottomColor: colors.border }])}>
-        <View>
-          <Text style={StyleSheet.flatten([styles.headerTitle, { color: colors.text }])}>Postcards</Text>
-          <Text style={StyleSheet.flatten([styles.headerSubtitle, { color: colors.textSecondary }])}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Postcards</Text>
+          <Text style={styles.headerSubtitle}>
             {postcards.length} postcards • {lockedCount} locked
           </Text>
         </View>
-        <TouchableOpacity 
-          style={StyleSheet.flatten([styles.headerButton, { backgroundColor: colors.muted }])}
-          onPress={navigateToCreate}
-        >
-          <Ionicons name="add" size={22} color={colors.primary} />
-        </TouchableOpacity>
+        {!isMobile && (
+          <Pressable style={styles.addButtonMobile} onPress={() => setCreateModalOpen(true)}>
+            <Ionicons name="add" size={16} color="#fff" />
+            <Text style={styles.newPostCardButtonText}>New Card</Text>
+          </Pressable>
+        )}
       </View>
 
-      {/* Filter Tabs */}
-      <View style={StyleSheet.flatten([styles.tabContainer, { borderBottomColor: colors.border }])}>
-        {(['all', 'locked', 'unlocked'] as FilterTab[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={StyleSheet.flatten([
-              styles.tab,
-              activeTab === tab && { borderBottomColor: colors.primary, borderBottomWidth: 2 }
-            ])}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Ionicons 
-              name={tab === 'all' ? 'mail' : tab === 'locked' ? 'lock-closed' : 'lock-open'}
-              size={16}
-              color={activeTab === tab ? colors.primary : colors.textSecondary}
-            />
-            <Text style={StyleSheet.flatten([
-              styles.tabText,
-              { color: activeTab === tab ? colors.primary : colors.textSecondary }
-            ])}>
-              {tab === 'all' ? 'All' : tab === 'locked' ? `Locked (${lockedCount})` : `Opened (${unlockedCount})`}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Debug Controls */}
+      {/* {!isMobile && (
+        <View style={styles.debugContainer}>
+          <Text style={styles.debugTitle}>Debug / Test Controls</Text>
+          <View style={styles.debugButtons}>
+            <Pressable style={styles.debugBtn} onPress={handleTestGeoUnlock}>
+              <Text style={styles.debugBtnText}>Check Geo (Saigon)</Text>
+            </Pressable>
+            <Pressable style={styles.debugBtn} onPress={handleTestTimeUnlock}>
+              <Text style={styles.debugBtnText}>Trigger Time Unlock</Text>
+            </Pressable>
+          </View>
+        </View>
+      )} */}
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <Pressable
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Ionicons
+            name="mail"
+            size={16}
+            color={activeTab === 'all' ? Colors.light.primary : '#737373'}
+          />
+          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>All</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, activeTab === 'locked' && styles.activeTab]}
+          onPress={() => setActiveTab('locked')}
+        >
+          <Ionicons
+            name="lock-closed"
+            size={16}
+            color={activeTab === 'locked' ? Colors.light.primary : '#737373'}
+          />
+          <Text style={[styles.tabText, activeTab === 'locked' && styles.activeTabText]}>
+            Locked ({lockedCount})
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, activeTab === 'unlocked' && styles.activeTab]}
+          onPress={() => setActiveTab('unlocked')}
+        >
+          <Ionicons
+            name="lock-open"
+            size={16}
+            color={activeTab === 'unlocked' ? Colors.light.primary : '#737373'}
+          />
+          <Text style={[styles.tabText, activeTab === 'unlocked' && styles.activeTabText]}>
+            Opened ({unlockedCount})
+          </Text>
+        </Pressable>
       </View>
 
       {/* Content */}
-      {isLoading ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={postcards}
-          keyExtractor={(item) => item.id}
-          renderItem={renderPostcard}
-          contentContainerStyle={postcards.length === 0 ? styles.emptyContent : styles.listContent}
-          refreshControl={
-            <RefreshControl 
-              refreshing={isRefreshing} 
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <View style={StyleSheet.flatten([styles.emptyIconContainer, { backgroundColor: colors.muted }])}>
-                <Ionicons name="mail-outline" size={40} color={colors.primary} />
-              </View>
-              <Text style={StyleSheet.flatten([styles.emptyText, { color: colors.text }])}>
-                {activeTab === 'locked' ? 'No locked postcards' : 
-                 activeTab === 'unlocked' ? 'No opened postcards' : 
-                 'No postcards yet'}
-              </Text>
-              <Text style={StyleSheet.flatten([styles.emptySubtext, { color: colors.textSecondary }])}>
-                Create your first time-locked postcard to yourself or a friend.
-              </Text>
-              <TouchableOpacity 
-                style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: colors.primary, marginTop: 20 }])} 
-                onPress={navigateToCreate}
-              >
-                <Text style={styles.primaryButtonText}>Create Postcard</Text>
-              </TouchableOpacity>
-            </View>
-          }
+      <View style={styles.content}>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.light.primary} />
+          </View>
+        ) : filteredPostcards.length === 0 ? (
+          <EmptyState
+            icon="mail"
+            title={
+              activeTab === 'locked'
+                ? 'No locked postcards'
+                : activeTab === 'unlocked'
+                  ? 'No opened postcards'
+                  : 'No postcards yet'
+            }
+            description="Create your first time-locked postcard to yourself or a friend."
+            action={{
+              label: 'Create Postcard',
+              onPress: () => setCreateModalOpen(true),
+            }}
+          />
+        ) : (
+          <FlatList
+            key={numColumns} // Force re-render when columns change
+            data={filteredPostcards}
+            keyExtractor={(item) => item.id}
+            renderItem={renderPostcard}
+            numColumns={numColumns}
+            columnWrapperStyle={{ gap }}
+            contentContainerStyle={[styles.listContent, { paddingHorizontal: padding }]}
+          />
+        )}
+      </View>
+
+      {/* FAB */}
+      {isMobile && (
+        <FloatingActionButton
+          onPress={() => setCreateModalOpen(true)}
+          icon={<Ionicons name="add" size={24} color="#fff" />}
         />
       )}
 
-      {/* FAB */}
-      <TouchableOpacity 
-        style={StyleSheet.flatten([styles.fab, { backgroundColor: colors.primary }, Theme.shadows.lg])} 
-        onPress={navigateToCreate}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
-    </SafeAreaView>
+      {/* Postcard Detail */}
+      {selectedPostcard && (
+        <PostcardDetail
+          postcard={selectedPostcard}
+          visible={!!selectedPostcard}
+          onClose={() => setSelectedPostcard(null)}
+        />
+      )}
+
+      {/* Locked Postcard Modal */}
+      {selectedLockedPostcard && (
+        <LockedPostcardModal
+          postcard={selectedLockedPostcard}
+          visible={!!selectedLockedPostcard}
+          onClose={() => setSelectedLockedPostcard(null)}
+          onRefresh={async () => {
+            // Re-fetch the postcard to trigger on-demand unlock
+            const fresh = await postcardsService.getPostcard(
+              selectedLockedPostcard.id,
+              accessToken,
+            );
+
+            // Update local state
+            setPostcards((prev) => prev.map((p) => (p.id === fresh.id ? fresh : p)));
+
+            // If unlocked, switch to detail view
+            if (fresh.status === 'UNLOCKED') {
+              setSelectedLockedPostcard(null);
+              setSelectedPostcard(fresh);
+            } else {
+              // Update the modal's postcard
+              setSelectedLockedPostcard(fresh);
+            }
+          }}
+        />
+      )}
+
+      {/* Create Modal */}
+      <CreatePostcardModal
+        visible={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSubmit={handleCreatePostcard}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
+  },
+  headerTitleContainer: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: Theme.typography.fontSizes.xxl,
-    fontWeight: Theme.typography.fontWeights.bold,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#171717',
   },
   headerSubtitle: {
-    fontSize: Theme.typography.fontSizes.xs,
+    fontSize: 12,
+    color: '#737373',
     marginTop: 2,
   },
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: Theme.borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabContainer: {
+  addButtonMobile: {
+    // padding: 8,
     flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  newPostCardButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
   },
   tab: {
     flex: 1,
@@ -295,127 +387,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: Theme.spacing.md,
+    paddingVertical: 12,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.light.primary,
   },
   tabText: {
-    fontSize: Theme.typography.fontSizes.sm,
-    fontWeight: Theme.typography.fontWeights.medium,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#737373',
+  },
+  activeTabText: {
+    color: Colors.light.primary,
+  },
+  content: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listContent: {
-    padding: Theme.spacing.lg,
-    paddingBottom: 100,
+    padding: 8,
+    paddingBottom: 80,
   },
-  emptyContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+
+  debugContainer: {
+    padding: 10,
+    backgroundColor: '#f0f0f0',
+    marginTop: 10,
+    borderRadius: 8,
   },
-  postcardCard: {
-    borderRadius: Theme.borderRadius.lg,
-    borderWidth: 1,
-    padding: Theme.spacing.lg,
-    marginBottom: Theme.spacing.md,
+  debugTitle: {
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
-  postcardHeader: {
+  debugButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.sm,
+    gap: 10,
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Theme.borderRadius.sm,
+  debugBtn: {
+    backgroundColor: Colors.light.primary,
+    padding: 8,
+    borderRadius: 4,
   },
-  statusText: {
-    fontSize: Theme.typography.fontSizes.xs,
-    fontWeight: Theme.typography.fontWeights.medium,
-  },
-  dateText: {
-    fontSize: Theme.typography.fontSizes.xs,
-  },
-  messagePreview: {
-    fontSize: Theme.typography.fontSizes.base,
-    lineHeight: 20,
-  },
-  postcardFooter: {
-    marginTop: Theme.spacing.sm,
-  },
-  unlockText: {
-    fontSize: Theme.typography.fontSizes.xs,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Theme.spacing.xxl,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: Theme.borderRadius.xxl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.xl,
-  },
-  title: {
-    fontSize: Theme.typography.fontSizes.xxl,
-    fontWeight: Theme.typography.fontWeights.bold,
-    marginBottom: Theme.spacing.sm,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: Theme.typography.fontSizes.base,
-    textAlign: 'center',
-    marginBottom: Theme.spacing.xl,
-  },
-  primaryButton: {
-    paddingHorizontal: Theme.spacing.xxl,
-    paddingVertical: Theme.spacing.md,
-    borderRadius: Theme.borderRadius.lg,
-  },
-  primaryButtonText: {
+  debugBtnText: {
     color: '#fff',
-    fontWeight: Theme.typography.fontWeights.semibold,
-    fontSize: Theme.typography.fontSizes.base,
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: Theme.spacing.xxl,
-  },
-  emptyIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: Theme.borderRadius.xxl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.lg,
-  },
-  emptyText: {
-    fontSize: Theme.typography.fontSizes.lg,
-    fontWeight: Theme.typography.fontWeights.semibold,
-  },
-  emptySubtext: {
-    fontSize: Theme.typography.fontSizes.sm,
-    marginTop: Theme.spacing.xs,
-    textAlign: 'center',
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: Theme.sizes.fab.size,
-    height: Theme.sizes.fab.size,
-    borderRadius: Theme.sizes.fab.size / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontSize: 12,
   },
 });

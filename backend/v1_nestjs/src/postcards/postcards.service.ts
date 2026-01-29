@@ -1,28 +1,61 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostcardDto } from './dto/create-postcard.dto';
-import { PostcardStatus } from '@prisma/client';
+import { PostcardStatus, NotificationType, Postcard } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
+
+// Type for postcard with sender/recipient relations
+type PostcardWithRelations = Postcard & {
+  sender: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+  };
+  recipient?: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+};
+
+// Helper to get display name from user
+function getDisplayName(user: { name: string | null; email: string }): string {
+  if (user.name) return user.name;
+  // Use part before @ from email as fallback
+  return user.email.split('@')[0];
+}
 
 @Injectable()
 export class PostcardsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) { }
 
   /**
    * Validate XOR constraint: exactly ONE of unlockDate OR (unlockLatitude + unlockLongitude) must be set
    */
   private validateUnlockCondition(dto: CreatePostcardDto): void {
     const hasDateLock = !!dto.unlockDate;
-    const hasGeoLock = dto.unlockLatitude !== undefined && dto.unlockLongitude !== undefined;
+    const hasGeoLock =
+      dto.unlockLatitude !== undefined && dto.unlockLongitude !== undefined;
 
     if (!hasDateLock && !hasGeoLock) {
       throw new BadRequestException(
-        'Must specify either an unlock date OR an unlock location (latitude + longitude)'
+        'Must specify either an unlock date OR an unlock location (latitude + longitude)',
       );
     }
 
     if (hasDateLock && hasGeoLock) {
       throw new BadRequestException(
-        'Cannot specify both unlock date AND unlock location. Choose one unlock condition.'
+        'Cannot specify both unlock date AND unlock location. Choose one unlock condition.',
       );
     }
 
@@ -30,26 +63,34 @@ export class PostcardsService {
     if (hasDateLock) {
       const unlockDate = new Date(dto.unlockDate!);
       const tomorrow = new Date();
+      const now = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(0, 0, 0, 0);
+      now.setDate(now.getDate());
+      now.setHours(0, 0, 0, 0);
 
       const maxDate = new Date();
       maxDate.setFullYear(maxDate.getFullYear() + 1);
 
-      if (unlockDate < tomorrow) {
-        throw new BadRequestException('Unlock date must be at least tomorrow');
+      if (unlockDate < now) {
+        throw new BadRequestException('Unlock date must be at least by now');
       }
       if (unlockDate > maxDate) {
-        throw new BadRequestException('Unlock date cannot be more than 1 year in the future');
+        throw new BadRequestException(
+          'Unlock date cannot be more than 1 year in the future',
+        );
       }
     }
   }
 
   /**
-   * Validate recipient is a valid friend (using Follow relationship)
+   * Validate recipient is a valid friend (using Friendship relationship)
    * Note: "Self" is allowed (senderId === recipientId)
    */
-  private async validateRecipient(senderId: string, recipientId: string): Promise<void> {
+  private async validateRecipient(
+    senderId: string,
+    recipientId: string,
+  ): Promise<void> {
     // Self-postcards are always allowed
     if (senderId === recipientId) {
       return;
@@ -63,18 +104,21 @@ export class PostcardsService {
       throw new NotFoundException('Recipient user not found');
     }
 
-    // Check if sender follows recipient (friendship check via Follow table)
-    const follow = await this.prisma.follow.findUnique({
+    // Check if sender and recipient are friends (mutual friendship with ACCEPTED status)
+    const friendship = await this.prisma.friendship.findFirst({
       where: {
-        followerId_followingId: {
-          followerId: senderId,
-          followingId: recipientId,
-        },
+        OR: [
+          { requesterId: senderId, addresseeId: recipientId },
+          { requesterId: recipientId, addresseeId: senderId },
+        ],
+        status: 'ACCEPTED',
       },
     });
 
-    if (!follow) {
-      throw new ForbiddenException('You can only send postcards to users you follow');
+    if (!friendship) {
+      throw new ForbiddenException(
+        'You can only send postcards to your friends',
+      );
     }
   }
 
@@ -103,20 +147,29 @@ export class PostcardsService {
         unlockLongitude: dto.unlockLongitude ?? null,
         unlockRadius: dto.unlockRadius ?? 50,
         status: PostcardStatus.LOCKED,
-        notificationSent: true, // TODO: Integrate with notification service
+        notificationSent: true,
       },
       include: {
         sender: {
-          select: { id: true, name: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
         recipient: {
-          select: { id: true, name: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
       },
     });
 
-    // TODO: Send push notification to recipient
-    // "You have a locked postcard from {senderName}!"
+    // Send push notification to recipient
+    if (senderId !== recipientId) {
+      const senderName = getDisplayName(postcard.sender);
+      await this.notificationsService.create({
+        userId: recipientId,
+        type: NotificationType.POSTCARD_RECEIVED,
+        title: 'New Postcard',
+        message: `You received a locked postcard from ${senderName}!`,
+        data: { postcardId: postcard.id, senderId, senderName },
+      });
+    }
 
     return this.toResponseDto(postcard, recipientId);
   }
@@ -140,7 +193,7 @@ export class PostcardsService {
       },
       include: {
         sender: {
-          select: { id: true, name: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
       },
     });
@@ -159,7 +212,7 @@ export class PostcardsService {
       },
       include: {
         sender: {
-          select: { id: true, name: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -176,7 +229,7 @@ export class PostcardsService {
       where: { senderId: userId },
       include: {
         recipient: {
-          select: { id: true, name: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -191,19 +244,21 @@ export class PostcardsService {
 
   /**
    * Get a single postcard by ID
+   * Also checks and unlocks if unlock conditions are met (on-demand unlock)
    */
   async getPostcardById(postcardId: string, userId: string) {
-    const postcard = await this.prisma.postcard.findUnique({
-      where: { id: postcardId },
-      include: {
-        sender: {
-          select: { id: true, name: true, avatarUrl: true },
+    let postcard: PostcardWithRelations | null =
+      await this.prisma.postcard.findUnique({
+        where: { id: postcardId },
+        include: {
+          sender: {
+            select: { id: true, name: true, email: true, avatarUrl: true },
+          },
+          recipient: {
+            select: { id: true, name: true, email: true, avatarUrl: true },
+          },
         },
-        recipient: {
-          select: { id: true, name: true, avatarUrl: true },
-        },
-      },
-    });
+      });
 
     if (!postcard) {
       throw new NotFoundException('Postcard not found');
@@ -212,6 +267,14 @@ export class PostcardsService {
     // Only sender or recipient can view
     if (postcard.senderId !== userId && postcard.recipientId !== userId) {
       throw new ForbiddenException('You do not have access to this postcard');
+    }
+
+    // On-demand unlock check: if postcard is LOCKED and unlock conditions are met
+    if (postcard.status === PostcardStatus.LOCKED) {
+      const shouldUnlock = this.checkUnlockConditions(postcard);
+      if (shouldUnlock) {
+        postcard = await this.unlockPostcard(postcard);
+      }
     }
 
     // If recipient is viewing and postcard is unlocked, mark as viewed
@@ -230,10 +293,64 @@ export class PostcardsService {
   }
 
   /**
+   * Check if unlock conditions are met for a postcard
+   */
+  private checkUnlockConditions(postcard: PostcardWithRelations): boolean {
+    const now = new Date();
+
+    // Time-based unlock: check if unlockDate has passed
+    if (postcard.unlockDate && new Date(postcard.unlockDate) <= now) {
+      return true;
+    }
+
+    // Geo-based unlock is handled separately via tryUnlockByLocation
+    return false;
+  }
+
+  /**
+   * Unlock a postcard and send notification
+   */
+  private async unlockPostcard(
+    postcard: PostcardWithRelations,
+  ): Promise<PostcardWithRelations> {
+    const updatedPostcard = await this.prisma.postcard.update({
+      where: { id: postcard.id },
+      data: {
+        status: PostcardStatus.UNLOCKED,
+        unlockNotificationSent: true,
+      },
+      include: {
+        sender: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        recipient: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+      },
+    });
+
+    // Send notification to recipient - use updatedPostcard to get sender name
+    const senderName = getDisplayName(updatedPostcard.sender);
+    await this.notificationsService.create({
+      userId: updatedPostcard.recipientId,
+      type: NotificationType.POSTCARD_UNLOCKED,
+      title: 'Postcard Unlocked! 💌',
+      message: `Your postcard from ${senderName} has been unlocked!`,
+      data: {
+        postcardId: updatedPostcard.id,
+        senderId: updatedPostcard.senderId,
+        senderName,
+      },
+    });
+
+    return updatedPostcard;
+  }
+
+  /**
    * Transform postcard to response DTO with content security
    * Content (message, mediaUrl) is hidden if status === LOCKED and viewer is recipient
    */
-  private toResponseDto(postcard: any, viewerId: string) {
+  private toResponseDto(postcard: PostcardWithRelations, viewerId: string) {
     const isRecipient = postcard.recipientId === viewerId;
     const isSender = postcard.senderId === viewerId;
     const isLocked = postcard.status === PostcardStatus.LOCKED;

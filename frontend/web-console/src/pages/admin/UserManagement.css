@@ -1,0 +1,351 @@
+/* User Management Styles (Story 8.1) */
+
+.user-management {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: #FFFFFF;
+}
+
+.user-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.user-management-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0F0F11;
+  margin: 0 0 8px 0;
+}
+
+.user-management-header p {
+  color: #737880;
+  margin: 0;
+}
+
+.back-button {
+  padding: 10px 20px;
+  background: #F7F7F8;
+  color: #0F0F11;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-button:hover {
+  background: #EEEEEE;
+}
+
+/* Search Form (AC 2) */
+.search-form {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #FFFFFF;
+  color: #0F0F11;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #E8795A;
+}
+
+.search-button {
+  padding: 12px 24px;
+  background: #E8795A;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.search-button:hover:not(:disabled) {
+  background: #D6684A;
+}
+
+.search-button:disabled,
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refresh-button {
+  padding: 12px 20px;
+  border: 1px solid #E5E7EB;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #F7F7F8;
+}
+
+/* Table Container */
+.table-container {
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* States */
+.loading-state,
+.empty-state,
+.error-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #737880;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #E5E7EB;
+  border-top-color: #E8795A;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-state {
+  color: #EF4444;
+}
+
+.error-state button {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #EF4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* User Table (AC 3) */
+.user-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.user-table th,
+.user-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.user-table th {
+  background: #F7F7F8;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #737880;
+}
+
+.user-table tr:last-child td {
+  border-bottom: none;
+}
+
+.user-table tr:hover {
+  background: #F7F7F8;
+}
+
+.locked-row {
+  background: #FEF2F2 !important;
+}
+
+.locked-row:hover {
+  background: #FEE2E2 !important;
+}
+
+/* User Info Cell */
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #0F0F11;
+}
+
+.user-email {
+  font-size: 13px;
+  color: #737880;
+}
+
+/* Role Badges (AC 5) */
+.role-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-badge:hover {
+  opacity: 0.8;
+}
+
+.role-badge-admin {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.role-badge-moderator {
+  background: #E0E7FF;
+  color: #4338CA;
+}
+
+.role-badge-user {
+  background: #F7F7F8;
+  color: #737880;
+}
+
+.role-select {
+  padding: 6px 10px;
+  border: 2px solid #E8795A;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #FFFFFF;
+  color: #0F0F11;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.active {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.status-badge.locked {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+/* Cells */
+.date-cell,
+.count-cell {
+  color: #737880;
+  font-size: 13px;
+}
+
+.count-cell {
+  font-weight: 500;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 8px;
+}
+
+/* Action Buttons */
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.role-btn {
+  background: #F7F7F8;
+}
+
+.role-btn:hover:not(:disabled) {
+  background: #EEEEEE;
+}
+
+.lock-btn {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.lock-btn:hover:not(:disabled) {
+  background: #FDE68A;
+}
+
+.unlock-btn {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.unlock-btn:hover:not(:disabled) {
+  background: #A7F3D0;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.pagination button {
+  padding: 10px 20px;
+  border: 1px solid #E5E7EB;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: #F7F7F8;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination span {
+  color: #737880;
+  font-size: 14px;
+}

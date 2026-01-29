@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Comment } from '@prisma/client';
+import { Comment, NotificationType } from '@prisma/client';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 export interface CommentWithAuthor {
   id: string;
@@ -28,7 +29,12 @@ export interface DeleteCommentResult {
 
 @Injectable()
 export class CommentsService {
-  constructor(private prisma: PrismaService) { }
+  private readonly logger = new Logger(CommentsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) { }
 
   /**
    * Create a new comment on a post
@@ -78,8 +84,19 @@ export class CommentsService {
       }),
     ]);
 
-    // TODO: Trigger notification if userId !== post.authorId (Subtask 1.4)
-    // Pending notification system implementation
+    // Story 6.3 AC 4: Trigger notification if userId !== post.authorId
+    if (userId !== post.authorId) {
+      const commenterName = comment.user.name || 'Someone';
+
+      await this.notificationsService.create({
+        userId: post.authorId,
+        type: NotificationType.COMMENT,
+        title: 'New Comment',
+        message: `${commenterName} commented on your post`,
+        data: { postId, commentId: comment.id, actorId: userId, actorName: commenterName },
+      });
+      this.logger.debug(`Sent COMMENT notification for post ${postId} to ${post.authorId}`);
+    }
 
     return {
       comment: {
@@ -215,7 +232,19 @@ export class CommentsService {
       }),
     ]);
 
-    // TODO: Notify memory author
+    // Story 6.3: Trigger notification if userId !== memory owner
+    if (userId !== memory.userId) {
+      const commenterName = comment.user.name || 'Someone';
+
+      await this.notificationsService.create({
+        userId: memory.userId,
+        type: NotificationType.COMMENT,
+        title: 'New Comment',
+        message: `${commenterName} commented on your memory`,
+        data: { memoryId, commentId: comment.id, actorId: userId, actorName: commenterName },
+      });
+      this.logger.debug(`Sent COMMENT notification for memory ${memoryId} to ${memory.userId}`);
+    }
 
     return {
       comment: {
@@ -248,8 +277,15 @@ export class CommentsService {
       throw new NotFoundException('Post not found');
     }
 
+    // Story 8.3 AC 5: Hide comments from banned users
     const comments = await this.prisma.comment.findMany({
-      where: { postId, deletedAt: null },
+      where: {
+        postId,
+        deletedAt: null,
+        user: {
+          isBanned: false,
+        },
+      },
       include: {
         user: {
           select: {
@@ -289,8 +325,15 @@ export class CommentsService {
       throw new NotFoundException('Memory not found');
     }
 
+    // Story 8.3 AC 5: Hide comments from banned users
     const comments = await this.prisma.comment.findMany({
-      where: { memoryId, deletedAt: null },
+      where: {
+        memoryId,
+        deletedAt: null,
+        user: {
+          isBanned: false,
+        },
+      },
       include: {
         user: {
           select: {

@@ -1,6 +1,6 @@
 # Story 2.3: Manual Pin Placement and Feeling-First Pins
 
-Status: done
+Status: reivew
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

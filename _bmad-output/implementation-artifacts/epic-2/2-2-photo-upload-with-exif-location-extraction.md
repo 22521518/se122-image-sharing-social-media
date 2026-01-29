@@ -28,7 +28,7 @@ so that I don't have to manually search for the location.
   - [x] Fallback UI for missing EXIF (manual placement).
 - [x] Backend: EXIF Verification & Processing
   - [x] Validate image types in `MemoriesService`.
-  - [ ] Strip sensitive EXIF data before public serving (Cloudinary handles via transformations).
+  - [x] Strip sensitive EXIF data before public serving (Cloudinary handles via transformations).
 - [x] Backend: Memory Creation (Photo)
   - [x] Create `POST /memories/photo` endpoint for photo files.
   - [x] Store `Memory` with `type: PHOTO`.
@@ -80,6 +80,7 @@ N/A
   - Integrated Voice/Photo mode toggle in MapScreen
   - **Review Fix (2025-12-22):** backend now parses EXIF timestamp (if provided) and sets it as `createdAt`, ensuring photos are backdated correctly.
   - **Device location fallback**: When photo lacks EXIF GPS, uses current device location via `expo-location`
+  - **2025-12-27:** Added `flags: 'strip_profile'` to Cloudinary upload options in `MediaService` to strip EXIF/GPS metadata from publicly-served images (NFR1 privacy compliance).
 
 ### File List
 
@@ -92,9 +93,13 @@ N/A
 - backend/v1_nestjs/src/memories/services/memories.service.spec.ts (Modified - added 6 photo tests)
 - backend/v1_nestjs/src/memories/dto/create-photo-memory.dto.ts (New)
 - backend/v1_nestjs/src/memories/dto/index.ts (Modified - export new DTO)
+- backend/v1_nestjs/src/media/services/media.service.ts (Modified - added strip_profile flag for EXIF removal)
 
 ## Change Log
 
 - 2025-12-21: Initial story creation
 - 2025-12-22: Implemented photo upload with EXIF extraction - all core tasks complete, 6 new tests passing
 - 2025-12-22: Code Review passed; fixed timestamp ignored issue (Medium) - tests updated. Story complete.
+- 2025-12-27: Completed EXIF stripping task via Cloudinary strip_profile flag.
+- 2025-12-28: Code Review (Epic 2) - Added EXIF timestamp format validation (@Matches regex) to create-photo-memory.dto.ts
+

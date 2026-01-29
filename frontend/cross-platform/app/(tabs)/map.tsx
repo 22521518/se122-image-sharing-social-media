@@ -1,2002 +1,918 @@
-import { Feeling, FeelingSelector } from '@/components/FeelingSelector';
-import { PhotoPicker } from '@/components/PhotoPicker';
-import { VoiceRecorder } from '@/components/VoiceRecorder';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import type { Feeling } from '@/components/FeelingSelector';
+import { PageHeader } from '@/components/layout';
+import { MemoryFilmstrip } from '@/components/map';
+import { CreateMemoryModal } from '@/components/map/CreateMemoryModal';
+import { MapComponent } from '@/components/map/MapComponent';
+import { MemoryAudioPlayer } from '@/components/memories/MemoryAudioPlayer';
+import { FloatingActionButton } from '@/components/shared';
+import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
-import { Memory, MemoryUploadState, useMemories } from '@/context/MemoriesContext';
-import { MapRegion, useMapViewport } from '@/hooks/useMapViewport';
-import { createInitialRegion } from '@/utils/geo';
+import { useMemories, type Memory } from '@/context/MemoriesContext';
+import { useMapViewport, type MapRegion } from '@/hooks/useMapViewport';
+import { useIsMobileView } from '@/hooks/usePlatform';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-// Platform-agnostic map component - Metro resolves to .web.tsx or .native.tsx
-import { MapComponent, MapComponentRef } from '@/components/MapComponent';
-import { VisualMemoryCard } from '@/components/VisualMemoryCard';
-import { Filmstrip, FilmstripRef } from '@/components/map/Filmstrip';
-import { ShutterFlash } from '@/components/map/ShutterFlash';
-import { TeleportButton } from '@/components/map/TeleportButton';
-import { MemoryDetailModal } from '@/components/memories/MemoryDetailModal';
-import { getMemoryColor, getMemoryIcon } from '@/constants/MemoryUI';
-import { useTeleport } from '@/hooks/useTeleport';
-import { analytics } from '@/services/analytics';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { GestureHandlerRootView, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
-// Feeling filter constants (matching web UI)
-const FEELINGS = ['JOY', 'CALM', 'ENERGETIC', 'INSPIRED', 'MELANCHOLY'] as const;
-type FeelingType = typeof FEELINGS[number] | 'ALL';
-
-const feelingEmojis: Record<typeof FEELINGS[number], string> = {
+// const { width } = Dimensions.get('window');
+const FEELINGS: Feeling[] = ['JOY', 'CALM', 'ENERGETIC', 'INSPIRED', 'MELANCHOLY'];
+const FEELING_EMOJIS: Record<Feeling, string> = {
   JOY: '😊',
   CALM: '😌',
   ENERGETIC: '⚡',
   INSPIRED: '✨',
-  MELANCHOLY: '🌧️',
+  MELANCHOLY: '😢',
 };
 
-type CaptureMode = 'voice' | 'photo' | 'feeling';
-type ActivePanel = 'none' | 'photo-confirm' | 'feeling-pin';
-
-interface PendingUpload {
-  uri: string;
-  latitude: number;
-  longitude: number;
-  locationSource: 'exif' | 'device';
-}
-
-interface ManualPinLocation {
-  latitude: number;
-  longitude: number;
-}
-
-// Upload status indicator
-function UploadStatus({ state }: { state: MemoryUploadState }) {
-  if (state === 'idle') return null;
-
-  const statusConfig = {
-    recording: { icon: 'mic' as const, text: 'Recording...', color: '#FF6B6B' },
-    uploading: { icon: 'cloud-upload' as const, text: 'Uploading...', color: '#007AFF' },
-    success: { icon: 'checkmark-circle' as const, text: 'Saved!', color: '#34C759' },
-    error: { icon: 'alert-circle' as const, text: 'Failed', color: '#FF3B30' },
-  };
-
-  const config = statusConfig[state];
-
-  return (
-    <View style={StyleSheet.flatten([styles.uploadStatus, { backgroundColor: config.color }])}>
-      <Ionicons name={config.icon} size={16} color="#FFFFFF" />
-      <Text style={styles.uploadStatusText}>{config.text}</Text>
-    </View>
-  );
-}
-
-// Capture mode toggle
-function CaptureModeToggle({
-  mode,
-  onModeChange,
-  disabled,
-}: {
-  mode: CaptureMode;
-  onModeChange: (mode: CaptureMode) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <View style={StyleSheet.flatten([styles.modeToggle, disabled && styles.modeToggleDisabled])}>
-      <TouchableOpacity
-        style={StyleSheet.flatten([styles.modeButton, mode === 'voice' && styles.modeButtonActive])}
-        onPress={() => onModeChange('voice')}
-        disabled={disabled}
-      >
-        <Ionicons name="mic" size={20} color={mode === 'voice' ? '#FFFFFF' : '#666'} />
-        <Text style={StyleSheet.flatten([styles.modeButtonText, mode === 'voice' && styles.modeButtonTextActive])}>
-          Voice
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={StyleSheet.flatten([styles.modeButton, mode === 'photo' && styles.modeButtonActive])}
-        onPress={() => onModeChange('photo')}
-        disabled={disabled}
-      >
-        <Ionicons name="image" size={20} color={mode === 'photo' ? '#FFFFFF' : '#666'} />
-        <Text style={StyleSheet.flatten([styles.modeButtonText, mode === 'photo' && styles.modeButtonTextActive])}>
-          Photo
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={StyleSheet.flatten([styles.modeButton, mode === 'feeling' && styles.modeButtonActive])}
-        onPress={() => onModeChange('feeling')}
-        disabled={disabled}
-      >
-        <Ionicons name="heart" size={20} color={mode === 'feeling' ? '#FFFFFF' : '#666'} />
-        <Text style={StyleSheet.flatten([styles.modeButtonText, mode === 'feeling' && styles.modeButtonTextActive])}>
-          Feeling
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-// Memory list item
-function MemoryListItem({ memory }: { memory: Memory }) {
-  const getIcon = () => getMemoryIcon(memory);
-  const getColor = () => getMemoryColor(memory);
-
-  return (
-    <View style={StyleSheet.flatten([styles.memoryItem, { borderLeftColor: getColor() }])}>
-      <Ionicons name={getIcon()} size={18} color={getColor()} />
-      <View style={styles.memoryItemInfo}>
-        {memory.title && <Text style={styles.memoryItemTitle}>{memory.title}</Text>}
-        <Text style={styles.memoryItemCoords}>
-          {memory.latitude.toFixed(4)}, {memory.longitude.toFixed(4)}
-        </Text>
-      </View>
-      {memory.feeling && (
-        <View style={StyleSheet.flatten([styles.feelingBadge, { backgroundColor: getColor() + '20' }])}>
-          <Text style={StyleSheet.flatten([styles.feelingBadgeText, { color: getColor() }])}>{memory.feeling}</Text>
-        </View>
-      )}
-    </View>
-  );
-}
+import { socialService } from '@/services/social.service';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function MapScreen() {
-  const { width } = useWindowDimensions();
-  const isWideScreen = width >= 768;
-
-  const { accessToken, completeOnboarding } = useAuth();
-  const isAuthenticated = !!accessToken;
-  const params = useLocalSearchParams<{ onboardingMemory?: string }>();
   const router = useRouter();
-  const {
-    mapMemories,
-    uploadState,
-    error,
-    isLoadingMapMemories,
-    uploadVoiceMemory,
-    uploadPhotoMemory,
-    uploadFeelingPin,
-    clearError,
-  } = useMemories();
+  const isMobile = useIsMobileView();
+  const insets = useSafeAreaInsets();
+  const { user, accessToken } = useAuth();
+  const { memories, fetchMemories, uploadFeelingPin, uploadPhotoMemory } = useMemories();
 
-  // Map viewport hook for debounced bounding box queries (Story 2.4a)
-  const { onRegionChange } = useMapViewport({
-    debounceMs: 500, // AC: Debounce to avoid request spam
-    limit: 50,
+  // Data state
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+
+  // Modal state
+  const [captureModalVisible, setCaptureModalVisible] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+
+  // Map state
+  const [manualPinLocation, setManualPinLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [showTempPin, setShowTempPin] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const mapRef = useRef<any>(null);
+
+  // Default region (Ho Chi Minh City)
+  const defaultRegion: MapRegion = {
+    latitude: 10.8231,
+    longitude: 106.6297,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  };
+
+  // Map viewport hook for bounding box queries
+  const { onRegionChange, isLoading: isMapLoading } = useMapViewport();
+
+  // Filter state
+  const [feelingFilter, setFeelingFilter] = useState<Feeling | 'ALL'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // New memory form state
+  const [newMemory, setNewMemory] = useState({
+    title: '',
+    content: '',
+    feeling: 'JOY' as Feeling,
+    photoUrl: '',
   });
 
-  // Story 4.1: Teleport Feature
-  const mapRef = useRef<MapComponentRef>(null);
-  const [isFlashing, setIsFlashing] = useState(false);
-  const { teleport, isLoading: isTeleporting } = useTeleport({
-    token: accessToken || null,
-    maxHistory: 5,
+  // Filter memories
+  const filteredMemories = memories.filter((m) => {
+    const matchesFeeling = feelingFilter === 'ALL' || m.feeling === feelingFilter;
+    const matchesSearch =
+      !searchQuery || (m.title?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+    return matchesFeeling && matchesSearch;
   });
 
-  const handleTeleport = useCallback(async () => {
-    // 1. Get random memory
-    const memory = await teleport();
-    
-    if (!memory) {
-      Alert.alert(
-        'No Memories Found',
-        'Create your first memory to start teleporting!',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Create Memory', 
-            onPress: () => {
-              // Open capture mode (default to voice)
-              setCaptureMode('voice');
-              // On mobile, ensure sheet is open if needed, or just relying on capture area visible
-              // If bottom sheet is covering, maybe snap to index 0?
-              // For now, simple activation is enough.
-            }
+  // Load memories on focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadMemories = async () => {
+        try {
+          await fetchMemories();
+        } catch (error) {
+          console.error('Failed to load memories:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadMemories();
+    }, [fetchMemories]),
+  );
+
+  // Memory interaction state
+  const handleLike = async () => {
+    if (!selectedMemory || !user) return;
+
+    // Optimistic update
+    const wasLiked = selectedMemory.liked;
+    const newLikeCount = (selectedMemory.likeCount || 0) + (wasLiked ? -1 : 1);
+
+    // Update local state for the modal
+    setSelectedMemory((prev) =>
+      prev
+        ? {
+            ...prev,
+            liked: !wasLiked,
+            likeCount: newLikeCount,
           }
-        ]
+        : null,
+    );
+
+    try {
+      await socialService.toggleLikeMemory(selectedMemory.id, accessToken || '');
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      // Revert on error
+      setSelectedMemory((prev) =>
+        prev
+          ? {
+              ...prev,
+              liked: wasLiked,
+              likeCount: (prev.likeCount || 0) + (wasLiked ? 1 : -1),
+            }
+          : null,
       );
-      return;
     }
+  };
 
-    // 2. Trigger Flash
-    setIsFlashing(true);
+  const handleComment = () => {
+    if (selectedMemory) {
+      goToMemoryDetail(selectedMemory.id);
+    }
+  };
 
-    // 3. Move Camera (Wait nicely for flash to peak)
-    setTimeout(() => {
+  const handleMemoryPress = useCallback(
+    async (memory: Memory) => {
+      setSelectedMemory(memory);
+      setDetailModalVisible(true);
+
+      // Fetch latest social status
+      if (accessToken) {
+        try {
+          const status = await socialService.getLikeStatusMemory(memory.id, accessToken);
+          setSelectedMemory((prev) =>
+            prev && prev.id === memory.id ? { ...prev, liked: status.liked } : prev,
+          );
+        } catch (e) {
+          console.log('Failed to fetch like status', e);
+        }
+      }
+
+      // Fly to the memory location
       mapRef.current?.flyTo({
         latitude: memory.latitude,
         longitude: memory.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 800); // 0.8s flight
-    }, 100);
-
-    // 4. Open Detail & Play Audio after flight lands
-    setTimeout(() => {
-      // Create full memory object from teleported partial
-      // We need to fetch full details or map it. 
-      // TeleportedMemory has most fields. Let's assume it's enough or fetch more.
-      // Based on AC, we return { id, lat, long, mediaUrl, feeling, title }.
-      // Memory type needs inference.
-      const type = memory.voiceUrl ? 'voice' : memory.imageUrl ? 'photo' : 'feeling';
-      const fullMemory: Memory = {
-         id: memory.id,
-         userId: '', // Not needed for display usually or we don't have it
-         type: type as any,
-         mediaUrl: memory.voiceUrl || memory.imageUrl || null,
-         feeling: memory.feeling || undefined,
-         title: memory.title || undefined,
-         latitude: memory.latitude,
-         longitude: memory.longitude,
-         createdAt: new Date().toISOString(),
-         privacy: 'public', // Assumed
-         likeCount: 0,
-         commentCount: 0,
-         liked: false,
-         updatedAt: new Date().toISOString()
-      };
-      
-      setDetailMemory(fullMemory);
-    }, 900); // 100ms start + 800ms flight = 900ms total
-  }, [teleport]);
-
-  // Track current map region
-  const [currentRegion, setCurrentRegion] = useState<MapRegion>(
-    createInitialRegion(10.762622, 106.660172, 12), // Default: Ho Chi Minh City
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    },
+    [accessToken],
   );
 
-  const [captureMode, setCaptureMode] = useState<CaptureMode>('voice');
-  const [activePanel, setActivePanel] = useState<ActivePanel>('none');
-  const [isLoading, setIsLoading] = useState(false);
+  const handleCapture = () => {
+    setCaptureModalVisible(true);
+  };
 
-  // Photo upload state
-  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
+  const handleTeleport = () => {
+    // Teleport to random memory
+    if (filteredMemories.length > 0) {
+      const randomIndex = Math.floor(Math.random() * filteredMemories.length);
+      const memory = filteredMemories[randomIndex];
+      handleMemoryPress(memory);
+      // Fly to the memory location
+      mapRef.current?.flyTo({
+        latitude: memory.latitude,
+        longitude: memory.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    }
+  };
 
-  // Feeling pin state
-  const [manualPinLocation, setManualPinLocation] = useState<ManualPinLocation | null>(null);
-  const [selectedFeeling, setSelectedFeeling] = useState<Feeling | null>(null);
-  const [pinTitle, setPinTitle] = useState('');
+  const handleMapLongPress = useCallback((coordinate: { latitude: number; longitude: number }) => {
+    setManualPinLocation(coordinate);
+    setShowTempPin(true);
+    // Pre-fill the new memory with location and open create modal
+    setNewMemory((prev) => ({
+      ...prev,
+      title: '',
+      content: '',
+    }));
+    setCreateModalVisible(true);
+  }, []);
 
-  // Mobile Layout State
-  const bottomSheetRef = React.useRef<BottomSheet>(null);
-  const snapPoints = React.useMemo(() => ['15%', '55%', '90%'], []);
-  // Mobile Tabs
-  const [activeMobileTab, setActiveMobileTab] = useState<'browse' | 'posts' | 'voice' | 'photo' | 'feeling'>(
-    'browse',
+  const handleRegionChangeComplete = useCallback(
+    (region: MapRegion) => {
+      onRegionChange(region);
+    },
+    [onRegionChange],
   );
-  // Desktop action panel collapse state
-  const [isActionPanelOpen, setIsActionPanelOpen] = useState(true);
-  // Story 2.4b: Selected memory for filmstrip two-way sync
-  const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
-  // Story 6.5: Memory detail modal from map marker press
-  const [detailMemory, setDetailMemory] = useState<Memory | null>(null);
 
-  // Feeling filter and search state (matching web UI)
-  const [feelingFilter, setFeelingFilter] = useState<FeelingType>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Filtered memories based on feeling and search
-  const filteredMemories = useMemo(() => {
-    return mapMemories.filter(m => {
-      const matchesFeeling = feelingFilter === 'ALL' || m.feeling === feelingFilter;
-      const matchesSearch = !searchQuery || 
-        m.title?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesFeeling && matchesSearch;
-    });
-  }, [mapMemories, feelingFilter, searchQuery]);
-  const filmstripRef = useRef<FilmstripRef>(null);
-
-  // Initialize viewport on mount and when authenticated
-  useEffect(() => {
-    if (isAuthenticated && currentRegion) {
-      onRegionChange(currentRegion);
+  const handleCreateMemory = async (data: {
+    title: string;
+    content: string;
+    feeling: Feeling;
+    type: 'text_only' | 'voice' | 'photo' | 'mixed';
+    privacy: 'private' | 'friends' | 'public';
+    mediaUrl?: string;
+    audioUrl?: string;
+  }) => {
+    if (!data.title.trim()) {
+      return;
     }
-  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handle onboarding memory (AC 4, Subtask 3.1-3.3)
-  useEffect(() => {
-    if (params.onboardingMemory && isAuthenticated) {
-      // Pre-fill the feeling pin with onboarding memory
-      setPinTitle(params.onboardingMemory);
-      setCaptureMode('feeling');
-      setActiveMobileTab('feeling');
-      
-      // Get current location and show feeling pin panel
-      handleDropFeelingPin();
+    try {
+      // Use manual pin location if available, otherwise use current location if available, else default to Ho Chi Minh City
+      const location = manualPinLocation ||
+        currentLocation || { latitude: 10.8231, longitude: 106.6297 };
+      let created: Memory | null = null;
+
+      if (data.type === 'photo' && data.mediaUrl) {
+        // Upload as photo memory
+        created = await uploadPhotoMemory({
+          uri: data.mediaUrl,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          title: data.title,
+          privacy: data.privacy,
+        });
+      } else {
+        // Upload as feeling pin (with optional audio)
+        created = await uploadFeelingPin({
+          latitude: location.latitude,
+          longitude: location.longitude,
+          feeling: data.feeling,
+          title: data.title,
+          voiceUri: data.audioUrl,
+          privacy: data.privacy,
+        });
+      }
+
+      if (created) {
+        setCreateModalVisible(false);
+        setNewMemory({ title: '', content: '', feeling: 'JOY', photoUrl: '' });
+        // Reset temp pin state
+        setManualPinLocation(null);
+        setShowTempPin(false);
+      }
+    } catch (error) {
+      console.error('Failed to create memory:', error);
     }
-  }, [params.onboardingMemory, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
-  // Get current location for feeling pin
-  const handleDropFeelingPin = useCallback(async () => {
-    setIsLoading(true);
+  const goToMemoryDetail = (memoryId: string) => {
+    setDetailModalVisible(false);
+    router.push({ pathname: '/(tabs)/memory/[id]', params: { id: memoryId } });
+  };
+
+  // Function to open modal with current location (for FAB and New button)
+  const handleOpenCreateWithCurrentLocation = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Location permission is needed to place pins.');
-        setIsLoading(false);
-        return;
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        setCurrentLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
       }
-
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      setManualPinLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-      setSelectedFeeling(null);
-      setPinTitle('');
-      setActivePanel('feeling-pin');
-    } catch (err) {
-      console.error('Failed to get location:', err);
-      Alert.alert('Error', 'Could not get your current location.');
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      console.warn('Failed to get current location:', error);
     }
-  }, []);
-
-  const handleRecordingComplete = useCallback(
-    async (data: { uri: string; duration: number; latitude: number; longitude: number }) => {
-      await uploadVoiceMemory({
-        uri: data.uri,
-        duration: data.duration,
-        latitude: data.latitude,
-        longitude: data.longitude,
-      });
-    },
-    [uploadVoiceMemory],
-  );
-
-  const handlePhotoSelected = useCallback(
-    async (data: {
-      uri: string;
-      exif: { latitude?: number; longitude?: number; timestamp?: string } | null;
-      hasLocation: boolean;
-    }) => {
-      let latitude: number;
-      let longitude: number;
-      let locationSource: 'exif' | 'device';
-
-      if (data.hasLocation && data.exif?.latitude && data.exif?.longitude) {
-        latitude = data.exif.latitude;
-        longitude = data.exif.longitude;
-        locationSource = 'exif';
-      } else {
-        setIsLoading(true);
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Location Required', 'Please enable location services.');
-            setIsLoading(false);
-            return;
-          }
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-          });
-          latitude = location.coords.latitude;
-          longitude = location.coords.longitude;
-          locationSource = 'device';
-        } catch {
-          Alert.alert('Error', 'Failed to get location for this photo.');
-          setIsLoading(false);
-          return;
-        }
-        setIsLoading(false);
-      }
-
-      setPendingUpload({ uri: data.uri, latitude, longitude, locationSource });
-      setActivePanel('photo-confirm');
-    },
-    [],
-  );
-
-  const handleConfirmPhotoUpload = useCallback(async () => {
-    if (!pendingUpload) return;
-
-    await uploadPhotoMemory({
-      uri: pendingUpload.uri,
-      latitude: pendingUpload.latitude,
-      longitude: pendingUpload.longitude,
-    });
-
-    setPendingUpload(null);
-    setActivePanel('none');
-  }, [pendingUpload, uploadPhotoMemory]);
-
-  const handleConfirmFeelingPin = useCallback(async () => {
-    if (!selectedFeeling || !manualPinLocation) return;
-
-    await uploadFeelingPin({
-      latitude: manualPinLocation.latitude,
-      longitude: manualPinLocation.longitude,
-      feeling: selectedFeeling,
-      title: pinTitle || undefined,
-    });
-
-    // If this pin was created from onboarding, mark user as onboarded (AC 4, Subtask 3.3)
-    if (params.onboardingMemory) {
-      await completeOnboarding();
-      // Track onboarding completion (Subtask 2.4)
-      analytics.track('ONBOARDING_COMPLETED', {
-        hasMemory: true,
-        feeling: selectedFeeling,
-      });
-    }
-
+    // Clear manual pin since we're using current location
     setManualPinLocation(null);
-    setSelectedFeeling(null);
-    setPinTitle('');
-    setActivePanel('none');
-  }, [selectedFeeling, manualPinLocation, pinTitle, uploadFeelingPin, params.onboardingMemory, completeOnboarding]);
-
-  const handleCancelPanel = useCallback(() => {
-    setPendingUpload(null);
-    setManualPinLocation(null);
-    setSelectedFeeling(null);
-    setPinTitle('');
-    setActivePanel('none');
-  }, []);
-
-  // Story 2.4b: Handle filmstrip memory press - center map and optionally play audio
-  const handleFilmstripMemoryPress = useCallback((memory: Memory) => {
-    // Update selected memory for highlight
-    setSelectedMemoryId(memory.id);
-    // Animate map to memory location (AC: centers map on pin)
-    setCurrentRegion({
-      ...currentRegion,
-      latitude: memory.latitude,
-      longitude: memory.longitude,
-    });
-  }, [currentRegion]);
-
-  // Handle map pin press for two-way sync AND open detail modal (Story 6.5)
-  const handleMapMemoryPress = useCallback((memory: Memory) => {
-    setSelectedMemoryId(memory.id);
-    // Scroll filmstrip to the memory
-    filmstripRef.current?.scrollToMemory(memory.id);
-    // Open detail modal (Story 6.5: AC1 - tap on memory pin opens detail view)
-    setDetailMemory(memory);
-  }, []);
-
-  // Close detail modal handler
-  const handleCloseDetail = useCallback(() => {
-    setDetailMemory(null);
-  }, []);
-
-  const handleRecordingError = useCallback((errorMessage: string) => {
-    Alert.alert('Error', errorMessage);
-  }, []);
-
-  // Show login prompt if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ThemedView style={styles.centeredContent}>
-          <Ionicons name="map-outline" size={64} color="#666" />
-          <ThemedText style={styles.loginPrompt}>Log in to start capturing memories</ThemedText>
-        </ThemedView>
-      </SafeAreaView>
-    );
-  }
-
-  // Shared error banner helper
-  const renderError = () =>
-    error && (
-      <TouchableOpacity style={styles.errorBanner} onPress={clearError}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Ionicons name="close" size={16} color="#FF3B30" />
-      </TouchableOpacity>
-    );
-
-  // Shared Action Panel Content (Photo Confirmation, Feeling Pin, Capture UI)
-  const renderActionPanelContent = () => (
-    <>
-      {/* Photo confirm panel now handled inside PhotoPicker (Story 3.2 Subtask 3.4) */}
-
-      {activePanel === 'feeling-pin' && manualPinLocation && (
-        <View style={styles.confirmPanel}>
-          <Text style={styles.panelTitle}>Create Feeling Pin</Text>
-          <View style={styles.locationInfo}>
-            <Ionicons name="location" size={18} color="#5856D6" />
-            <Text style={styles.locationText}>
-              {manualPinLocation.latitude.toFixed(4)}, {manualPinLocation.longitude.toFixed(4)}
-            </Text>
-          </View>
-          <TextInput
-            style={styles.titleInput}
-            placeholder="Add a title (optional)"
-            placeholderTextColor="#999"
-            value={pinTitle}
-            onChangeText={setPinTitle}
-            maxLength={100}
-          />
-          <FeelingSelector
-            selectedFeeling={selectedFeeling}
-            onFeelingSelect={setSelectedFeeling}
-            compact={!isWideScreen}
-          />
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelPanel}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.confirmButton, !selectedFeeling && styles.buttonDisabled])}
-              onPress={handleConfirmFeelingPin}
-              disabled={!selectedFeeling || uploadState === 'uploading'}
-            >
-              {uploadState === 'uploading' ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Ionicons name="heart" size={18} color="#FFF" />
-                  <Text style={styles.confirmButtonText}>Create</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {activePanel === 'none' && (
-        <>
-          <CaptureModeToggle mode={captureMode} onModeChange={setCaptureMode} />
-          <View style={styles.captureArea}>
-            {captureMode === 'voice' && (
-              <VoiceRecorder
-                onRecordingComplete={handleRecordingComplete}
-                onError={handleRecordingError}
-              />
-            )}
-            {captureMode === 'photo' && (
-              <PhotoPicker
-                onConfirmUpload={async (data) => {
-                  await uploadPhotoMemory({
-                    uri: data.uri,
-                    latitude: data.latitude,
-                    longitude: data.longitude,
-                  });
-                }}
-                showConfirmPanel={true}
-                uploadState={uploadState}
-                onError={handleRecordingError}
-              />
-            )}
-            {captureMode === 'feeling' && (
-              <View style={styles.feelingCaptureArea}>
-                <Ionicons name="hand-left" size={48} color="#5856D6" />
-                <Text style={styles.feelingCaptureText}>
-                  Long-press anywhere on the map above to drop a pin with an emotional tag
-                </Text>
-                <Text style={styles.feelingCaptureHint}>
-                  💡 Tip: Hold your finger on the map for half a second
-                </Text>
-                <TouchableOpacity style={styles.dropPinButton} onPress={handleDropFeelingPin}>
-                  <Ionicons name="add-circle" size={24} color="#FFF" />
-                  <Text style={styles.dropPinButtonText}>Drop Right Here</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </>
-      )}
-
-      {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#5856D6" />
-          <Text style={styles.loadingText}>Getting location...</Text>
-        </View>
-      )}
-    </>
-  );
-
-  // Desktop Layout
-  if (isWideScreen) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ShutterFlash isFlashing={isFlashing} onFlashComplete={() => setIsFlashing(false)} />
-        <MapComponent
-          ref={mapRef}
-          initialRegion={currentRegion}
-          onRegionChangeComplete={(region) => {
-            setCurrentRegion(region);
-            onRegionChange(region);
-          }}
-          onLongPress={(coordinate) => {
-            setManualPinLocation(coordinate);
-            setSelectedFeeling(null);
-            setPinTitle('');
-            setActivePanel('feeling-pin');
-          }}
-          memories={mapMemories}
-          onMemoryPress={handleMapMemoryPress}
-          manualPinLocation={manualPinLocation}
-          showTempPin={activePanel === 'feeling-pin'}
-          isLoading={isLoadingMapMemories}
-          containerStyle={StyleSheet.absoluteFill}
-        />
-
-        {/* Story 2.4b: Filmstrip overlay at bottom of map */}
-        <Filmstrip
-          ref={filmstripRef}
-          memories={mapMemories}
-          onMemoryPress={handleFilmstripMemoryPress}
-          isLoading={isLoadingMapMemories}
-          selectedMemoryId={selectedMemoryId}
-        />
-
-        <View style={styles.desktopOverlayContainer} pointerEvents="box-none">
-          <View style={styles.desktopLeftPanelWide}>
-            <View style={StyleSheet.flatten([styles.header, { borderBottomWidth: 0, paddingBottom: 0 }])}>
-              <ThemedText type="title" style={styles.headerTitle}>
-                My Living Map
-              </ThemedText>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <TeleportButton 
-                  onPress={handleTeleport} 
-                  isLoading={isTeleporting}
-                  variant="inline"
-                />
-                {/* Story 4.2: Postcard Creation */}
-                <TouchableOpacity
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    backgroundColor: '#5856D6',
-                    borderRadius: 8,
-                  }}
-                  onPress={() => router.push('/postcards/create' as any)}
-                >
-                  <Ionicons name="mail" size={18} color="#FFF" />
-                  <Text style={{ color: '#FFF', fontWeight: '600', fontSize: 14 }}>Postcard</Text>
-                </TouchableOpacity>
-                <UploadStatus state={uploadState} />
-              </View>
-            </View>
-            <ScrollView style={styles.memoriesListWide} showsVerticalScrollIndicator={false}>
-              {mapMemories.length === 0 ? (
-                <Text style={styles.emptyText}>
-                  {isLoadingMapMemories
-                    ? 'Loading memories...'
-                    : 'No memories in this area. Pan the map or start capturing!'}
-                </Text>
-              ) : (
-                mapMemories.map((memory) => (
-                  <TouchableOpacity
-                    key={memory.id}
-                    style={styles.desktopPostCard}
-                    onPress={() => {
-                      setCurrentRegion({
-                        ...currentRegion,
-                        latitude: memory.latitude,
-                        longitude: memory.longitude,
-                      });
-                    }}
-                  >
-                    {memory.mediaUrl && (
-                      <Image
-                        source={{ uri: memory.mediaUrl }}
-                        style={styles.desktopPostImage}
-                        resizeMode="contain"
-                      />
-                    )}
-                    <View style={styles.desktopPostContent}>
-                      <View style={styles.desktopPostHeader}>
-                        <View
-                          style={StyleSheet.flatten([
-                            styles.desktopPostIcon,
-                            { backgroundColor: memory.type === 'voice' ? '#FF6B6B' : memory.type === 'photo' ? '#5856D6' : '#A855F7' },
-                          ])}
-                        >
-                          <Ionicons
-                            name={memory.type === 'voice' ? 'mic' : memory.type === 'photo' ? 'image' : 'heart'}
-                            size={14}
-                            color="#FFF"
-                          />
-                        </View>
-                        <Text style={styles.desktopPostTitle}>
-                          {memory.title || `${memory.type === 'voice' ? 'Voice' : memory.type === 'photo' ? 'Photo' : 'Feeling'} Memory`}
-                        </Text>
-                        {memory.feeling && (
-                          <View style={StyleSheet.flatten([styles.desktopPostFeeling, { backgroundColor: '#F0EFFF' }])}>
-                            <Text style={styles.desktopPostFeelingText}>{memory.feeling}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.desktopPostLocation}>
-                        📍 {memory.latitude.toFixed(4)}, {memory.longitude.toFixed(4)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
-          </View>
-
-          <View style={StyleSheet.flatten([styles.desktopRightPanel, !isActionPanelOpen && styles.desktopRightPanelCollapsed])}>
-            <TouchableOpacity
-              style={styles.actionPanelToggle}
-              onPress={() => setIsActionPanelOpen(!isActionPanelOpen)}
-            >
-              <Ionicons
-                name={isActionPanelOpen ? 'chevron-forward' : 'chevron-back'}
-                size={20}
-                color="#666"
-              />
-              {!isActionPanelOpen && (
-                <Text style={styles.actionPanelToggleText}>Actions</Text>
-              )}
-            </TouchableOpacity>
-            {isActionPanelOpen && (
-              <View style={styles.actionPanelContent}>
-                {renderError()}
-                {renderActionPanelContent()}
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Memory Detail Modal (Story 6.5) */}
-        <MemoryDetailModal
-          visible={!!detailMemory}
-          memory={detailMemory}
-          onClose={handleCloseDetail}
-          autoPlay={true} // Story 4.1 AC3
-        />
-      </SafeAreaView>
-    );
-  }
-
-  // Mobile Layout
-  const CARD_WIDTH = width * 0.7;
-  const SNAP_INTERVAL = CARD_WIDTH + 16;
-  const INSET_X = (width - CARD_WIDTH) / 2;
+    setShowTempPin(false);
+    setCreateModalVisible(true);
+  };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ShutterFlash isFlashing={isFlashing} onFlashComplete={() => setIsFlashing(false)} />
-      <MapComponent
-        ref={mapRef}
-        initialRegion={currentRegion}
-        onRegionChangeComplete={(region) => {
-          setCurrentRegion(region);
-          onRegionChange(region);
-        }}
-        onLongPress={(coordinate) => {
-          setManualPinLocation(coordinate);
-          setSelectedFeeling(null);
-          setPinTitle('');
-          setActivePanel('feeling-pin');
-        }}
-        memories={mapMemories}
-        onMemoryPress={handleMapMemoryPress}
-        manualPinLocation={manualPinLocation}
-        showTempPin={activePanel === 'feeling-pin'}
-        isLoading={isLoadingMapMemories}
-        containerStyle={StyleSheet.absoluteFill}
-      />
-
-      <SafeAreaView style={styles.mobileHeaderOverlay} pointerEvents="box-none">
-        {renderError()}
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            width: '100%',
-            paddingHorizontal: 16,
-          }}
-        >
-          <UploadStatus state={uploadState} />
-          <TouchableOpacity
-            style={styles.fullscreenToggle}
-            onPress={() => bottomSheetRef.current?.snapToIndex(0)}
-          >
-            <Ionicons name="map-outline" size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-
-      <TeleportButton 
-        onPress={handleTeleport} 
-        isLoading={isTeleporting}
-        variant="fab"
-        style={{ bottom: 200 }} // Position above bottom sheet (higher to avoid overlap)
-      />
-
-      {/* Story 4.2: Postcard FAB - Always visible on mobile */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          left: 16,
-          bottom: 200,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: '#5856D6',
-          alignItems: 'center',
-          justifyContent: 'center',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-          elevation: 8,
-          zIndex: 100,
-        }}
-        onPress={() => router.push('/postcards/create' as any)}
-        activeOpacity={0.8}
-        accessibilityLabel="Create Postcard"
-        accessibilityRole="button"
-      >
-        <Ionicons name="mail" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
-
-      {/* Overlay for Blocking Actions (Photo Confirm / Manual Pin) */}
-      {activePanel !== 'none' ? (
-        <View style={styles.mobileActionOverlay}>{renderActionPanelContent()}</View>
-      ) : (
-        <BottomSheet
-          ref={bottomSheetRef}
-          index={1}
-          snapPoints={snapPoints}
-          enablePanDownToClose={false}
-          style={{ zIndex: 100 }}
-        >
-          <BottomSheetView style={styles.sheetHeader}>
-            {/* Filmstrip Header - Matching web UI */}
-            <View style={styles.filmstripHeader}>
-              {/* Title Row with Memory Count */}
-              <View style={styles.filmstripTitleRow}>
-                <Text style={styles.sheetTitle}>Your Memories</Text>
-                <Text style={styles.memoryCount}>
-                  {filteredMemories.length} memories
-                </Text>
-              </View>
-
-              {/* Feeling Filter Badges */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterBadgesContainer}
-                style={styles.filterBadgesScroll}
+    <View style={styles.container}>
+      <PageHeader
+        title="Map"
+        rightAction={
+          <View>
+            {/* New Post Button - Desktop only */}
+            {!isMobile && (
+              <Pressable
+                style={styles.newMemoryButton}
+                onPress={handleOpenCreateWithCurrentLocation}
               >
-                <TouchableOpacity
-                  style={StyleSheet.flatten([
-                    styles.filterBadge,
-                    feelingFilter === 'ALL' && styles.filterBadgeActive,
-                  ])}
-                  onPress={() => setFeelingFilter('ALL')}
-                >
-                  <Text
-                    style={StyleSheet.flatten([
-                      styles.filterBadgeText,
-                      feelingFilter === 'ALL' && styles.filterBadgeTextActive,
-                    ])}
-                  >
-                    All
-                  </Text>
-                </TouchableOpacity>
-                {FEELINGS.map((feeling) => (
-                  <TouchableOpacity
-                    key={feeling}
-                    style={StyleSheet.flatten([
-                      styles.filterBadge,
-                      feelingFilter === feeling && styles.filterBadgeActive,
-                    ])}
-                    onPress={() => setFeelingFilter(feeling)}
-                  >
-                    <Text
-                      style={StyleSheet.flatten([
-                        styles.filterBadgeText,
-                        feelingFilter === feeling && styles.filterBadgeTextActive,
-                      ])}
-                    >
-                      {feelingEmojis[feeling]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Search Input */}
-              <View style={styles.searchContainer}>
-                <Ionicons name="search" size={16} color="#999" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search memories..."
-                  placeholderTextColor="#999"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color="#999" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </BottomSheetView>
-
-          {/* Di chuyển ScrollView xuống đây, ngoài BottomSheetView */}
-          <View style={styles.quickActionsWrapper}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickActionsContainer}
-              style={styles.quickActionsScroll}
-              nestedScrollEnabled={true}
-              scrollEnabled={true}
-              bounces={false}
-            >
-              <TouchableOpacity
-                style={StyleSheet.flatten([styles.actionBtn, activeMobileTab === 'posts' && styles.actionBtnActive])}
-                onPress={() =>
-                  setActiveMobileTab(activeMobileTab === 'posts' ? 'browse' : 'posts')
-                }
-              >
-                <Ionicons
-                  name="newspaper"
-                  size={18}
-                  color={activeMobileTab === 'posts' ? '#FFF' : '#5856D6'}
-                />
-                <Text
-                  style={StyleSheet.flatten([
-                    styles.actionBtnText,
-                    activeMobileTab === 'posts' && styles.actionBtnTextActive,
-                  ])}
-                >
-                  Posts
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={StyleSheet.flatten([styles.actionBtn, activeMobileTab === 'voice' && styles.actionBtnActive])}
-                onPress={() =>
-                  setActiveMobileTab(activeMobileTab === 'voice' ? 'browse' : 'voice')
-                }
-              >
-                <Ionicons
-                  name="mic"
-                  size={18}
-                  color={activeMobileTab === 'voice' ? '#FFF' : '#5856D6'}
-                />
-                <Text
-                  style={StyleSheet.flatten([
-                    styles.actionBtnText,
-                    activeMobileTab === 'voice' && styles.actionBtnTextActive,
-                  ])}
-                >
-                  Voice
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={StyleSheet.flatten([styles.actionBtn, activeMobileTab === 'photo' && styles.actionBtnActive])}
-                onPress={() =>
-                  setActiveMobileTab(activeMobileTab === 'photo' ? 'browse' : 'photo')
-                }
-              >
-                <Ionicons
-                  name="camera"
-                  size={18}
-                  color={activeMobileTab === 'photo' ? '#FFF' : '#5856D6'}
-                />
-                <Text
-                  style={StyleSheet.flatten([
-                    styles.actionBtnText,
-                    activeMobileTab === 'photo' && styles.actionBtnTextActive,
-                  ])}
-                >
-                  Photo
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={StyleSheet.flatten([
-                  styles.actionBtn,
-                  activeMobileTab === 'feeling' && styles.actionBtnActive,
-                ])}
-                onPress={() =>
-                  setActiveMobileTab(activeMobileTab === 'feeling' ? 'browse' : 'feeling')
-                }
-              >
-                <Ionicons
-                  name="heart"
-                  size={18}
-                  color={activeMobileTab === 'feeling' ? '#FFF' : '#5856D6'}
-                />
-                <Text
-                  style={StyleSheet.flatten([
-                    styles.actionBtnText,
-                    activeMobileTab === 'feeling' && styles.actionBtnTextActive,
-                  ])}
-                >
-                  Feeling
-                </Text>
-              </TouchableOpacity>
-
-              {/* Story 4.2: Postcard Creation - Navigation to postcards screen */}
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => router.push('/postcards/create' as any)}
-              >
-                <Ionicons
-                  name="mail"
-                  size={18}
-                  color="#5856D6"
-                />
-                <Text style={styles.actionBtnText}>
-                  Postcard
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-
-          <View style={styles.sheetContent}>
-            {activeMobileTab === 'posts' ? (
-              <GHScrollView
-                contentContainerStyle={{ paddingHorizontal: INSET_X, paddingVertical: 16 }}
-                horizontal={true}
-                showsHorizontalScrollIndicator={false}
-                decelerationRate="fast"
-                snapToInterval={SNAP_INTERVAL}
-                snapToAlignment="center"
-              >
-                {filteredMemories.length === 0 ? (
-                  <View style={StyleSheet.flatten([styles.emptyPostsContainer, { width: width - INSET_X * 2 }])}>
-                    <Ionicons name="newspaper-outline" size={48} color="#CCC" />
-                    <Text style={styles.emptyPostsText}>No posts yet</Text>
-                    <Text style={styles.emptyPostsSubtext}>
-                      Your memories will appear here as posts
-                    </Text>
-                  </View>
-                ) : (
-                  filteredMemories.map((m) => (
-                    <VisualMemoryCard
-                      key={m.id}
-                      memory={m}
-                      onPress={(mem) => {
-                        setCurrentRegion({
-                          ...currentRegion,
-                          latitude: mem.latitude,
-                          longitude: mem.longitude,
-                        });
-                        setActiveMobileTab('browse');
-                        // bottomSheetRef.current?.snapToIndex(0);
-                      }}
-                    />
-                  ))
-                )}
-              </GHScrollView>
-            ) : activeMobileTab !== 'browse' ? (
-              <View style={styles.mobileCaptureContainer}>
-                {activeMobileTab === 'voice' && (
-                  <VoiceRecorder
-                    onRecordingComplete={(file) => {
-                      handleRecordingComplete(file);
-                      setActiveMobileTab('browse');
-                    }}
-                    onError={handleRecordingError}
-                  />
-                )}
-                {activeMobileTab === 'photo' && (
-                  <PhotoPicker
-                    onConfirmUpload={async (data) => {
-                      await uploadPhotoMemory({
-                        uri: data.uri,
-                        latitude: data.latitude,
-                        longitude: data.longitude,
-                      });
-                      setActiveMobileTab('browse');
-                    }}
-                    showConfirmPanel={true}
-                    uploadState={uploadState}
-                    onError={handleRecordingError}
-                  />
-                )}
-                {activeMobileTab === 'feeling' && (
-                  <View style={styles.feelingCaptureAreaMobile}>
-                    <ThemedText style={{ textAlign: 'center', marginBottom: 12 }}>
-                      How are you feeling right now?
-                    </ThemedText>
-                    <TouchableOpacity
-                      style={StyleSheet.flatten([styles.dropPinButton, { width: '100%' }])}
-                      onPress={() => {
-                        handleDropFeelingPin();
-                        setActiveMobileTab('browse');
-                      }}
-                    >
-                      <Ionicons name="location" size={20} color="#FFF" />
-                      <Text style={styles.dropPinButtonText}>Drop Feeling Pin Here</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={styles.cancelCaptureBtn}
-                  onPress={() => setActiveMobileTab('browse')}
-                >
-                  <Text style={styles.cancelCaptureText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <GHScrollView
-                contentContainerStyle={{ paddingHorizontal: INSET_X, paddingVertical: 16 }}
-                horizontal={true}
-                showsHorizontalScrollIndicator={false}
-                decelerationRate="fast"
-                snapToInterval={SNAP_INTERVAL}
-                snapToAlignment="center"
-              >
-                {filteredMemories.map((m) => (
-                  <VisualMemoryCard
-                    key={m.id}
-                    memory={m}
-                    onPress={(mem) => {
-                      setCurrentRegion({
-                        ...currentRegion,
-                        latitude: mem.latitude,
-                        longitude: mem.longitude,
-                      });
-                      // bottomSheetRef.current?.snapToIndex(0);
-                    }}
-                  />
-                ))}
-              </GHScrollView>
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={styles.newMemoryButtonText}>New Memory</Text>
+              </Pressable>
             )}
           </View>
-        </BottomSheet>
+        }
+      />
+
+      {/* Map Area */}
+      <View style={styles.mapContainer}>
+        <MapComponent
+          ref={mapRef}
+          initialRegion={defaultRegion}
+          onRegionChangeComplete={handleRegionChangeComplete}
+          onLongPress={handleMapLongPress}
+          memories={filteredMemories}
+          onMemoryPress={handleMemoryPress}
+          manualPinLocation={manualPinLocation}
+          showTempPin={showTempPin}
+          isLoading={isMapLoading}
+          containerStyle={styles.map}
+        />
+      </View>
+
+      {/* Filmstrip Section */}
+      <View
+        style={[
+          styles.filmstripContainer,
+          {
+            paddingBottom: Platform.select({
+              ios: 90, // Tab bar height (84) + buffer
+              android: 64 + insets.bottom, // Tab bar height (56) + buffer + safe area
+              default: 64, // Web/desktop
+            }),
+          },
+        ]}
+      >
+        {/* Header */}
+        <View style={styles.filmstripHeader}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.filmstripTitle}>Your Memories</Text>
+            <Text style={styles.memoryCount}>{filteredMemories.length} memories</Text>
+          </View>
+          {/* Feeling Filter */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterContent}
+          >
+            <Pressable
+              style={[styles.filterBadge, feelingFilter === 'ALL' && styles.filterBadgeActive]}
+              onPress={() => setFeelingFilter('ALL')}
+            >
+              <Text
+                style={[
+                  styles.filterBadgeText,
+                  feelingFilter === 'ALL' && styles.filterBadgeTextActive,
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
+            {FEELINGS.map((feeling) => (
+              <Pressable
+                key={feeling}
+                style={[styles.filterBadge, feelingFilter === feeling && styles.filterBadgeActive]}
+                onPress={() => setFeelingFilter(feeling)}
+              >
+                <Text
+                  style={[
+                    styles.filterBadgeText,
+                    feelingFilter === feeling && styles.filterBadgeTextActive,
+                  ]}
+                >
+                  {FEELING_EMOJIS[feeling]}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Memory List */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={Colors.light.primary} />
+          </View>
+        ) : filteredMemories.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No memories found</Text>
+          </View>
+        ) : (
+          <MemoryFilmstrip memories={filteredMemories} onMemoryPress={handleMemoryPress} />
+        )}
+      </View>
+
+      {/* FAB for creating new memory */}
+      {isMobile && (
+        <FloatingActionButton
+          onPress={handleOpenCreateWithCurrentLocation}
+          icon={<Ionicons name="add" size={24} color="#fff" />}
+        />
       )}
 
-      {/* Memory Detail Modal (Story 6.5) */}
-      <MemoryDetailModal
-        visible={!!detailMemory}
-        memory={detailMemory}
-        onClose={handleCloseDetail}
+      {/* Capture Type Modal */}
+      <Modal
+        visible={captureModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCaptureModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setCaptureModalVisible(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Capture a Memory</Text>
+              <Pressable onPress={() => setCaptureModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#171717" />
+              </Pressable>
+            </View>
+
+            <View style={styles.captureGrid}>
+              <CaptureOption
+                icon="mic-outline"
+                label="Voice"
+                description="Record audio"
+                onPress={() => {
+                  setCaptureModalVisible(false);
+                  setCreateModalVisible(true);
+                }}
+              />
+              <CaptureOption
+                icon="camera-outline"
+                label="Photo"
+                description="Take a photo"
+                onPress={() => {
+                  setCaptureModalVisible(false);
+                  setCreateModalVisible(true);
+                }}
+              />
+              <CaptureOption
+                icon="happy-outline"
+                label="Feeling"
+                description="Log emotion"
+                onPress={() => {
+                  setCaptureModalVisible(false);
+                  setCreateModalVisible(true);
+                }}
+              />
+              <CaptureOption
+                icon="sparkles-outline"
+                label="Mixed"
+                description="All types"
+                onPress={() => {
+                  setCaptureModalVisible(false);
+                  setCreateModalVisible(true);
+                }}
+              />
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Create Memory Modal */}
+      <CreateMemoryModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onSubmit={handleCreateMemory}
+        initialData={newMemory}
       />
-    </GestureHandlerRootView>
+
+      {/* Memory Detail Modal */}
+      <Modal
+        visible={detailModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDetailModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setDetailModalVisible(false)}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            {selectedMemory && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{selectedMemory.title || 'Memory'}</Text>
+                  <Pressable onPress={() => setDetailModalVisible(false)}>
+                    <Ionicons name="close" size={24} color="#171717" />
+                  </Pressable>
+                </View>
+
+                <ScrollView style={styles.detailScroll}>
+                  {/* Image */}
+                  {selectedMemory.mediaUrl &&
+                    (selectedMemory.type === 'photo' || selectedMemory.type === 'mixed') && (
+                      <Image
+                        source={{ uri: selectedMemory.mediaUrl }}
+                        style={styles.detailImage}
+                        resizeMode="cover"
+                      />
+                    )}
+
+                  {/* Audio Player for voice memories */}
+                  {selectedMemory.mediaUrl &&
+                    (selectedMemory.type === 'voice' || selectedMemory.type === 'mixed') && (
+                      <View style={styles.audioPlayerWrapper}>
+                        <MemoryAudioPlayer
+                          audioUrl={selectedMemory.mediaUrl}
+                          duration={selectedMemory.duration}
+                          autoPlay={false}
+                        />
+                      </View>
+                    )}
+
+                  {/* Placeholder for text/voice memories */}
+                  {selectedMemory.placeholderMetadata && !selectedMemory.mediaUrl && (
+                    <View style={[styles.detailPlaceholder, styles.placeholderGradient]}>
+                      <Text style={styles.placeholderEmoji}>
+                        {FEELING_EMOJIS[selectedMemory.feeling || 'JOY']}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Actions */}
+                  <View style={styles.detailActions}>
+                    <View style={styles.leftActions}>
+                      <Pressable style={styles.actionButton} onPress={handleLike}>
+                        <Ionicons
+                          name={selectedMemory.liked ? 'heart' : 'heart-outline'}
+                          size={24}
+                          color={selectedMemory.liked ? '#ef4444' : '#171717'}
+                        />
+                        {selectedMemory.likeCount !== undefined && selectedMemory.likeCount > 0 && (
+                          <Text style={styles.actionCount}>{selectedMemory.likeCount}</Text>
+                        )}
+                      </Pressable>
+                      <Pressable style={styles.actionButton} onPress={handleComment}>
+                        <Ionicons name="chatbubble-outline" size={24} color="#171717" />
+                        {selectedMemory.commentCount !== undefined &&
+                          selectedMemory.commentCount > 0 && (
+                            <Text style={styles.actionCount}>{selectedMemory.commentCount}</Text>
+                          )}
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Metadata */}
+                  <View style={styles.metadataRow}>
+                    <View style={styles.metadataBadge}>
+                      <Text style={styles.metadataText}>
+                        📍{' '}
+                        {`${selectedMemory.latitude.toFixed(4)}, ${selectedMemory.longitude.toFixed(4)}`}
+                      </Text>
+                    </View>
+                    {selectedMemory.feeling && (
+                      <View style={styles.metadataBadge}>
+                        <Text style={styles.metadataText}>
+                          {FEELING_EMOJIS[selectedMemory.feeling]} {selectedMemory.feeling}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedMemory.placeholderMetadata?.timeOfDay && (
+                      <View style={styles.metadataBadge}>
+                        <Text style={styles.metadataText}>
+                          🕐 {selectedMemory.placeholderMetadata.timeOfDay}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.metadataBadge}>
+                      <Ionicons
+                        name={
+                          selectedMemory.privacy?.toLowerCase() === 'public'
+                            ? 'globe-outline'
+                            : selectedMemory.privacy?.toLowerCase() === 'friends'
+                              ? 'people-outline'
+                              : 'lock-closed-outline'
+                        }
+                        size={12}
+                        color="#737373"
+                      />
+                    </View>
+                  </View>
+
+                  {/* View Full Button */}
+                  <Pressable
+                    style={styles.viewFullButton}
+                    onPress={() => goToMemoryDetail(selectedMemory.id)}
+                  >
+                    <Text style={styles.viewFullButtonText}>View Full Memory</Text>
+                    <Ionicons name="arrow-forward" size={16} color={Colors.light.primary} />
+                  </Pressable>
+                </ScrollView>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+// Capture Option Component
+function CaptureOption({
+  icon,
+  label,
+  description,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  description: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.captureOption} onPress={onPress}>
+      <View style={styles.captureIconContainer}>
+        <Ionicons name={icon as any} size={24} color={Colors.light.primary} />
+      </View>
+      <Text style={styles.captureLabel}>{label}</Text>
+      <Text style={styles.captureDescription}>{description}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#fff',
   },
-  centeredContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loginPrompt: {
-    fontSize: 16,
-    color: '#666',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  newMemoryButton: {
+    backgroundColor: Colors.light.primary,
+    borderRadius: 8,
+    paddingVertical: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  uploadStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
+    gap: 8,
   },
-  uploadStatusText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  newMemoryButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
-
-  // Main content layout
-  mainContent: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  mainContentWide: {
-    flexDirection: 'row',
-  },
-
-  // Map section
-  mapSection: {
-    flex: 1,
-    minHeight: 200,
-  },
-  mapSectionWide: {
-    flex: 2,
-    borderRightWidth: 1,
-    borderRightColor: '#E5E5EA',
-  },
   mapContainer: {
-    height: 280,
-    position: 'relative',
+    flex: 1,
+    minHeight: 300,
   },
   map: {
     flex: 1,
-  },
-  mapLoadingOverlay: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 3,
-        }),
-  },
-  mapLoadingText: {
-    fontSize: 12,
-    color: '#5856D6',
-    fontWeight: '600',
-  },
-  mapPlaceholder: {
-    height: 180,
-    backgroundColor: '#E8F4F8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  mapPlaceholderEmoji: {
-    fontSize: 40,
-    marginBottom: 8,
-  },
-  mapPlaceholderText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
-  },
-  mapPinCount: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#888',
-  },
-  mapInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  memoriesList: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  // 50% wide left panel for desktop
-  desktopLeftPanelWide: {
-    width: '50%',
-    maxWidth: 600,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    margin: 16,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.15,
-          shadowRadius: 12,
-          elevation: 8,
-        }),
-    maxHeight: '90%',
-  },
-  memoriesListWide: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  // Desktop Post Card styles
-  desktopPostCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          elevation: 3,
-        }),
-  },
-  desktopPostImage: {
     width: '100%',
-    height: 180,
-    backgroundColor: '#E8F4F8',
+    height: '100%',
   },
-  desktopPostContent: {
-    padding: 14,
-  },
-  desktopPostHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  desktopPostIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  desktopPostTitle: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-  },
-  desktopPostFeeling: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  desktopPostFeelingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#5856D6',
-  },
-  desktopPostLocation: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 8,
-  },
-  // Collapsible action panel
-  desktopRightPanelCollapsed: {
-    width: 50,
-    minWidth: 50,
-    maxWidth: 50,
-    padding: 0,
-  },
-  actionPanelToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  actionPanelToggleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginLeft: 4,
-    writingDirection: 'ltr',
-  },
-  actionPanelContent: {
-    flex: 1,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#888',
-    marginTop: 20,
-    fontSize: 14,
-  },
-  memoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    gap: 10,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 2,
-          elevation: 1,
-        }),
-  },
-  memoryItemInfo: {
-    flex: 1,
-  },
-  memoryItemTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  memoryItemCoords: {
-    fontSize: 11,
-    color: '#888',
-    marginTop: 2,
-  },
-  feelingBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  feelingBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-
-  // Action Panel
-  actionPanel: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  filmstripContainer: {
+    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
-  },
-  actionPanelWide: {
-    flex: 1,
-    borderTopWidth: 0,
-    maxWidth: 400,
-  },
-
-  // Mode toggle
-  modeToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 12,
-  },
-  modeToggleDisabled: {
-    opacity: 0.5,
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderTopColor: '#e5e5e5',
     paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
+    // paddingVertical: 8, // Duplicate removed
+    // Removed maxHeight to allow content to dictate height
   },
-  modeButtonActive: {
-    backgroundColor: '#5856D6',
-  },
-  modeButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#666',
-  },
-  modeButtonTextActive: {
-    color: '#FFFFFF',
-  },
-
-  // Capture area
-  captureArea: {
-    minHeight: 100,
-  },
-  feelingCaptureArea: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    gap: 16,
-  },
-  feelingCaptureText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  feelingCaptureHint: {
-    fontSize: 12,
-    color: '#888',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-  dropPinButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#5856D6',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 10,
-  },
-  dropPinButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-  // Confirmation panels
-  confirmPanel: {
-    gap: 12,
-  },
-  panelTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-  },
-  photoPreview: {
-    width: '100%',
-    height: 300,
-    borderRadius: 12,
-    backgroundColor: '#000000',
-  },
-  locationInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    backgroundColor: '#F0EFFF',
-    borderRadius: 8,
-  },
-  locationText: {
-    fontSize: 14,
-    color: '#5856D6',
-    fontWeight: '500',
-  },
-  locationSource: {
-    fontSize: 12,
-    color: '#888',
-  },
-  titleInput: {
-    height: 44,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: '#333',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  cancelButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#F2F2F7',
-  },
-  cancelButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#666',
-  },
-  confirmButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#5856D6',
-    gap: 6,
-  },
-  confirmButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  buttonDisabled: {
-    backgroundColor: '#C7C7CC',
-  },
-
-  // Error banner
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFEBEE',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  errorText: {
-    flex: 1,
-    color: '#FF3B30',
-    fontSize: 13,
-  },
-  // Loading overlay
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 10,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#5856D6',
-    fontWeight: '600',
-  },
-  // Temporary pin marker
-  tempPinMarker: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -16 }, { translateY: -32 }],
-    alignItems: 'center',
-    zIndex: 5,
-  },
-  tempPinLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FF3B30',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: -4,
-  },
-
-  // Mobile Layout Styles
-  mobileHeaderOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    padding: 16,
-    alignItems: 'flex-end',
-    pointerEvents: 'box-none',
-  },
-  fullscreenToggle: {
-    position: 'absolute',
-    bottom: 300, // Adjust based on sheet
-    right: 16,
-    backgroundColor: '#FFF',
-    padding: 12,
-    borderRadius: 24,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 4,
-          elevation: 5,
-        }),
-    zIndex: 50,
-  },
-  sheetHeader: {
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
-  sheetContent: {
-    flex: 1,
-    backgroundColor: '#F9F9FB',
-  },
-  mobileTabs: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  mobileTab: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  mobileTabActive: {
-    backgroundColor: '#5856D6',
-  },
-  mobileTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  mobileTabTextActive: {
-    color: '#FFF',
-  },
-  mobileActionOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.2)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
-          elevation: 20,
-        }),
-    zIndex: 200,
-  },
-  mobileCardsContainer: {
-    padding: 16,
-  },
-  mobileCaptureContainer: {
-    padding: 20,
-  },
-  feelingCaptureAreaMobile: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    gap: 16,
-  },
-  desktopOverlayContainer: {
-    ...StyleSheet.absoluteFillObject,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 24,
-    zIndex: 10,
-  },
-  desktopLeftPanel: {
-    width: 380,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    overflow: 'hidden',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 12,
-          elevation: 8,
-        }),
-    display: 'flex',
-    flexDirection: 'column',
-    maxHeight: '100%',
-  },
-  desktopRightPanel: {
-    width: 480,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    alignSelf: 'flex-start',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 12,
-          elevation: 8,
-        }),
-  },
-  mobileHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
-  sheetTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000',
-  },
-  quickActions: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  quickActionsScroll: {
-    flexGrow: 0,
-  },
-  quickActionsContainer: {
-    gap: 8,
-    paddingRight: 16,
-    alignItems: 'center',
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    gap: 4,
-  },
-  actionBtnMap: {
-    backgroundColor: '#E5E5EA',
-  },
-  actionBtnActive: {
-    backgroundColor: '#5856D6',
-  },
-  actionBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#5856D6',
-  },
-  actionBtnTextActive: {
-    color: '#FFF',
-  },
-  cancelCaptureBtn: {
-    alignSelf: 'center',
-    marginTop: 16,
-    padding: 10,
-  },
-  cancelCaptureText: {
-    color: '#999',
-    fontSize: 14,
-  },
-  quickActionsWrapper: {
-    backgroundColor: '#FFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
-  // Posts tab styles
-  emptyPostsContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyPostsText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 12,
-  },
-  emptyPostsSubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  postItem: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.1)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 2,
-        }),
-  },
-  postItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  postItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postItemDetails: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  postItemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  postItemLocation: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  postItemFeeling: {
-    backgroundColor: '#F0EFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  postItemFeelingText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#5856D6',
-  },
-
-  // Filmstrip Header Styles (matching web UI)
   filmstripHeader: {
-    gap: 12,
-  },
-  filmstripTitleRow: {
+    display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filmstripTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#171717',
   },
   memoryCount: {
     fontSize: 12,
-    color: '#888',
+    color: '#737373',
   },
-  
-  // Filter Badges
-  filterBadgesScroll: {
-    flexGrow: 0,
+  filterScroll: {
+    marginBottom: 8,
   },
-  filterBadgesContainer: {
+  filterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
     flexDirection: 'row',
-    gap: 6,
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   filterBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    backgroundColor: '#FFF',
+    borderColor: '#e5e5e5',
+    backgroundColor: '#fff',
   },
   filterBadgeActive: {
-    backgroundColor: '#5856D6',
-    borderColor: '#5856D6',
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
   },
   filterBadgeText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#666',
+    fontSize: 12,
+    color: '#737373',
   },
   filterBadgeTextActive: {
-    color: '#FFF',
+    color: '#fff',
   },
-
-  // Search Input
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
     paddingHorizontal: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
     height: 36,
-    gap: 8,
   },
   searchIcon: {
-    marginRight: 4,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#333',
-    padding: 0,
+    color: '#171717',
+  },
+  clearButton: {
+    padding: 4,
+  },
+  loadingContainer: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#737373',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+    // On desktop, we want to center the modal
+    ...(Platform.OS === 'web' && {
+      alignItems: 'center',
+      justifyContent: 'center',
+    }),
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    // Mobile: Bottom sheet
+    width: '100%',
+    maxHeight: '90%', // Increased from 80% for mobile
+
+    // Desktop: Centered card
+    ...(Platform.OS === 'web' && {
+      width: 480, // Fixed width on desktop
+      maxHeight: '85%',
+      borderRadius: 24, // Rounded corners on all sides
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+    }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#171717',
+  },
+  captureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  captureOption: {
+    // Responsive width logic needed in component or using flex basis
+    width: '47%', // roughly half minus gap
+    alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    borderRadius: 12,
+    gap: 8,
+  },
+  captureIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#171717',
+  },
+  captureDescription: {
+    fontSize: 12,
+    color: '#737373',
+  },
+  detailScroll: {
+    paddingHorizontal: 16,
+  },
+  detailImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  audioPlayerWrapper: {
+    marginBottom: 16,
+    // backgroundColor: '#1c1c1e',
+    borderRadius: 12,
+    padding: 12,
+  },
+  detailPlaceholder: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderGradient: {
+    backgroundColor: '#f0e6e6',
+  },
+  placeholderEmoji: {
+    fontSize: 64,
+  },
+  detailActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  leftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  actionButton: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+  },
+  detailContent: {
+    fontSize: 14,
+    color: '#737373',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  metadataRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  metadataBadge: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  metadataText: {
+    fontSize: 12,
+    color: '#737373',
+  },
+  viewFullButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  viewFullButtonText: {
+    fontSize: 14,
+    color: Colors.light.primary,
+    fontWeight: '500',
+  },
+  actionCount: {
+    fontSize: 14,
+    color: '#171717',
+    marginLeft: 4,
   },
 });

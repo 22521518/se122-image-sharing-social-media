@@ -1,583 +1,459 @@
-import { ThemedText } from '@/components/themed-text';
+import { PageHeader } from '@/components/layout';
+import { EmptyState, UserAvatar } from '@/components/shared';
 import { Colors } from '@/constants/Colors';
-import { Theme } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { HashtagResult, PostDetail, SearchResponse, socialService, TrendingResponse, UserSearchResult } from '@/services/social.service';
+import { socialService, TrendingResponse } from '@/services/social.service';
+import type {
+  HashtagResult,
+  PostDetail,
+  SearchResponse,
+  UserSearchResult,
+} from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
-  FlatList,
   Image,
+  Pressable,
+  ScrollView,
   StyleSheet,
+  Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const GRID_COLUMNS = 3;
-const GRID_ITEM_SIZE = (SCREEN_WIDTH - 4) / GRID_COLUMNS;
+const { width } = Dimensions.get('window');
+const GRID_ITEM_SIZE = (width - 8) / 3;
 
-// AC 4: Debounced search (300ms delay)
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
-type TabType = 'top' | 'accounts' | 'tags' | 'posts';
-
-export default function ExploreScreen() {
+export default function ExplorePage() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('top');
-  const [isLoading, setIsLoading] = useState(false);
-  const [trending, setTrending] = useState<PostDetail[]>([]);
+  const [query, setQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResponse | null>(null);
+  const [trending, setTrending] = useState<TrendingResponse | null>(null);
+  const [isLoadingTrending, setIsLoadingTrending] = useState(true);
+  const [activeTab, setActiveTab] = useState<'all' | 'users' | 'posts' | 'hashtags'>('all');
 
-  // AC 4: Min 2 chars for search
-  const debouncedQuery = useDebounce(searchQuery, 300);
-  const isSearchMode = debouncedQuery.length >= 2;
-
-  // AC 2, 3: Load trending on mount
+  // Load trending content on mount
   useEffect(() => {
+    const loadTrending = async () => {
+      try {
+        const data = await socialService.getTrending();
+        setTrending(data);
+      } finally {
+        setIsLoadingTrending(false);
+      }
+    };
     loadTrending();
   }, []);
 
-  const loadTrending = async () => {
-    setIsLoading(true);
-    try {
-      const result: TrendingResponse = await socialService.getTrending();
-      setTrending(result.posts);
-    } catch (error) {
-      console.error('Failed to load trending', error);
-      Alert.alert('Error', 'Failed to load trending posts. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // AC 4, 5: Search when query changes
+  // Debounced search
   useEffect(() => {
-    if (debouncedQuery.length >= 2) {
-      performSearch();
-    } else {
+    const formattedQuery = query.trim();
+    if (!formattedQuery || formattedQuery.length < 2) {
       setSearchResults(null);
+      return;
     }
-  }, [debouncedQuery]);
 
-  const performSearch = async () => {
-    setIsLoading(true);
-    try {
-      const type = activeTab === 'top' ? 'all' : 
-                   activeTab === 'accounts' ? 'users' :
-                   activeTab === 'tags' ? 'hashtags' : 'posts';
-      const result = await socialService.search(debouncedQuery, type);
-      setSearchResults(result);
-    } catch (error) {
-      console.error('Search failed', error);
-      Alert.alert('Search Error', 'Failed to search. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await socialService.search(formattedQuery);
+        setSearchResults(results);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const clearSearch = () => {
+    setQuery('');
+    setSearchResults(null);
   };
 
-  // Re-search when tab changes
-  useEffect(() => {
-    if (isSearchMode) {
-      performSearch();
-    }
-  }, [activeTab]);
+  const goToPost = (postId: string) =>
+    router.push({ pathname: '/(tabs)/post/[id]', params: { id: postId } });
+  const goToUser = (userId: string) =>
+    router.push({ pathname: '/(tabs)/user/[id]', params: { id: userId } });
+  const goToHashtag = (tag: string) => setQuery(`#${tag}`);
 
-  // AC 7: Navigate to results
-  const handleUserPress = (userId: string) => {
-    router.push({ pathname: '/profile/[id]', params: { id: userId } } as any);
+  const formatCount = (count: number) => {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
   };
 
-  const handlePostPress = (postId: string) => {
-    router.push({ pathname: '/post/[id]', params: { id: postId } } as any);
-  };
-
-  const handleHashtagPress = (tag: string) => {
-    setSearchQuery(`#${tag}`);
-    setActiveTab('posts');
-  };
-
-  // Render trending grid (AC 3)
-  const renderTrendingItem = ({ item }: { item: PostDetail }) => (
-    <TouchableOpacity
-      style={styles.gridItem}
-      onPress={() => handlePostPress(item.id)}
-      activeOpacity={0.8}
-    >
-      <View style={StyleSheet.flatten([styles.gridPlaceholder, { backgroundColor: colors.muted }])}>
-        <ThemedText style={StyleSheet.flatten([styles.gridLikes, { color: colors.textSecondary }])}>
-          ❤️ {item.likeCount}
-        </ThemedText>
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Render user result
-  const renderUserItem = ({ item }: { item: UserSearchResult }) => (
-    <TouchableOpacity 
-      style={StyleSheet.flatten([styles.userItem, { borderBottomColor: colors.border }])} 
-      onPress={() => handleUserPress(item.id)}
-    >
-      {item.avatarUrl ? (
-        <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+  const renderPostItem = ({ item }: { item: PostDetail }) => (
+    <Pressable style={styles.gridItem} onPress={() => goToPost(item.id)}>
+      {item.imageUrls && item.imageUrls.length > 0 ? (
+        <Image source={{ uri: item.imageUrls[0] }} style={styles.gridImage} />
       ) : (
-        <View style={StyleSheet.flatten([styles.avatarPlaceholder, { backgroundColor: colors.primary }])}>
-          <ThemedText style={styles.avatarText}>
-            {item.name?.charAt(0)?.toUpperCase() || '?'}
-          </ThemedText>
+        <View style={styles.gridTextContainer}>
+          <Text style={styles.gridText} numberOfLines={3}>
+            {item.content}
+          </Text>
         </View>
       )}
-      <View style={styles.userInfo}>
-        <ThemedText style={StyleSheet.flatten([styles.userName, { color: colors.text }])}>{item.name || 'Anonymous'}</ThemedText>
-        {item.bio && (
-          <ThemedText style={StyleSheet.flatten([styles.userBio, { color: colors.textSecondary }])} numberOfLines={1}>
-            {item.bio}
-          </ThemedText>
-        )}
-      </View>
-    </TouchableOpacity>
+      {item.imageUrls && item.imageUrls.length > 1 && (
+        <View style={styles.multipleIndicator}>
+          <Text style={styles.multipleText}>+{item.imageUrls.length - 1}</Text>
+        </View>
+      )}
+    </Pressable>
   );
 
-  // Render hashtag result
-  const renderHashtagItem = ({ item }: { item: HashtagResult }) => (
-    <TouchableOpacity 
-      style={StyleSheet.flatten([styles.hashtagItem, { borderBottomColor: colors.border }])} 
-      onPress={() => handleHashtagPress(item.tag)}
+  const renderUserItem = (user: UserSearchResult) => (
+    <Pressable key={user.id} style={styles.userItem} onPress={() => goToUser(user.id)}>
+      <UserAvatar src={user.avatarUrl} name={user.name || 'User'} size="md" />
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{user.name}</Text>
+        <Text style={styles.userUsername}>{user.bio || ''}</Text>
+      </View>
+      <Pressable style={styles.followSmallButton}>
+        <Text style={styles.followSmallText}>Follow</Text>
+      </Pressable>
+    </Pressable>
+  );
+
+  const renderHashtagItem = (hashtag: HashtagResult) => (
+    <Pressable
+      key={hashtag.tag}
+      style={styles.hashtagItem}
+      onPress={() => goToHashtag(hashtag.tag)}
     >
-      <View style={StyleSheet.flatten([styles.hashtagIcon, { backgroundColor: colors.muted }])}>
-        <ThemedText style={StyleSheet.flatten([styles.hashIcon, { color: colors.primary }])}>#</ThemedText>
+      <View style={styles.hashtagIcon}>
+        <Ionicons name="pricetag" size={20} color="#737373" />
       </View>
       <View style={styles.hashtagInfo}>
-        <ThemedText style={StyleSheet.flatten([styles.hashtagName, { color: colors.text }])}>#{item.tag}</ThemedText>
-        <ThemedText style={StyleSheet.flatten([styles.hashtagCount, { color: colors.textSecondary }])}>
-          {item.postCount} posts
-        </ThemedText>
+        <Text style={styles.hashtagName}>#{hashtag.tag}</Text>
+        <Text style={styles.hashtagCount}>{formatCount(hashtag.postCount)} posts</Text>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
-
-  // Render post result
-  const renderPostItem = ({ item }: { item: PostDetail }) => (
-    <TouchableOpacity 
-      style={StyleSheet.flatten([styles.postItem, { borderBottomColor: colors.border }])} 
-      onPress={() => handlePostPress(item.id)}
-    >
-      <ThemedText style={StyleSheet.flatten([styles.postContent, { color: colors.text }])} numberOfLines={2}>
-        {item.content}
-      </ThemedText>
-      <View style={styles.postMeta}>
-        <ThemedText style={StyleSheet.flatten([styles.postAuthor, { color: colors.textSecondary }])}>
-          {item.author.name || 'Anonymous'}
-        </ThemedText>
-        <ThemedText style={StyleSheet.flatten([styles.postLikes, { color: colors.textSecondary }])}>
-          ❤️ {item.likeCount}
-        </ThemedText>
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Render search results based on active tab
-  const renderSearchContent = () => {
-    if (!searchResults) return null;
-
-    if (activeTab === 'top') {
-      return (
-        <View>
-          {searchResults.users.length > 0 && (
-            <View style={StyleSheet.flatten([styles.section, { borderBottomColor: colors.border }])}>
-              <ThemedText style={StyleSheet.flatten([styles.sectionTitle, { color: colors.text }])}>Accounts</ThemedText>
-              {searchResults.users.slice(0, 3).map(user => (
-                <TouchableOpacity 
-                  key={user.id} 
-                  style={StyleSheet.flatten([styles.userItem, { borderBottomColor: colors.border }])} 
-                  onPress={() => handleUserPress(user.id)}
-                >
-                  <View style={StyleSheet.flatten([styles.avatarPlaceholder, { backgroundColor: colors.primary }])}>
-                    <ThemedText style={styles.avatarText}>
-                      {user.name?.charAt(0)?.toUpperCase() || '?'}
-                    </ThemedText>
-                  </View>
-                  <ThemedText style={StyleSheet.flatten([styles.userName, { color: colors.text, marginLeft: 12 }])}>
-                    {user.name}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          {searchResults.hashtags.length > 0 && (
-            <View style={StyleSheet.flatten([styles.section, { borderBottomColor: colors.border }])}>
-              <ThemedText style={StyleSheet.flatten([styles.sectionTitle, { color: colors.text }])}>Tags</ThemedText>
-              {searchResults.hashtags.slice(0, 3).map(tag => (
-                <TouchableOpacity 
-                  key={tag.id} 
-                  style={StyleSheet.flatten([styles.hashtagItem, { borderBottomColor: colors.border }])} 
-                  onPress={() => handleHashtagPress(tag.tag)}
-                >
-                  <ThemedText style={StyleSheet.flatten([styles.hashtagName, { color: colors.text }])}>#{tag.tag}</ThemedText>
-                  <ThemedText style={StyleSheet.flatten([styles.hashtagCount, { color: colors.textSecondary }])}>
-                    {tag.postCount} posts
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          {searchResults.posts.length > 0 && (
-            <View style={StyleSheet.flatten([styles.section, { borderBottomColor: colors.border }])}>
-              <ThemedText style={StyleSheet.flatten([styles.sectionTitle, { color: colors.text }])}>Posts</ThemedText>
-              {searchResults.posts.slice(0, 5).map(post => (
-                <TouchableOpacity 
-                  key={post.id} 
-                  style={StyleSheet.flatten([styles.postItem, { borderBottomColor: colors.border }])} 
-                  onPress={() => handlePostPress(post.id)}
-                >
-                  <ThemedText style={StyleSheet.flatten([styles.postContent, { color: colors.text }])} numberOfLines={2}>
-                    {post.content}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      );
-    }
-
-    if (activeTab === 'accounts') {
-      return (
-        <FlatList
-          data={searchResults.users}
-          renderItem={renderUserItem}
-          keyExtractor={item => item.id}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <ThemedText style={StyleSheet.flatten([styles.emptyText, { color: colors.textSecondary }])}>No accounts found</ThemedText>
-            </View>
-          }
-        />
-      );
-    }
-
-    if (activeTab === 'tags') {
-      return (
-        <FlatList
-          data={searchResults.hashtags}
-          renderItem={renderHashtagItem}
-          keyExtractor={item => item.id}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <ThemedText style={StyleSheet.flatten([styles.emptyText, { color: colors.textSecondary }])}>No tags found</ThemedText>
-            </View>
-          }
-        />
-      );
-    }
-
-    if (activeTab === 'posts') {
-      return (
-        <FlatList
-          data={searchResults.posts}
-          renderItem={renderPostItem}
-          keyExtractor={item => item.id}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <ThemedText style={StyleSheet.flatten([styles.emptyText, { color: colors.textSecondary }])}>No posts found</ThemedText>
-            </View>
-          }
-        />
-      );
-    }
-
-    return null;
-  };
 
   return (
-    <SafeAreaView style={StyleSheet.flatten([styles.container, { backgroundColor: colors.background }])}>
-      {/* Header */}
-      <View style={StyleSheet.flatten([styles.header, { borderBottomColor: colors.border }])}>
-        <ThemedText style={StyleSheet.flatten([styles.headerTitle, { color: colors.text }])}>Explore</ThemedText>
-      </View>
+    <View style={styles.container}>
+      <PageHeader title="Explore" />
 
-      {/* Search Bar */}
-      <View style={StyleSheet.flatten([styles.searchContainer, { borderBottomColor: colors.border }])}>
-        <View style={StyleSheet.flatten([styles.searchBar, { backgroundColor: colors.muted }])}>
-          <Ionicons name="search" size={18} color={colors.textSecondary} />
+      <View style={styles.content}>
+        {/* Search Input */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={16} color="#737373" style={styles.searchIcon} />
           <TextInput
-            style={StyleSheet.flatten([styles.searchInput, { color: colors.text }])}
-            placeholder="Search users, hashtags, posts..."
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
+            style={styles.searchInput}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search users, posts, or hashtags..."
+            placeholderTextColor="#a3a3a3"
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
+          {query.length > 0 && (
+            <Pressable onPress={clearSearch} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={18} color="#737373" />
+            </Pressable>
           )}
         </View>
-      </View>
 
-      {/* Tabs (AC 1: Search bar and tabs) */}
-      {isSearchMode && (
-        <View style={StyleSheet.flatten([styles.tabs, { borderBottomColor: colors.border }])}>
-          {(['top', 'accounts', 'tags', 'posts'] as TabType[]).map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={StyleSheet.flatten([styles.tab, activeTab === tab && { borderBottomColor: colors.primary, borderBottomWidth: 2 }])}
-              onPress={() => setActiveTab(tab)}
-            >
-              <ThemedText style={StyleSheet.flatten([
-                styles.tabText, 
-                { color: activeTab === tab ? colors.primary : colors.textSecondary },
-                activeTab === tab && { fontWeight: '600' }
-              ])}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Loading */}
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      )}
-
-      {/* Content */}
-      {!isLoading && (
-        isSearchMode ? (
-          renderSearchContent()
-        ) : (
-          /* AC 3: Trending grid */
-          <FlatList
-            data={trending}
-            renderItem={renderTrendingItem}
-            keyExtractor={item => item.id}
-            numColumns={GRID_COLUMNS}
-            contentContainerStyle={styles.gridContainer}
-            ListHeaderComponent={
-              <ThemedText style={StyleSheet.flatten([styles.trendingTitle, { color: colors.text }])}>Trending</ThemedText>
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <View style={StyleSheet.flatten([styles.emptyIconContainer, { backgroundColor: colors.muted }])}>
-                  <Ionicons name="flame-outline" size={40} color={colors.primary} />
-                </View>
-                <ThemedText style={StyleSheet.flatten([styles.emptyText, { color: colors.textSecondary }])}>
-                  No trending posts yet
-                </ThemedText>
+        {/* Content */}
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {query.trim().length >= 2 ? (
+            isSearching ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={Colors.light.primary} />
               </View>
-            }
-          />
-        )
-      )}
-    </SafeAreaView>
+            ) : searchResults ? (
+              <View style={styles.resultsContainer}>
+                {/* Tabs */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.tabsScroll}
+                >
+                  {(['all', 'users', 'posts', 'hashtags'] as const).map((tab) => (
+                    <Pressable
+                      key={tab}
+                      style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
+                      onPress={() => setActiveTab(tab)}
+                    >
+                      <Text
+                        style={[styles.tabButtonText, activeTab === tab && styles.activeTabText]}
+                      >
+                        {tab === 'all'
+                          ? 'All'
+                          : tab === 'users'
+                            ? `Users (${searchResults.users.length})`
+                            : tab === 'posts'
+                              ? `Posts (${searchResults.posts.length})`
+                              : `Tags (${searchResults.hashtags.length})`}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+
+                {/* Results */}
+                {(activeTab === 'all' || activeTab === 'users') &&
+                  searchResults.users.length > 0 && (
+                    <View style={styles.section}>
+                      {activeTab === 'all' && <Text style={styles.sectionTitle}>Users</Text>}
+                      {(activeTab === 'all'
+                        ? searchResults.users.slice(0, 3)
+                        : searchResults.users
+                      ).map(renderUserItem)}
+                    </View>
+                  )}
+
+                {(activeTab === 'all' || activeTab === 'posts') &&
+                  searchResults.posts.length > 0 && (
+                    <View style={styles.section}>
+                      {activeTab === 'all' && <Text style={styles.sectionTitle}>Posts</Text>}
+                      <View style={styles.postsGrid}>
+                        {(activeTab === 'all'
+                          ? searchResults.posts.slice(0, 6)
+                          : searchResults.posts
+                        ).map((post) => renderPostItem({ item: post }))}
+                      </View>
+                    </View>
+                  )}
+
+                {(activeTab === 'all' || activeTab === 'hashtags') &&
+                  searchResults.hashtags.length > 0 && (
+                    <View style={styles.section}>
+                      {activeTab === 'all' && <Text style={styles.sectionTitle}>Hashtags</Text>}
+                      {(activeTab === 'all'
+                        ? searchResults.hashtags.slice(0, 5)
+                        : searchResults.hashtags
+                      ).map(renderHashtagItem)}
+                    </View>
+                  )}
+
+                {searchResults.users.length === 0 &&
+                  searchResults.posts.length === 0 &&
+                  searchResults.hashtags.length === 0 && (
+                    <EmptyState
+                      icon="search"
+                      title="No results found"
+                      description={`We couldn't find anything for "${query}"`}
+                    />
+                  )}
+              </View>
+            ) : null
+          ) : /* Trending Content */
+          isLoadingTrending ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.light.primary} />
+            </View>
+          ) : trending ? (
+            <View style={styles.trendingContainer}>
+              {/* Discover Posts */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="trending-up" size={20} color={Colors.light.primary} />
+                  <Text style={styles.sectionTitle}>Trending</Text>
+                </View>
+                <View style={styles.postsGrid}>
+                  {trending.posts.map((post) => renderPostItem({ item: post }))}
+                </View>
+              </View>
+            </View>
+          ) : null}
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
-  header: {
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: {
-    fontSize: Theme.typography.fontSizes.xxl,
-    fontWeight: Theme.typography.fontWeights.bold,
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
   },
   searchContainer: {
-    padding: Theme.spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Theme.borderRadius.lg,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    borderRadius: 8,
+    marginVertical: 16,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    marginLeft: Theme.spacing.sm,
-    fontSize: Theme.typography.fontSizes.base,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#171717',
   },
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: Theme.spacing.md,
-    alignItems: 'center',
-  },
-  tabText: {
-    fontSize: Theme.typography.fontSizes.sm,
+  clearButton: {
+    padding: 4,
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    paddingVertical: 48,
     alignItems: 'center',
   },
-  gridContainer: {
-    paddingBottom: Theme.spacing.xl,
-  },
-  trendingTitle: {
-    fontSize: Theme.typography.fontSizes.xl,
-    fontWeight: Theme.typography.fontWeights.bold,
-    padding: Theme.spacing.lg,
-  },
-  gridItem: {
-    width: GRID_ITEM_SIZE,
-    height: GRID_ITEM_SIZE,
-    padding: 1,
-  },
-  gridPlaceholder: {
+  resultsContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Theme.borderRadius.sm,
   },
-  gridLikes: {
-    fontSize: Theme.typography.fontSizes.xs,
+  tabsScroll: {
+    marginBottom: 16,
+  },
+  tabButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  activeTabButton: {
+    backgroundColor: Colors.light.primary,
+  },
+  tabButtonText: {
+    fontSize: 14,
+    color: '#737373',
+  },
+  activeTabText: {
+    color: '#fff',
   },
   section: {
-    padding: Theme.spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: Theme.typography.fontSizes.base,
-    fontWeight: Theme.typography.fontWeights.semibold,
-    marginBottom: Theme.spacing.md,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#171717',
+    marginBottom: 12,
   },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Theme.spacing.md,
-    paddingHorizontal: Theme.spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  avatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
+    padding: 12,
+    borderRadius: 8,
   },
   userInfo: {
-    marginLeft: Theme.spacing.md,
     flex: 1,
+    marginLeft: 12,
   },
   userName: {
-    fontSize: Theme.typography.fontSizes.base,
-    fontWeight: Theme.typography.fontWeights.semibold,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#171717',
   },
-  userBio: {
-    fontSize: Theme.typography.fontSizes.sm,
-    marginTop: 2,
+  userUsername: {
+    fontSize: 12,
+    color: '#737373',
+  },
+  followSmallButton: {
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  followSmallText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#171717',
+  },
+  postsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  gridItem: {
+    width: GRID_ITEM_SIZE,
+    height: GRID_ITEM_SIZE,
+    margin: 1,
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridTextContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+  gridText: {
+    fontSize: 10,
+    color: '#737373',
+    textAlign: 'center',
+  },
+  multipleIndicator: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  multipleText: {
+    color: '#fff',
+    fontSize: 10,
   },
   hashtagItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Theme.spacing.md,
-    paddingHorizontal: Theme.spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    borderRadius: 8,
   },
   hashtagIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
     alignItems: 'center',
-  },
-  hashIcon: {
-    fontSize: 18,
-    fontWeight: '600',
+    justifyContent: 'center',
   },
   hashtagInfo: {
-    marginLeft: Theme.spacing.md,
+    marginLeft: 12,
   },
   hashtagName: {
-    fontSize: Theme.typography.fontSizes.base,
-    fontWeight: Theme.typography.fontWeights.semibold,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#171717',
   },
   hashtagCount: {
-    fontSize: Theme.typography.fontSizes.sm,
-    marginTop: 2,
+    fontSize: 12,
+    color: '#737373',
   },
-  postItem: {
-    paddingVertical: Theme.spacing.md,
-    paddingHorizontal: Theme.spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  postContent: {
-    fontSize: Theme.typography.fontSizes.sm,
-    lineHeight: 20,
-  },
-  postMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Theme.spacing.sm,
-  },
-  postAuthor: {
-    fontSize: Theme.typography.fontSizes.xs,
-  },
-  postLikes: {
-    fontSize: Theme.typography.fontSizes.xs,
-  },
-  emptyState: {
+  trendingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Theme.spacing.xxxl,
   },
-  emptyIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: Theme.borderRadius.xxl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.lg,
+  hashtagsRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  emptyText: {
-    fontSize: Theme.typography.fontSizes.base,
-    marginTop: Theme.spacing.md,
+  trendingTag: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trendingTagText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#171717',
+  },
+  trendingTagCount: {
+    fontSize: 12,
+    color: '#737373',
   },
 });

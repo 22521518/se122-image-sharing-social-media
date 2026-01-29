@@ -1,0 +1,128 @@
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F7F7F8;
+  padding: 20px;
+}
+
+.login-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-header h1 {
+  color: #0F0F11;
+  font-size: 1.75rem;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.login-header p {
+  color: #737880;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: #0F0F11;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.form-group input {
+  background: #F7F7F8;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #0F0F11;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.form-group input::placeholder {
+  color: #737880;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #E8795A;
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(232, 121, 90, 0.2);
+}
+
+.form-group input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #EF4444;
+  font-size: 0.9rem;
+}
+
+.login-button {
+  background: #E8795A;
+  border: none;
+  border-radius: 8px;
+  padding: 14px 24px;
+  color: #FFFFFF;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+
+.login-button:hover:not(:disabled) {
+  background: #D6684A;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(232, 121, 90, 0.4);
+}
+
+.login-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.login-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.login-footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.login-footer p {
+  color: #737880;
+  font-size: 0.8rem;
+  margin: 0;
+}

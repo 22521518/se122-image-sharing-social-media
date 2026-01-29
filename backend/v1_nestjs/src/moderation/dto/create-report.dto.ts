@@ -5,7 +5,7 @@ import { ReportReason, TargetType } from '@prisma/client';
 export class CreateReportDto {
   @ApiProperty({
     description: 'Type of content being reported',
-    enum: ['POST', 'COMMENT', 'USER'],
+    enum: ['POST', 'COMMENT', 'USER', 'MEMORY'],
     example: 'POST',
   })
   @IsEnum(TargetType)

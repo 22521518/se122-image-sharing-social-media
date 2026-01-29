@@ -1,90 +1,33 @@
+import type {
+  Comment,
+  CreateCommentResponse,
+  DeleteCommentResponse,
+  FeedResponse,
+  GetCommentsResponse,
+  LikeStatusResponse,
+  MediaItem,
+  PostDetail,
+  SearchResponse,
+  ToggleLikeResponse,
+  UserSearchResult,
+} from '@/types/api.types';
 import { ApiService as api } from './api.service';
-
-export interface ToggleLikeResponse {
-  liked: boolean;
-  likeCount: number;
-}
-
-export interface LikeStatusResponse {
-  liked: boolean;
-  likeCount: number;
-}
-
-export interface CommentAuthor {
-  id: string;
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-export interface Comment {
-  id: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  author: CommentAuthor;
-  isOwner: boolean;
-}
-
-export interface CreateCommentResponse {
-  comment: Comment;
-  commentCount: number;
-}
-
-export interface DeleteCommentResponse {
-  success: boolean;
-  commentCount: number;
-}
-
-export interface GetCommentsResponse {
-  comments: Comment[];
-  count: number;
-}
-
-export interface PostAuthor {
-  id: string;
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-export interface PostDetail {
-  id: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  likeCount: number;
-  commentCount: number;
-  author: PostAuthor;
-  liked: boolean;
-}
-
-export interface FeedResponse {
-  posts: PostDetail[];
-  nextCursor: string | null;
-  hasMore: boolean;
-}
-
-export interface UserSearchResult {
-  id: string;
-  name: string | null;
-  avatarUrl: string | null;
-  bio: string | null;
-}
-
-export interface HashtagResult {
-  id: string;
-  tag: string;
-  postCount: number;
-}
-
-export interface SearchResponse {
-  users: UserSearchResult[];
-  posts: PostDetail[];
-  hashtags: HashtagResult[];
-}
 
 export interface TrendingResponse {
   posts: PostDetail[];
 }
+
+// Re-export types for backwards compatibility
+export type {
+  Comment, CreateCommentResponse,
+  DeleteCommentResponse, FeedResponse, GetCommentsResponse, LikeStatusResponse, PostDetail, SearchResponse,
+  ToggleLikeResponse, UserSearchResult
+};
+
+// Legacy type aliases (deprecated - use imports from api.types.ts)
+export type CommentAuthor = Comment['author'];
+export type PostAuthor = PostDetail['author'];
+export type HashtagResult = SearchResponse['hashtags'][number];
 
 export const socialService = {
   // Follow/Unfollow
@@ -102,7 +45,21 @@ export const socialService = {
 
   // Posts
   async getPost(postId: string, token: string): Promise<PostDetail> {
-    return api.get(`/api/social/posts/${postId}`, token);
+    const post = await api.get<PostDetail>(`/api/social/posts/${postId}`, token);
+
+    // If media is present, transform it to imageUrls
+    if (post.media && post.media.length > 0) {
+      return {
+        ...post,
+        imageUrls: post.media
+          .filter(m => m.type === 'image')
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          .map(m => m.url),
+      };
+    }
+
+    // Otherwise return post as is (using existing imageUrls if available)
+    return post;
   },
 
   async getRecentPosts(token: string): Promise<PostDetail[]> {
@@ -114,7 +71,31 @@ export const socialService = {
     const params = new URLSearchParams();
     if (cursor) params.append('cursor', cursor);
     params.append('limit', limit.toString());
-    return api.get(`/api/social/feed?${params.toString()}`, token);
+
+    interface BackendPost extends Omit<PostDetail, 'imageUrls'> {
+      media?: MediaItem[];
+    }
+    interface BackendFeedResponse {
+      posts: BackendPost[];
+      nextCursor: string | null;
+      hasMore: boolean;
+    }
+
+    const response = await api.get<BackendFeedResponse>(`/api/social/feed?${params.toString()}`, token);
+
+    // Transform media array to imageUrls for UI compatibility
+    const posts: PostDetail[] = response.posts.map(post => ({
+      ...post,
+      imageUrls: post.media
+        ?.filter(m => m.type === 'image')
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map(m => m.url) ?? [],
+    }));
+
+    return {
+      ...response,
+      posts,
+    };
   },
 
   // Discovery (Story 5.4 - Explore and Search)
@@ -122,15 +103,62 @@ export const socialService = {
     const params = new URLSearchParams();
     params.append('q', query);
     params.append('type', type);
-    return api.get(`/api/social/search?${params.toString()}`);
+
+    interface BackendPost extends Omit<PostDetail, 'imageUrls'> {
+      media?: MediaItem[];
+    }
+    interface BackendSearchResponse {
+      users: SearchResponse['users'];
+      posts: BackendPost[];
+      hashtags: SearchResponse['hashtags'];
+    }
+
+    const response = await api.get<BackendSearchResponse>(`/api/social/search?${params.toString()}`);
+
+    // Transform media array to imageUrls for UI compatibility
+    const posts: PostDetail[] = response.posts.map(post => ({
+      ...post,
+      imageUrls: post.media
+        ?.filter(m => m.type === 'image')
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map(m => m.url) ?? [],
+    }));
+
+    return {
+      ...response,
+      posts,
+    };
   },
 
   async getTrending(): Promise<TrendingResponse> {
-    return api.get('/api/social/explore/trending');
+    interface BackendPost extends Omit<PostDetail, 'imageUrls'> {
+      media?: MediaItem[];
+    }
+    interface BackendTrendingResponse {
+      posts: BackendPost[];
+    }
+
+    const response = await api.get<BackendTrendingResponse>('/api/social/explore/trending');
+
+    // Transform media array to imageUrls for UI compatibility
+    const posts: PostDetail[] = response.posts.map(post => ({
+      ...post,
+      imageUrls: post.media
+        ?.filter(m => m.type === 'image')
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map(m => m.url) ?? [],
+    }));
+
+    return { posts };
   },
 
   // Likes
   async toggleLike(postId: string, token: string): Promise<ToggleLikeResponse> {
+    return api.post(`/api/social/likes/toggle/${postId}`, {}, token);
+  },
+
+  /** @alias toggleLike - backwards compatibility */
+  async likePost(postId: string, token: string): Promise<ToggleLikeResponse> {
     return api.post(`/api/social/likes/toggle/${postId}`, {}, token);
   },
 
@@ -174,6 +202,13 @@ export const socialService = {
     mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>;
   }, token: string): Promise<PostDetail> {
     return api.post('/api/social/posts', data, token);
+  },
+
+  async updatePost(postId: string, data: {
+    content?: string;
+    privacy?: string;
+  }, token: string): Promise<PostDetail> {
+    return api.patch(`/api/social/posts/${postId}`, data, token);
   },
 };
 

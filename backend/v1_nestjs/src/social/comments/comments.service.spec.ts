@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CommentsService } from './comments.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 
 describe('CommentsService', () => {
@@ -25,6 +26,10 @@ describe('CommentsService', () => {
     },
   };
 
+  const mockNotificationsService = {
+    create: jest.fn().mockResolvedValue({ id: 'notif-1' }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -32,6 +37,10 @@ describe('CommentsService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: NotificationsService,
+          useValue: mockNotificationsService,
         },
       ],
     }).compile();
@@ -69,6 +78,14 @@ describe('CommentsService', () => {
       expect(result.comment.content).toBe('Great post!');
       expect(result.comment.isOwner).toBe(true);
       expect(result.commentCount).toBe(6);
+      // Verify notification was sent (AC 4)
+      expect(mockNotificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'author-789',
+          type: 'COMMENT',
+          title: 'New Comment',
+        })
+      );
     });
 
     it('should throw NotFoundException if post does not exist', async () => {

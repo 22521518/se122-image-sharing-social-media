@@ -1,119 +1,89 @@
-/**
- * Desktop Sidebar Navigation
- * Only displayed on web when screen width >= 1024px (desktop)
- */
-
 import { Colors } from '@/constants/Colors';
-import { Theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNotifications } from '@/context/NotificationContext';
 import { Ionicons } from '@expo/vector-icons';
-import { Link, usePathname } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-type NavItem = {
-  href: '/' | '/map' | '/explore' | '/postcards' | '/profile';
-  icon: keyof typeof Ionicons.glyphMap;
-  iconFilled: keyof typeof Ionicons.glyphMap;
-  label: string;
-};
-
-const navItems: NavItem[] = [
-  { href: '/', icon: 'home-outline', iconFilled: 'home', label: 'Feed' },
-  { href: '/map', icon: 'map-outline', iconFilled: 'map', label: 'Map' },
-  { href: '/explore', icon: 'search-outline', iconFilled: 'search', label: 'Explore' },
-  { href: '/postcards', icon: 'mail-outline', iconFilled: 'mail', label: 'Postcards' },
-  { href: '/profile', icon: 'person-outline', iconFilled: 'person', label: 'Profile' },
-];
+const navItems = [
+  { to: '/', icon: 'home-outline', activeIcon: 'home', label: 'Feed' },
+  { to: '/map', icon: 'map-outline', activeIcon: 'map', label: 'Map' },
+  // { to: '/explore', icon: 'search-outline', activeIcon: 'search', label: 'Explore' },
+  { to: '/postcards', icon: 'mail-outline', activeIcon: 'mail', label: 'Postcards' },
+  { to: '/messages', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', label: 'Messages' },
+  { to: '/notifications', icon: 'notifications-outline', activeIcon: 'notifications', label: 'Notifications' },
+  { to: '/profile', icon: 'person-outline', activeIcon: 'person', label: 'Profile' },
+] as const;
 
 export function Sidebar() {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { unreadCount } = useNotifications();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // Only render on web
-  if (Platform.OS !== 'web') {
-    return null;
-  }
-
-  const isActive = (href: string) => {
-    if (href === '/') {
-      return pathname === '/' || pathname === '/index';
-    }
-    return pathname.startsWith(href);
+  const isActive = (path: string) => {
+    if (path === '/') return pathname === '/';
+    return pathname.startsWith(path);
   };
 
   return (
-    <View style={StyleSheet.flatten([styles.sidebar, { backgroundColor: colors.background, borderRightColor: colors.border }])}>
+    <View style={styles.container}>
       {/* Logo */}
       <View style={styles.logoContainer}>
-        <Text style={StyleSheet.flatten([styles.logo, { color: colors.text }])}>LifeMapped</Text>
+        <Text style={styles.logoText}>LifeMapped</Text>
       </View>
 
       {/* Navigation */}
       <View style={styles.nav}>
         {navItems.map((item) => {
-          const active = isActive(item.href);
+          const active = isActive(item.to);
+          const showBadge = item.to === '/notifications' && unreadCount > 0;
           return (
-            <Link key={item.href} href={item.href} asChild>
-              <TouchableOpacity
-                style={StyleSheet.flatten([
-                  styles.navItem,
-                  active && { backgroundColor: colors.muted },
-                ])}
-              >
+            <Pressable
+              key={item.to}
+              style={[styles.navItem, active && styles.navItemActive]}
+              onPress={() => router.push(item.to as any)}
+            >
+              <View>
                 <Ionicons
-                  name={active ? item.iconFilled : item.icon}
-                  size={22}
-                  color={active ? colors.text : colors.textSecondary}
+                  name={active ? item.activeIcon : item.icon}
+                  size={20}
+                  color={active ? '#171717' : '#737373'}
                 />
-                <Text
-                  style={StyleSheet.flatten([
-                    styles.navLabel,
-                    { color: active ? colors.text : colors.textSecondary },
-                    active && styles.navLabelActive,
-                  ])}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            </Link>
+                {showBadge && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
+            </Pressable>
           );
         })}
       </View>
 
-      {/* Separator */}
-      <View style={StyleSheet.flatten([styles.separator, { backgroundColor: colors.border }])} />
+      <View style={styles.separator} />
 
-      {/* User Section */}
+      {/* User section */}
       <View style={styles.userSection}>
         {user ? (
-          <View style={styles.userRow}>
-            <View style={StyleSheet.flatten([styles.avatar, { backgroundColor: colors.muted }])}>
-              <Text style={StyleSheet.flatten([styles.avatarText, { color: colors.primary }])}>
-                {user.email?.charAt(0).toUpperCase() || 'U'}
+          <View style={styles.userInfo}>
+            <View style={styles.userDetails}>
+              <Text style={styles.userEmail} numberOfLines={1}>
+                {user.name}
               </Text>
             </View>
-            <View style={styles.userInfo}>
-              <Text
-                style={StyleSheet.flatten([styles.userEmail, { color: colors.text }])}
-                numberOfLines={1}
-              >
-                {user.email}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={logout} style={styles.signOutBtn}>
-              <Ionicons name="log-out-outline" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
+            <Pressable onPress={logout} style={styles.logoutButton}>
+              <Ionicons name="log-out-outline" size={16} color="#737373" />
+            </Pressable>
           </View>
         ) : (
-          <Link href="/(auth)/login" asChild>
-            <TouchableOpacity style={StyleSheet.flatten([styles.signInBtn, { backgroundColor: colors.primary }])}>
-              <Text style={styles.signInText}>Sign In</Text>
-            </TouchableOpacity>
-          </Link>
+          <Pressable style={styles.signInButton} onPress={() => router.push('/auth' as any)}>
+            <Text style={styles.signInText}>Sign In</Text>
+          </Pressable>
         )}
       </View>
     </View>
@@ -121,85 +91,97 @@ export function Sidebar() {
 }
 
 const styles = StyleSheet.create({
-  sidebar: {
+  container: {
     width: 256,
     height: '100%',
+    backgroundColor: '#fff',
     borderRightWidth: 1,
-    flexDirection: 'column',
-    // @ts-ignore - web specific
-    position: 'sticky',
-    top: 0,
+    borderRightColor: '#e5e5e5',
   },
   logoContainer: {
-    padding: Theme.spacing.xl,
+    padding: 24,
   },
-  logo: {
-    fontSize: Theme.typography.fontSizes.xl,
-    fontWeight: Theme.typography.fontWeights.semibold,
+  logoText: {
+    fontSize: 20,
+    fontWeight: '600',
     letterSpacing: -0.5,
+    color: '#171717',
   },
   nav: {
     flex: 1,
-    paddingHorizontal: Theme.spacing.md,
+    paddingHorizontal: 12,
+    gap: 4,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.md,
-    paddingHorizontal: Theme.spacing.md,
+    gap: 12,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: Theme.borderRadius.lg,
-    marginBottom: 2,
+    borderRadius: 8,
+  },
+  navItemActive: {
+    backgroundColor: '#f5f5f5',
   },
   navLabel: {
-    fontSize: Theme.typography.fontSizes.base,
+    fontSize: 14,
+    color: '#737373',
   },
   navLabelActive: {
-    fontWeight: Theme.typography.fontWeights.medium,
+    color: '#171717',
+    fontWeight: '500',
   },
   separator: {
     height: 1,
-    marginHorizontal: Theme.spacing.lg,
+    backgroundColor: '#e5e5e5',
+    marginHorizontal: 12,
   },
   userSection: {
-    padding: Theme.spacing.lg,
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.md,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    fontSize: Theme.typography.fontSizes.lg,
-    fontWeight: Theme.typography.fontWeights.semibold,
+    padding: 16,
   },
   userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  userDetails: {
     flex: 1,
     minWidth: 0,
   },
   userEmail: {
-    fontSize: Theme.typography.fontSizes.sm,
-    fontWeight: Theme.typography.fontWeights.medium,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#171717',
   },
-  signOutBtn: {
-    padding: Theme.spacing.sm,
+  logoutButton: {
+    padding: 8,
   },
-  signInBtn: {
-    paddingVertical: Theme.spacing.md,
-    paddingHorizontal: Theme.spacing.lg,
-    borderRadius: Theme.borderRadius.lg,
+  signInButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 10,
+    borderRadius: 8,
     alignItems: 'center',
   },
   signInText: {
     color: '#fff',
-    fontSize: Theme.typography.fontSizes.base,
-    fontWeight: Theme.typography.fontWeights.medium,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '600',
   },
 });

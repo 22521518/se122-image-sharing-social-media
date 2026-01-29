@@ -1,60 +1,69 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  TextInput, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Modal, 
-  ActivityIndicator, 
-  Alert,
-  Platform,
-  ScrollView,
-  KeyboardAvoidingView,
-  Image,
-} from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from '@expo/vector-icons';
+import { UserAvatar } from '@/components/shared';
+import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
-import { useSocial } from '@/context/SocialContext';
-import { mediaService } from '@/services/media.service';
+import { usePlatform } from '@/hooks/usePlatform';
+import type { PrivacyLevel } from '@/types/api.types';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface CreatePostModalProps {
   visible: boolean;
   onClose: () => void;
+  onSubmit: (data: {
+    content: string;
+    imageUrls: string[];
+    privacy: PrivacyLevel;
+  }) => Promise<void>;
 }
 
-interface ImageWithMetadata {
-  uri: string;
-  caption?: string;
-  sortOrder: number;
-  mimeType?: string;
-}
+const privacyOptions = [
+  { value: 'public' as const, label: 'Public', icon: 'globe-outline' as const },
+  { value: 'friends' as const, label: 'Friends', icon: 'people-outline' as const },
+  { value: 'private' as const, label: 'Only me', icon: 'lock-closed-outline' as const },
+];
 
-export default function CreatePostModal({ visible, onClose }: CreatePostModalProps) {
-  const { user, accessToken } = useAuth();
-  const { createPost } = useSocial();
+export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalProps) {
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { isDesktop } = usePlatform();
+  const screenHeight = Dimensions.get('window').height;
+  
   const [content, setContent] = useState('');
-  const [privacy, setPrivacy] = useState<'public' | 'friends' | 'private'>('friends');
-  const [images, setImages] = useState<ImageWithMetadata[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [privacy, setPrivacy] = useState<PrivacyLevel>('public');
+  const [images, setImages] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPrivacyPicker, setShowPrivacyPicker] = useState(false);
 
-  // Reset form when modal closes
-  useEffect(() => {
-    if (!visible) {
+  const handleSubmit = async () => {
+    if (!content.trim() && images.length === 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ content: content.trim(), imageUrls: images, privacy });
       setContent('');
-      setPrivacy('friends');
       setImages([]);
+      setPrivacy('public');
+      onClose();
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [visible]);
+  };
 
-  const pickImage = async () => {
-    if (images.length >= 10) {
-      Alert.alert('Limit Reached', 'You can only add up to 10 images per post');
-      return;
-    }
-
+  const handleImageSelect = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
@@ -62,315 +71,304 @@ export default function CreatePostModal({ visible, onClose }: CreatePostModalPro
     });
 
     if (!result.canceled) {
-      const remainingSlots = 10 - images.length;
-      const assetsToAdd = result.assets.slice(0, remainingSlots);
-
-      const newImages: ImageWithMetadata[] = assetsToAdd.map((asset, index) => ({
-        uri: asset.uri,
-        mimeType: asset.mimeType || 'image/jpeg',
-        sortOrder: images.length + index,
-        caption: undefined,
-      }));
-
-      setImages([...images, ...newImages]);
+      const newImages = result.assets.map((asset) => asset.uri);
+      setImages((prev) => [...prev, ...newImages]);
     }
   };
 
   const removeImage = (index: number) => {
-    const newImages = [...images];
-    newImages.splice(index, 1);
-    // Update sortOrder
-    setImages(newImages.map((img, i) => ({ ...img, sortOrder: i })));
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async () => {
-    if (!content.trim() && images.length === 0) {
-      Alert.alert('Error', 'Please add text or images');
-      return;
-    }
+  const canSubmit = (content.trim() || images.length > 0) && !isSubmitting;
+  const currentPrivacyOption = privacyOptions.find((o) => o.value === privacy) || privacyOptions[0];
 
-    if (content.length > 2000) {
-      Alert.alert('Error', 'Content exceeds 2000 characters');
-      return;
-    }
+  const renderContent = () => (
+    <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={24} color="#171717" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Create Post</Text>
+          <Pressable
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+            style={[styles.shareButton, !canSubmit && styles.shareButtonDisabled]}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.shareButtonText}>Share</Text>
+            )}
+          </Pressable>
+        </View>
 
-    setSubmitting(true);
-    try {
-      let mediaIds: string[] = [];
-      let mediaMetadata: Array<{ mediaId: string; caption?: string; sortOrder: number }> = [];
+        <ScrollView style={styles.content}>
+          {/* User info */}
+          <View style={styles.userInfo}>
+            <UserAvatar name={user?.email?.charAt(0).toUpperCase() || 'U'} size="md" />
+            <View style={styles.userDetails}>
+              <Text style={styles.userName}>{user?.email || 'User'}</Text>
+              <Pressable
+                style={styles.privacySelector}
+                onPress={() => setShowPrivacyPicker(!showPrivacyPicker)}
+              >
+                <Ionicons name={currentPrivacyOption.icon} size={14} color="#737373" />
+                <Text style={styles.privacyText}>{currentPrivacyOption.label}</Text>
+                <Ionicons name="chevron-down" size={14} color="#737373" />
+              </Pressable>
+            </View>
+          </View>
 
-      if (images.length > 0) {
-        setUploading(true);
-        const uploadPromises = images.map(img =>
-          mediaService.uploadMedia(img.uri, img.mimeType || 'image/jpeg', accessToken)
-        );
-        const uploadedMedia = await Promise.all(uploadPromises);
-        mediaIds = uploadedMedia.map(m => m.id);
-        mediaMetadata = uploadedMedia.map((media, index) => ({
-          mediaId: media.id,
-          caption: images[index].caption,
-          sortOrder: images[index].sortOrder,
-        }));
-        setUploading(false);
-      }
+          {/* Privacy picker dropdown */}
+          {showPrivacyPicker && (
+            <View style={styles.privacyPicker}>
+              {privacyOptions.map((option) => (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    styles.privacyOption,
+                    privacy === option.value && styles.privacyOptionActive,
+                  ]}
+                  onPress={() => {
+                    setPrivacy(option.value);
+                    setShowPrivacyPicker(false);
+                  }}
+                >
+                  <Ionicons
+                    name={option.icon}
+                    size={16}
+                    color={privacy === option.value ? Colors.light.primary : '#737373'}
+                  />
+                  <Text
+                    style={[
+                      styles.privacyOptionText,
+                      privacy === option.value && styles.privacyOptionTextActive,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
 
-      createPost(content, privacy, mediaIds, mediaMetadata).catch((err: any) => {
-        console.error('Background create post failed', err);
-      });
+          {/* Content */}
+          <TextInput
+            placeholder="What's on your mind?"
+            placeholderTextColor="#737373"
+            value={content}
+            onChangeText={setContent}
+            style={styles.textInput}
+            multiline
+            textAlignVertical="top"
+          />
 
-      onClose();
-    } catch (error) {
-      console.error('Failed to create post:', error);
-      Alert.alert('Error', 'Failed to upload media');
-      setUploading(false);
-      setSubmitting(false);
-    }
-  };
+          {/* Image previews */}
+          {images.length > 0 && (
+            <View style={styles.imageGrid}>
+              {images.map((uri, index) => (
+                <View key={index} style={styles.imageContainer}>
+                  <Image source={{ uri }} style={styles.previewImage} />
+                  <Pressable style={styles.removeImageButton} onPress={() => removeImage(index)}>
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Footer actions */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Pressable style={styles.addPhotoButton} onPress={handleImageSelect}>
+            <Ionicons name="image-outline" size={20} color={Colors.light.primary} />
+            <Text style={styles.addPhotoText}>Photo</Text>
+          </Pressable>
+        </View>
+      </View>
+  );
 
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      transparent={Platform.OS !== 'web'}
+      animationType={isDesktop ? "fade" : "slide"}
+      presentationStyle={isDesktop ? "overFullScreen" : "pageSheet"}
+      transparent={isDesktop}
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-      >
-        <View style={styles.modalContent}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.headerButton}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Create Post</Text>
-            <TouchableOpacity 
-              onPress={handleSubmit} 
-              disabled={submitting || uploading || (!content.trim() && images.length === 0)}
-              style={styles.headerButton}
-            >
-              {submitting ? (
-                <ActivityIndicator size="small" color="#007AFF" />
-              ) : (
-                <Text style={StyleSheet.flatten([
-                  styles.postButtonText, 
-                  (!content.trim() && images.length === 0) && styles.disabled
-                ])}>
-                  Post
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-            {/* User row */}
-            <View style={styles.userRow}>
-              <View style={styles.avatar}>
-                <Text>{user?.name?.[0] || 'U'}</Text>
-              </View>
-              <View>
-                <Text style={styles.userName}>{user?.name || 'User'}</Text>
-                <TouchableOpacity 
-                  style={styles.privacySelector}
-                  onPress={() => {
-                    setPrivacy(prev => {
-                      if (prev === 'friends') return 'public';
-                      if (prev === 'public') return 'private';
-                      return 'friends';
-                    });
-                  }}
-                >
-                  <Text style={styles.privacyText}>
-                    {privacy === 'friends' ? '👥 Friends' : privacy === 'public' ? '🌍 Public' : '🔒 Private'} ▼
-                  </Text>
-                </TouchableOpacity>
-              </View>
+      {isDesktop ? (
+        <View style={styles.desktopOverlay}>
+            <Pressable style={styles.desktopBackdrop} onPress={onClose} />
+            <View style={[styles.desktopContainer, { maxHeight: screenHeight * 0.8 }]}>
+                {renderContent()}
             </View>
-
-            {/* Content Input */}
-            <TextInput
-              style={styles.input}
-              multiline
-              placeholder="What's on your mind?"
-              placeholderTextColor="#999"
-              value={content}
-              onChangeText={setContent}
-              maxLength={2000}
-              autoFocus
-            />
-            <Text style={styles.charCount}>{content.length}/2000</Text>
-
-            {/* Image previews */}
-            {images.length > 0 && (
-              <ScrollView horizontal style={styles.imageRow} showsHorizontalScrollIndicator={false}>
-                {images.map((img, index) => (
-                  <View key={index} style={styles.imageContainer}>
-                    <Image source={{ uri: img.uri }} style={styles.previewImage} />
-                    <TouchableOpacity style={styles.removeButton} onPress={() => removeImage(index)}>
-                      <Ionicons name="close-circle" size={24} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Add image button */}
-            <TouchableOpacity style={styles.addMediaButton} onPress={pickImage}>
-              <Ionicons name="images-outline" size={24} color="#007AFF" />
-              <Text style={styles.addMediaText}>Add Images ({images.length}/10)</Text>
-            </TouchableOpacity>
-          </ScrollView>
-
-          {/* Loading overlay */}
-          {uploading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#fff" />
-              <Text style={styles.loadingText}>Uploading images...</Text>
-            </View>
-          )}
         </View>
-      </KeyboardAvoidingView>
+      ) : (
+        renderContent()
+      )}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalContainer: {
+  // Desktop Styles
+  desktopOverlay: {
     flex: 1,
-    backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.5)' : '#fff',
-    justifyContent: Platform.OS === 'web' ? 'center' : 'flex-start',
-    alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  modalContent: {
-    flex: Platform.OS === 'web' ? undefined : 1,
+  desktopBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  desktopContainer: {
+    width: '90%',
+    maxWidth: 600,
     backgroundColor: '#fff',
-    borderRadius: Platform.OS === 'web' ? 16 : 0,
-    width: Platform.OS === 'web' ? '90%' : '100%',
-    maxWidth: Platform.OS === 'web' ? 600 : undefined,
-    maxHeight: Platform.OS === 'web' ? '90%' : undefined,
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  // Existing Styles
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    backgroundColor: '#fff',
-  },
-  headerButton: {
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  cancelText: {
-    fontSize: 16,
-    color: '#000',
+    borderBottomColor: '#e5e5e5',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  postButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#171717',
   },
-  disabled: {
+  shareButton: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  shareButtonDisabled: {
     opacity: 0.5,
   },
-  body: {
+  shareButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  content: {
     flex: 1,
     padding: 16,
   },
-  userRow: {
+  userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     marginBottom: 16,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#eee',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  userDetails: {
+    gap: 4,
   },
   userName: {
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 2,
+    color: '#171717',
   },
   privacySelector: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   privacyText: {
     fontSize: 12,
-    color: '#666',
+    color: '#737373',
   },
-  input: {
-    fontSize: 16,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    color: '#000',
-  },
-  charCount: {
-    textAlign: 'right',
-    color: '#999',
-    fontSize: 12,
+  privacyPicker: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
     marginBottom: 16,
+    overflow: 'hidden',
   },
-  imageRow: {
+  privacyOption: {
     flexDirection: 'row',
-    marginBottom: 16,
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  privacyOptionActive: {
+    backgroundColor: '#e5e5e5',
+  },
+  privacyOptionText: {
+    fontSize: 14,
+    color: '#737373',
+  },
+  privacyOptionTextActive: {
+    color: Colors.light.primary,
+    fontWeight: '500',
+  },
+  textInput: {
+    fontSize: 16,
+    color: '#171717',
+    minHeight: 120,
+  },
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 16,
   },
   imageContainer: {
-    marginRight: 10,
-    position: 'relative',
+    width: '48%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   previewImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
+    width: '100%',
+    height: '100%',
   },
-  removeButton: {
+  removeImageButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
     borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addMediaButton: {
+  footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
+    gap: 8,
     paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e5e5',
   },
-  addMediaText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
+  addPhotoButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  loadingText: {
-    color: '#fff',
-    marginTop: 12,
-    fontSize: 16,
+  addPhotoText: {
+    fontSize: 14,
+    color: Colors.light.primary,
   },
 });

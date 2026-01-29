@@ -43,8 +43,8 @@ export const Colors = {
     // Core
     text: '#FAFAFA',
     textSecondary: '#A1A1AA',
-    background: '#0F0F11',
-    backgroundSecondary: '#18181B',
+    background: '#1C1C1E', // Apple Dark System Gray 6
+    backgroundSecondary: '#2C2C2E', // Apple Dark System Gray 5
 
     // Brand - Warm coral/salmon
     primary: '#E8795A',
@@ -55,9 +55,9 @@ export const Colors = {
     accentForeground: '#FFFFFF',
 
     // UI Elements
-    border: '#27272A',
-    card: '#18181B',
-    cardElevated: '#1F1F23',
+    border: '#3A3A3C',
+    card: '#2C2C2E',
+    cardElevated: '#3A3A3C',
 
     // Tab bar
     tint: '#E8795A',
@@ -97,4 +97,16 @@ export const Colors = {
   },
   tempPin: '#FF3B30',
   tempPinLabel: '#FFF',
+};
+
+/**
+ * Semantic Feeling Colors - Used for emotional context UI
+ * Exported separately for convenience
+ */
+export const FeelingColors = {
+  joy: '#FACC15',
+  melancholy: '#3B82F6',
+  energetic: '#E8795A',
+  calm: '#2DD4BF',
+  inspired: '#A855F7',
 };

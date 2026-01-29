@@ -210,15 +210,23 @@ describe('ModerationService', () => {
   });
 
   describe('lockPostComments', () => {
-    it('should create a moderation log for locking', async () => {
+    it('should set commentsLocked to true and log the action', async () => {
       const postId = 'post-uuid';
       const moderatorId = 'mod-uuid';
 
-      mockPrismaService.post.findUnique.mockResolvedValue({ id: postId });
+      mockPrismaService.post.findUnique.mockResolvedValue({ id: postId, commentsLocked: false });
+      mockPrismaService.post.update.mockResolvedValue({ id: postId, commentsLocked: true });
       mockPrismaService.moderationLog.create.mockResolvedValue({});
 
       await service.lockPostComments(postId, moderatorId);
 
+      // Verify commentsLocked is set to true
+      expect(mockPrismaService.post.update).toHaveBeenCalledWith({
+        where: { id: postId },
+        data: { commentsLocked: true },
+      });
+
+      // Verify moderation log is created
       expect(mockPrismaService.moderationLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           moderatorId,

@@ -12,11 +12,13 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { MemoriesService } from '../services/memories.service';
 import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto, CheckDuplicatesDto, RandomMemoryQueryDto } from '../dto';
+import { UpdateMemoryDto } from '../dto/update-memory.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -316,8 +318,29 @@ export class MemoriesController {
   })
   @ApiResponse({ status: 200, description: 'List of memories' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getMyMemories(@Request() req: any) {
-    return this.memoriesService.getMemoriesByUser(req.user.id);
+  async getMyMemories(@Request() req: any, @Query('scope') scope?: string) {
+    // If scope is specifically 'mine', return only my memories
+    if (scope === 'mine') {
+      return this.memoriesService.getMemoriesByUser(req.user.id);
+    }
+
+    // Default (scope='all' or undefined): Return the social feed (Self + Friends + Followed)
+    return this.memoriesService.getMemoriesFeed(req.user.id);
+  }
+
+  @Get('user/:userId')
+  @ApiOperation({
+    summary: 'Get memories by user ID',
+    description: 'Retrieve public memories for a specific user, filtered by privacy settings.',
+  })
+  @ApiParam({ name: 'userId', description: 'Target user ID' })
+  @ApiResponse({ status: 200, description: 'List of visible memories' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMemoriesByUserId(
+    @Request() req: any,
+    @Param('userId') userId: string,
+  ) {
+    return this.memoriesService.getPublicMemoriesByUser(userId, req.user.id);
   }
 
   @Get('random')
@@ -385,5 +408,17 @@ export class MemoriesController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async deleteMemory(@Request() req: any, @Param('id') id: string) {
     return this.memoriesService.deleteMemory(id, req.user.id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update memory details' })
+  @ApiResponse({ status: 200, description: 'Memory updated successfully' })
+  @ApiResponse({ status: 404, description: 'Memory not found' })
+  async updateMemory(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateMemoryDto,
+  ) {
+    return this.memoriesService.updateMemory(id, req.user.id, dto);
   }
 }

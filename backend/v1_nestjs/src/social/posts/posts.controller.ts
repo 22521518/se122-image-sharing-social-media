@@ -1,8 +1,9 @@
-import { Controller, Get, Param, UseGuards, Req, Post, Body } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Req, Post, Body, Patch } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags, ApiResponse } from '@nestjs/swagger';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 @ApiTags('posts')
 @ApiBearerAuth()
@@ -10,6 +11,14 @@ import { CreatePostDto } from './dto/create-post.dto';
 @UseGuards(JwtAuthGuard)
 export class PostsController {
   constructor(private readonly postsService: PostsService) { }
+
+  @Get('user/:userId')
+  @ApiOperation({ summary: 'Get posts by user ID' })
+  @ApiParam({ name: 'userId', description: 'ID of the user whose posts to retrieve' })
+  async getPostsByUserId(@Param('userId') userId: string, @Req() req: any) {
+    const currentUserId = req.user.id;
+    return this.postsService.getPostsByUserId(userId, currentUserId);
+  }
 
   @Get(':postId')
   @ApiOperation({ summary: 'Get full post details by ID' })
@@ -34,6 +43,14 @@ export class PostsController {
       ...createPostDto,
       authorId: userId,
     });
+  }
+
+  @Patch(':postId')
+  @ApiOperation({ summary: 'Update an existing post' })
+  @ApiResponse({ status: 200, description: 'The post has been successfully updated.' })
+  async update(@Param('postId') postId: string, @Body() updatePostDto: UpdatePostDto, @Req() req: any) {
+    const userId = req.user.id;
+    return this.postsService.updatePost(postId, userId, updatePostDto);
   }
 }
 

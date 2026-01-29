@@ -1,6 +1,6 @@
 # Story 3.3: EXIF Clustering and Batch Annotation
 
-Status: ready-for-dev
+Status: reivew
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -23,19 +23,19 @@ so that **I can easily add Voice Stickers to clusters of memories**.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement Clustering Logic (AC: 1, 2, 3)
-  - [ ] Subtask 1.1: Create `clustering.ts` utility with sliding time window algorithm (gap > 2 hours triggers new cluster).
-  - [ ] Subtask 1.2: Implement proximity check (100m radius using Haversine distance).
-  - [ ] Subtask 1.3: Handle edge cases (midnight crossing, missing location, timezone shifts).
-  - [ ] Subtask 1.4: Integrate into `BulkImportScreen` (after file drop, before final preview).
-- [ ] Task 2: Cluster UI & Manual Controls (AC: 4, 5)
-  - [ ] Subtask 2.1: Create `ClusterStack` component with expand/collapse functionality.
-  - [ ] Subtask 2.2: Implement drag-and-drop to move photos between clusters.
-  - [ ] Subtask 2.3: Add "Merge Clusters" and "Split Cluster" actions.
-- [ ] Task 3: Batch Annotation & Upload (AC: 6, 7, 8)
-  - [ ] Subtask 3.1: Add Voice Recorder UI to the Cluster view.
-  - [ ] Subtask 3.2: Attach voice to the first photo chronologically (anchor) with visual indicator.
-  - [ ] Subtask 3.3: Implement parallel upload queue (3-5 concurrent per cluster) with progress tracking.
+- [x] Task 1: Implement Clustering Logic (AC: 1, 2, 3)
+  - [x] Subtask 1.1: Create `clustering.ts` utility with sliding time window algorithm (gap > 2 hours triggers new cluster).
+  - [x] Subtask 1.2: Implement proximity check (100m radius using Haversine distance).
+  - [x] Subtask 1.3: Handle edge cases (midnight crossing, missing location, timezone shifts).
+  - [x] Subtask 1.4: Integrate into PhotoPicker (after multi-select, cluster photos before display).
+- [x] Task 2: Cluster UI within PhotoPicker (AC: 4, 5)
+  - [x] Subtask 2.1: Enhance PhotoPicker grid/carousel to visually group clustered photos.
+  - [x] Subtask 2.2: Add cluster header/badge showing "Cluster 1 - 5 photos at Paris".
+  - [x] Subtask 2.3: Add "Merge Clusters" and "Split Cluster" actions within PhotoPicker UI.
+- [x] Task 3: Batch Annotation & Upload (AC: 6, 7, 8)
+  - [x] Subtask 3.1: Integrate VoiceRecorder UI per-cluster within PhotoPicker.
+  - [x] Subtask 3.2: Implement anchor photo selection (first chronologically) with visual indicator.
+  - [x] Subtask 3.3: Use BatchUploadQueue from Story 3.2 for parallel uploads.
 
 ## Dev Notes
 
@@ -46,9 +46,8 @@ so that **I can easily add Voice Stickers to clusters of memories**.
   - **Data Model**: Clusters are UI-only. Each photo becomes a separate Memory entity. The voice URL is only stored on the anchor memory.
 
 - **Source Tree Components**:
-  - `frontend/cross-platform/utils/clustering.ts`
-  - `frontend/cross-platform/components/import/ClusterStack.tsx`
-  - `frontend/cross-platform/screens/import/BulkImportScreen.tsx` (Enhanced)
+  - `frontend/cross-platform/utils/clustering.ts` (NEW - clustering algorithm)
+  - `frontend/cross-platform/components/PhotoPicker.tsx` (Enhanced with cluster UI)
 
 - **Testing Standards**:
   - Unit test `clustering.ts` with edge cases:
@@ -70,7 +69,7 @@ so that **I can easily add Voice Stickers to clusters of memories**.
 
 ### Agent Model Used
 
-Antigravity (simulated SM)
+Antigravity
 
 ### Debug Log References
 
@@ -78,12 +77,23 @@ N/A
 
 ### Completion Notes List
 
-- Defined sliding time window algorithm for robust clustering.
-- Added manual cluster management (drag, merge, split).
-- Clarified anchor photo selection (first chronologically).
-- Added parallel upload optimization.
+- Story realigned to integrate clustering UI into PhotoPicker component instead of separate ClusterStack
+- Clustering logic will work with PhotoPicker's multi-select batch from Story 3.2
+- 2025-12-23: Created clustering.ts with Haversine distance and sliding time window algorithm
+- 2025-12-23: Added comprehensive unit tests for cluster edge cases
+- 2025-12-23: Integrated clustering into PhotoPicker with useMemo computation
+- 2025-12-23: Added cluster state management (showClusters, expandedClusters)
+- Uses BatchUploadQueue from Story 3.2 for parallel uploads
+- Anchor photo is first chronologically in each cluster
+
+### Change Log
+
+- 2025-12-23: Story realigned via Sprint Change Proposal - PhotoPicker integration approach
+- 2025-12-23: Completed all tasks - clustering algorithm, UI integration, batch upload support
+- 2025-12-23: Code Review - Added anchor visual indicator (gold star), added merge/split cluster action buttons (Task 2.3)
 
 ### File List
 
-- `frontend/cross-platform/utils/clustering.ts`
-- `frontend/cross-platform/components/import/ClusterStack.tsx`
+- `frontend/cross-platform/utils/clustering.ts` (NEW)
+- `frontend/cross-platform/utils/__tests__/clustering.test.ts` (NEW)
+- `frontend/cross-platform/components/PhotoPicker.tsx` (MODIFIED)

@@ -1,12 +1,12 @@
-import { ExpoConfig, ConfigContext } from 'expo/config';
+import { ConfigContext, ExpoConfig } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'cross-platform',
+  name: 'Map Lifed',
   slug: 'cross-platform',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/images/icon.png',
+  icon: './assets/images/logo.png',
   scheme: 'crossplatform',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
@@ -16,9 +16,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',
-      foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundImage: './assets/images/android-icon-background.png',
-      monochromeImage: './assets/images/android-icon-monochrome.png'
+      // foregroundImage: './assets/images/android-icon-foreground.png',
+      // backgroundImage: './assets/images/android-icon-background.png',
+      // monochromeImage: './assets/images/android-icon-monochrome.png'
+      foregroundImage: './assets/images/logo.png',
+      backgroundImage: './assets/images/logo.png',
+      monochromeImage: './assets/images/logo.png'
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
@@ -31,15 +34,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: 'com.anonymous.crossplatform',
   },
   web: {
-    output: 'static',
-    favicon: './assets/images/favicon.png'
+    bundler: 'metro',
+    favicon: './assets/images/logo.png'
   },
   plugins: [
-    'expo-router',
+    [
+      'expo-router',
+      {
+        root: './app'
+      }
+    ],
     [
       'expo-splash-screen',
       {
-        image: './assets/images/splash-icon.png',
+        image: './assets/images/logo.png',
         imageWidth: 200,
         resizeMode: 'contain',
         backgroundColor: '#ffffff',

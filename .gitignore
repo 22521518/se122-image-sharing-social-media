@@ -1,8 +1,8 @@
-# .bmad
-# .agent
-# .claude
-# .github
-# .vscode
+_bmad
+.agent
+.claude
+.github
+.vscode
 # *.md
 # *.yaml
 # *.yml
@@ -10,3 +10,12 @@
 # .xml
 .vscode
 **/node_modules/**
+**/_bmad-output/**
+
+*.md
+!README.md
+!AGENTS.md
+*.env
+!*.example
+frontend/cross-platform/.env
+frontend/web-console/.env

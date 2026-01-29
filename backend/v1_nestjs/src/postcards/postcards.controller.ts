@@ -61,5 +61,12 @@ export class PostcardsController {
   async getById(@Request() req: any, @Param('id') id: string) {
     return this.postcardsService.getPostcardById(id, req.user.id);
   }
+
+  @Post('test/trigger-time-unlock')
+  @ApiOperation({ summary: 'TEST ONLY: Manually trigger time unlock cron job' })
+  async testTriggerTimeUnlock() {
+    await this.postcardsScheduler.handleTimeLockUnlock();
+    return { success: true, message: 'Time unlock job triggered' };
+  }
 }
 

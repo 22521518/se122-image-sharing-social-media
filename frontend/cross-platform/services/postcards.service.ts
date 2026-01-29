@@ -83,6 +83,10 @@ export const postcardsService = {
       { unlockedCount: number; unlocked: { id: string; senderName: string | null; distance: number }[] }
     >('/api/postcards/check-geo', { latitude, longitude }, token);
   },
+
+  async triggerTimeUnlock(token?: string | null): Promise<void> {
+    return ApiService.post('/api/postcards/test/trigger-time-unlock', {}, token);
+  },
 };
 
 export default postcardsService;

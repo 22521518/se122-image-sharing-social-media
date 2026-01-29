@@ -1,241 +1,513 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Image, ScrollView, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, Stack, router } from 'expo-router';
+import { PageHeader } from '@/components/layout';
+import { ActionMenu, EmptyState, ReportModal, UserAvatar } from '@/components/shared';
+import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
-import { FollowButton } from '../../components/social/FollowButton';
-import { LoginPromptModal } from '../../components/common/LoginPromptModal';
-import { ApiService } from '../../services/api.service';
+import { socialService } from '@/services/social.service';
+import { usersService } from '@/services/users.service';
+import type { PostDetail, Profile } from '@/types/api.types';
+import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-interface PublicProfile {
-  id: string;
-  name: string | null;
-  bio: string | null;
-  avatarUrl: string | null;
-  followerCount: number;
-  followingCount: number;
-  isFollowing: boolean;
-  isAuthenticated?: boolean;
-}
+const { width } = Dimensions.get('window');
+const GRID_ITEM_SIZE = (width - 8) / 3;
 
-export default function UserProfileScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { accessToken, user } = useAuth();
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
+export default function UserProfilePage() {
+  const { id: userId } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { accessToken, user: currentUser } = useAuth();
+
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [posts, setPosts] = useState<PostDetail[]>([]);
+  const [memories, setMemories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-
-  const isAuthenticated = !!accessToken;
-  const isOwnProfile = user?.id === id;
-
-  // Redirect to own profile tab if viewing self
-  useEffect(() => {
-    if (isOwnProfile && !isLoading) {
-      router.replace('/(tabs)/profile');
-    }
-  }, [isOwnProfile, isLoading]);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts' | 'memories'>('posts');
+  const [showMenu, setShowMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   useEffect(() => {
-    if (id && !isOwnProfile) {
-      loadProfile(id, accessToken || undefined);
-    } else if (isOwnProfile) {
-      setIsLoading(false);
-    }
-  }, [id, accessToken, isOwnProfile]);
+    const loadProfile = async () => {
+      if (!userId || !accessToken) {
+        setIsLoading(false);
+        return;
+      }
 
-  const loadProfile = async (userId: string, token?: string) => {
-    setIsLoading(true);
-    setError('');
+      // If viewing own profile, redirect to tabs/profile
+      if (currentUser && userId === currentUser.id) {
+        router.replace('/(tabs)/profile');
+        return;
+      }
+
+      try {
+        const [profileData, postsData, memoriesData] = await Promise.all([
+          usersService.getUserProfile(userId, accessToken),
+          usersService.getUserPosts(userId, accessToken),
+          usersService.getUserMemories(userId, accessToken),
+        ]);
+
+        if (profileData) {
+          setProfile(profileData);
+          // isFollowing comes from the public-profile endpoint
+          setIsFollowing(profileData.isFollowing || false);
+        }
+        setPosts(postsData);
+        setMemories(memoriesData || []);
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [userId, router, accessToken, currentUser]);
+
+  const handleFollow = async () => {
+    if (!profile || !accessToken) return;
+
+    setIsFollowLoading(true);
     try {
-      const data = await ApiService.get<PublicProfile>(`/api/users/${userId}/public-profile`, token);
-      setProfile(data);
-    } catch (err) {
-      console.error('Failed to load profile:', err);
-      setError('Failed to load profile');
+      if (isFollowing) {
+        await socialService.unfollowUser(profile.id, accessToken);
+        setIsFollowing(false);
+        setProfile((prev) =>
+          prev ? { ...prev, followerCount: (prev.followerCount || 0) - 1 } : null,
+        );
+      } else {
+        await socialService.followUser(profile.id, accessToken);
+        setIsFollowing(true);
+        setProfile((prev) =>
+          prev ? { ...prev, followerCount: (prev.followerCount || 0) + 1 } : null,
+        );
+      }
+    } catch (error) {
+      console.error('Failed to follow/unfollow:', error);
     } finally {
-      setIsLoading(false);
+      setIsFollowLoading(false);
     }
   };
 
-  const handleLoginRequired = () => {
-    setShowLoginPrompt(true);
+  const formatCount = (count: number | undefined) => {
+    if (!count) return '0';
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
   };
-
-  // Show loading while redirecting to own profile
-  if (isOwnProfile) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#6366f1" />
-          <Text style={styles.redirectText}>Redirecting to your profile...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#6366f1" />
+      <View style={styles.container}>
+        <PageHeader showBack title="Profile" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
-  if (error || !profile) {
+  if (!profile) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.center}>
-          <Text style={styles.error}>{error || 'User not found'}</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <PageHeader showBack title="Profile" />
+        <EmptyState
+          title="User not found"
+          description="This user doesn't exist or has been removed"
+        />
+      </View>
     );
   }
+
+  const renderPostItem = ({ item }: { item: PostDetail }) => (
+    <Pressable
+      style={styles.gridItem}
+      onPress={() => router.push({ pathname: '/(tabs)/post/[id]', params: { id: item.id } })}
+    >
+      {item.imageUrls && item.imageUrls.length > 0 ? (
+        <Image source={{ uri: item.imageUrls[0] }} style={styles.gridImage} />
+      ) : (
+        <View style={styles.gridTextContainer}>
+          <Text style={styles.gridText} numberOfLines={3}>
+            {item.content}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Stack.Screen options={{ title: profile.name || 'User Profile', headerBackTitle: 'Back' }} />
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-            <View style={styles.avatarContainer}>
-              {profile.avatarUrl ? (
-                <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarText}>
-                    {profile.name?.[0]?.toUpperCase() || '?'}
-                  </Text>
-                </View>
-              )}
+    <View style={styles.container}>
+      <PageHeader
+        showBack
+        title={profile.username || profile.name || 'Profile'}
+        rightAction={
+          <Pressable style={styles.moreButton} onPress={() => setShowMenu(true)}>
+            <Ionicons name="ellipsis-horizontal" size={20} color="#171717" />
+          </Pressable>
+        }
+      />
+
+      <ScrollView style={styles.content}>
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <UserAvatar src={profile.avatarUrl} name={profile.name || 'User'} size="xl" />
+
+          <View style={styles.profileInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.name}>{profile.name}</Text>
+              <Pressable
+                style={[styles.followButton, isFollowing && styles.followingButton]}
+                onPress={handleFollow}
+                disabled={isFollowLoading}
+              >
+                {isFollowLoading ? (
+                  <ActivityIndicator size="small" color={isFollowing ? '#171717' : '#fff'} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name={isFollowing ? 'person-remove' : 'person-add'}
+                      size={16}
+                      color={isFollowing ? '#171717' : '#fff'}
+                    />
+                    <Text
+                      style={[styles.followButtonText, isFollowing && styles.followingButtonText]}
+                    >
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
             </View>
 
-            <Text style={styles.name}>{profile.name || 'Anonymous'}</Text>
+            <Text style={styles.username}>
+              @{profile.username || profile.email?.split('@')[0] || 'user'}
+            </Text>
+
             {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
 
-            <View style={styles.stats}>
-                <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{profile.followerCount}</Text>
-                    <Text style={styles.statLabel}>Followers</Text>
-                </View>
-                <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{profile.followingCount}</Text>
-                    <Text style={styles.statLabel}>Following</Text>
-                </View>
-            </View>
+            {profile.createdAt && (
+              <View style={styles.joinedRow}>
+                <Ionicons name="calendar-outline" size={14} color="#737373" />
+                <Text style={styles.joinedText}>
+                  Joined {format(new Date(profile.createdAt), 'MMMM yyyy')}
+                </Text>
+              </View>
+            )}
 
-            {/* Only show follow button for other users */}
-            <View style={styles.actionButton}>
-                <FollowButton 
-                    key={`follow-${profile.id}-${profile.isFollowing}`}
-                    userId={profile.id} 
-                    initialIsFollowing={profile.isFollowing}
-                    isAuthenticated={isAuthenticated}
-                    accessToken={accessToken || undefined}
-                    onLoginRequired={handleLoginRequired}
-                    onFollowChange={(isFollowing) => {
-                        setProfile(prev => prev ? ({
-                            ...prev,
-                            isFollowing,
-                            followerCount: isFollowing ? prev.followerCount + 1 : prev.followerCount - 1
-                        }) : null);
-                    }}
-                />
+            {/* Stats */}
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatCount(profile.postCount)}</Text>
+                <Text style={styles.statLabel}>Posts</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatCount(profile.friendCount)}</Text>
+                <Text style={styles.statLabel}>Friends</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatCount(profile.followerCount)}</Text>
+                <Text style={styles.statLabel}>Followers</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatCount(profile.followingCount)}</Text>
+                <Text style={styles.statLabel}>Following</Text>
+              </View>
             </View>
+          </View>
         </View>
+
+        <View style={styles.separator} />
+
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <Pressable
+            style={[styles.tab, activeTab === 'posts' && styles.activeTab]}
+            onPress={() => setActiveTab('posts')}
+          >
+            <Ionicons
+              name="grid"
+              size={18}
+              color={activeTab === 'posts' ? Colors.light.primary : '#737373'}
+            />
+            <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>
+              Posts
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tab, activeTab === 'memories' && styles.activeTab]}
+            onPress={() => setActiveTab('memories')}
+          >
+            <Ionicons
+              name="location"
+              size={18}
+              color={activeTab === 'memories' ? Colors.light.primary : '#737373'}
+            />
+            <Text style={[styles.tabText, activeTab === 'memories' && styles.activeTabText]}>
+              Memories
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Content */}
+        {activeTab === 'posts' ? (
+          posts.length === 0 ? (
+            <EmptyState
+              icon="grid"
+              title="No posts yet"
+              description="This user hasn't posted anything yet"
+            />
+          ) : (
+            <View style={styles.postsGrid}>
+              {posts.map((post) => renderPostItem({ item: post }))}
+            </View>
+          )
+        ) : memories.length === 0 ? (
+          <EmptyState
+            icon="location"
+            title="No public memories"
+            description="This user hasn't shared any public memories"
+          />
+        ) : (
+          <View style={styles.postsGrid}>
+            {memories.map((memory) => (
+              <Pressable
+                key={memory.id}
+                style={styles.gridItem}
+                onPress={() => router.push({ pathname: '/memory/[id]', params: { id: memory.id } })}
+              >
+                {memory.mediaUrl && memory.type === 'photo' ? (
+                  <Image source={{ uri: memory.mediaUrl }} style={styles.gridImage} />
+                ) : (
+                  <View
+                    style={[
+                      styles.gridTextContainer,
+                      {
+                        backgroundColor:
+                          memory.type === 'voice' ? Colors.memory.voice : Colors.memory.text,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={memory.type === 'voice' ? 'mic' : 'pin'}
+                      size={24}
+                      color="#fff"
+                    />
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
-      <LoginPromptModal
-        visible={showLoginPrompt}
-        onClose={() => setShowLoginPrompt(false)}
-        message="Log in to follow users and see their latest updates in your feed."
+      {/* Action Menu */}
+      <ActionMenu
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        items={[
+          {
+            label: 'Report User',
+            icon: 'flag-outline',
+            onPress: () => setShowReportModal(true),
+            destructive: true,
+          },
+          {
+            label: 'Block User',
+            icon: 'ban-outline',
+            onPress: () => {
+              // TODO: Implement block user
+            },
+            destructive: true,
+          },
+          {
+            label: 'Share Profile',
+            icon: 'share-outline',
+            onPress: () => {
+              // TODO: Share profile link
+            },
+          },
+        ]}
       />
-    </SafeAreaView>
+
+      {/* Report Modal */}
+      {profile && (
+        <ReportModal
+          visible={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          targetType="USER"
+          targetId={profile.id}
+          onReported={() => {
+            // Optionally show some UI feedback
+          }}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#0f0f0f',
-  },
   container: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: '#fff',
   },
-  center: {
+  content: {
+    flex: 1,
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f0f0f',
   },
-  header: {
+  moreButton: {
+    padding: 8,
+  },
+  profileHeader: {
+    alignItems: 'center',
     padding: 24,
+    gap: 16,
+  },
+  profileInfo: {
     alignItems: 'center',
+    gap: 8,
+    width: '100%',
   },
-  avatarContainer: {
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
+  nameRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  avatarText: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#fff',
+    gap: 12,
   },
   name: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#171717',
+  },
+  followButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  followingButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+  },
+  followButtonText: {
     color: '#fff',
-    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  followingButtonText: {
+    color: '#171717',
+  },
+  username: {
+    fontSize: 14,
+    color: '#737373',
   },
   bio: {
-    fontSize: 16,
-    color: '#ccc',
+    fontSize: 14,
+    color: '#171717',
     textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 20,
+    maxWidth: 300,
+    lineHeight: 20,
   },
-  stats: {
+  joinedRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 24,
-    gap: 40,
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
   },
-  statItem: {
+  joinedText: {
+    fontSize: 12,
+    color: '#737373',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 32,
+    marginTop: 16,
+  },
+  stat: {
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#171717',
   },
   statLabel: {
+    fontSize: 12,
+    color: '#737373',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#e5e5e5',
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 32,
+    marginBottom: 16,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.light.primary,
+  },
+  tabText: {
     fontSize: 14,
-    color: '#888',
+    fontWeight: '500',
+    color: '#737373',
   },
-  actionButton: {
-    minWidth: 150,
+  activeTabText: {
+    color: Colors.light.primary,
   },
-  error: {
-    color: '#ef4444',
-    fontSize: 16,
+  postsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 2,
   },
-  redirectText: {
-    color: '#888',
-    marginTop: 12,
-    fontSize: 14,
+  gridItem: {
+    width: GRID_ITEM_SIZE,
+    height: GRID_ITEM_SIZE,
+    margin: 1,
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridTextContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+  gridText: {
+    fontSize: 10,
+    color: '#737373',
+    textAlign: 'center',
   },
 });

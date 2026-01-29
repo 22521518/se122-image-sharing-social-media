@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // Feeling enum matching backend
 export type Feeling = 'JOY' | 'MELANCHOLY' | 'ENERGETIC' | 'CALM' | 'INSPIRED';
 
 // Beautiful color schemes for each feeling
-const FEELING_CONFIG: Record<Feeling, {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  colors: string[];
-  description: string;
-}> = {
+const FEELING_CONFIG: Record<
+  Feeling,
+  {
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    colors: string[];
+    description: string;
+  }
+> = {
   JOY: {
     label: 'Joy',
     icon: 'sunny',
@@ -56,8 +59,8 @@ interface FeelingSelectorProps {
  * FeelingSelector - A beautiful UI for selecting emotional states.
  * Responsive design for both mobile (compact) and desktop (full).
  */
-export function FeelingSelector({ 
-  selectedFeeling, 
+export function FeelingSelector({
+  selectedFeeling,
   onFeelingSelect,
   compact = false,
 }: FeelingSelectorProps) {
@@ -66,34 +69,39 @@ export function FeelingSelector({
     return (
       <View style={styles.compactContainer}>
         <Text style={styles.compactTitle}>Select a feeling</Text>
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.compactScroll}
         >
           {FEELINGS.map((feeling) => {
             const config = FEELING_CONFIG[feeling];
             const isSelected = selectedFeeling === feeling;
-            
+
             return (
               <TouchableOpacity
                 key={feeling}
                 style={StyleSheet.flatten([
                   styles.compactButton,
-                  isSelected && { borderColor: config.colors[0], backgroundColor: config.colors[0] + '15' },
+                  isSelected && {
+                    borderColor: config.colors[0],
+                    backgroundColor: config.colors[0] + '15',
+                  },
                 ])}
                 onPress={() => onFeelingSelect(feeling)}
                 activeOpacity={0.7}
               >
-                <Ionicons 
-                  name={config.icon} 
+                <Ionicons
+                  name={config.icon}
                   size={22}
-                  color={isSelected ? config.colors[0] : '#888'} 
+                  color={isSelected ? config.colors[0] : '#888'}
                 />
-                <Text style={StyleSheet.flatten([
-                  styles.compactLabel,
-                  isSelected && { color: config.colors[0], fontWeight: '700' },
-                ])}>
+                <Text
+                  style={StyleSheet.flatten([
+                    styles.compactLabel,
+                    isSelected && { color: config.colors[0], fontWeight: '700' },
+                  ])}
+                >
                   {config.label}
                 </Text>
               </TouchableOpacity>
@@ -112,7 +120,7 @@ export function FeelingSelector({
         {FEELINGS.map((feeling) => {
           const config = FEELING_CONFIG[feeling];
           const isSelected = selectedFeeling === feeling;
-          
+
           return (
             <TouchableOpacity
               key={feeling}
@@ -124,26 +132,28 @@ export function FeelingSelector({
               onPress={() => onFeelingSelect(feeling)}
               activeOpacity={0.7}
             >
-              <View 
+              <View
                 style={StyleSheet.flatten([
                   styles.gradientBar,
                   { backgroundColor: config.colors[0], opacity: isSelected ? 1 : 0.4 },
-                ])} 
+                ])}
               />
-              
-              <Ionicons 
-                name={config.icon} 
+
+              <Ionicons
+                name={config.icon}
                 size={28}
-                color={isSelected ? config.colors[0] : '#666'} 
+                color={isSelected ? config.colors[0] : '#666'}
               />
-              
-              <Text style={StyleSheet.flatten([
-                styles.gridLabel,
-                isSelected && { color: config.colors[0], fontWeight: '700' },
-              ])}>
+
+              <Text
+                style={StyleSheet.flatten([
+                  styles.gridLabel,
+                  isSelected && { color: config.colors[0], fontWeight: '700' },
+                ])}
+              >
                 {config.label}
               </Text>
-              
+
               {isSelected && (
                 <Text style={StyleSheet.flatten([styles.description, { color: config.colors[1] }])}>
                   {config.description}
@@ -202,7 +212,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#888',
   },
-  
+
   // Full layout (desktop/tablet)
   container: {
     paddingVertical: 12,

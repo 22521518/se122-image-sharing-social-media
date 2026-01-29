@@ -1,269 +1,151 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  Dimensions,
-  Platform,
-  Image,
-  ScrollView,
-  KeyboardAvoidingView,
-  ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
-import { Memory } from '@/context/MemoriesContext';
-import { LikeButton } from '@/components/social/LikeButton';
-import { CommentList } from '@/components/social/CommentList';
-import { CommentInput } from '@/components/social/CommentInput';
-import { DoubleTapLike } from '@/components/social/DoubleTapLike';
 import { useAuth } from '@/context/AuthContext';
-import { socialService } from '@/services/social.service';
-import { useAudioPlayer } from 'expo-audio';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { Memory, useMemories } from '@/context/MemoriesContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, Dimensions, Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { ActionMenu } from '../shared/ActionMenu';
+import { ReportModal } from '../shared/ReportModal';
+import { EditMemoryModal } from './EditMemoryModal';
+import { MemoryAudioPlayer } from './MemoryAudioPlayer';
 
 interface MemoryDetailModalProps {
   visible: boolean;
   memory: Memory | null;
   onClose: () => void;
   onLoginRequired?: () => void;
+  /** Auto-play audio when modal opens (for voice memories) */
   autoPlay?: boolean;
 }
+
+const { width, height } = Dimensions.get('window');
 
 export function MemoryDetailModal({
   visible,
   memory,
   onClose,
-  onLoginRequired,
   autoPlay = false,
 }: MemoryDetailModalProps) {
-  const { isAuthenticated, accessToken, user } = useAuth();
-  const [commentCount, setCommentCount] = useState(memory?.commentCount || 0);
-  const [likeCount, setLikeCount] = useState(memory?.likeCount || 0);
-  const [liked, setLiked] = useState(memory?.liked || false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [commentListKey, setCommentListKey] = useState(0);
+  const router = useRouter();
+  const { user } = useAuth();
+  const { deleteMemory } = useMemories();
 
-  // Audio player for voice memories
-  const audioUrl = memory?.type === 'voice' && memory?.mediaUrl ? memory.mediaUrl : undefined;
-  const audioPlayer = useAudioPlayer(audioUrl);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  // Stop audio when modal closes
-  useEffect(() => {
-    if (!visible && audioPlayer) {
-      audioPlayer.pause();
-      setIsPlaying(false);
-    }
-  }, [visible, audioPlayer]);
-
-  // Auto-play audio if requested
-  useEffect(() => {
-    if (visible && autoPlay && audioPlayer && memory?.type === 'voice') {
-      audioPlayer.play();
-      setIsPlaying(true);
-    }
-  }, [visible, autoPlay, audioPlayer, memory]);
-
-  useEffect(() => {
-    if (memory) {
-      setCommentCount(memory.commentCount);
-      setLikeCount(memory.likeCount);
-      setLiked(memory.liked || false);
-    }
-  }, [memory]);
-
-  // IMPORTANT: All useCallback hooks MUST be before any early returns (Rules of Hooks)
-  
-  // DoubleTapLike handler - trigger like action
-  const handleDoubleTapLike = useCallback(async () => {
-    if (!memory) return; // Guard inside callback instead
-    if (!isAuthenticated || !accessToken) {
-      onLoginRequired?.();
-      return;
-    }
-    if (liked) return; // Already liked, no action needed
-    
-    try {
-      const response = await socialService.toggleLikeMemory(memory.id, accessToken);
-      setLiked(response.liked);
-      setLikeCount(response.likeCount);
-    } catch (error) {
-      console.error('Failed to like memory:', error);
-    }
-  }, [memory, isAuthenticated, accessToken, liked, onLoginRequired]);
-
-  // Audio playback toggle
-  const handleToggleAudio = useCallback(() => {
-    if (!audioPlayer) return;
-    if (isPlaying) {
-      audioPlayer.pause();
-      setIsPlaying(false);
-    } else {
-      audioPlayer.play();
-      setIsPlaying(true);
-    }
-  }, [audioPlayer, isPlaying]);
-
-  // Handle close - stop audio first
-  const handleClose = useCallback(() => {
-    if (audioPlayer) {
-      audioPlayer.pause();
-      setIsPlaying(false);
-    }
-    onClose();
-  }, [audioPlayer, onClose]);
-
-  const handleLikeChange = useCallback((newLiked: boolean, newCount: number) => {
-    setLiked(newLiked);
-    setLikeCount(newCount);
-  }, []);
-
-  const handleCommentCountChange = useCallback((count: number) => {
-    setCommentCount(count);
-  }, []);
-
-  const handleSubmitComment = useCallback(async (content: string) => {
-    if (!accessToken || !memory) return;
-
-    try {
-      const response = await socialService.createCommentOnMemory(memory.id, content, accessToken);
-      setCommentCount(response.commentCount);
-      // Force CommentList to refresh by changing key
-      setCommentListKey((prev) => prev + 1);
-    } catch (error) {
-       console.error("Failed to post comment", error);
-    }
-  }, [accessToken, memory]);
-
-  // Early return AFTER all hooks
   if (!memory) return null;
-  
-  // Format date
-  const dateStr = new Date(memory.createdAt).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+
+  const isOwner = user?.id === memory.userId;
+
+  const handleDelete = async () => {
+    Alert.alert('Delete Memory', 'Are you sure you want to delete this memory?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const success = await deleteMemory(memory.id);
+          if (success) onClose();
+        },
+      },
+    ]);
+  };
+
+  const menuItems = [
+    ...(isOwner
+      ? [
+          {
+            label: 'Edit Memory',
+            icon: 'create-outline',
+            onPress: () => setShowEditModal(true),
+          },
+          {
+            label: 'Delete Memory',
+            icon: 'trash-outline',
+            destructive: true,
+            onPress: handleDelete,
+          },
+        ]
+      : [
+          {
+            label: 'Report Memory',
+            icon: 'flag-outline',
+            destructive: true,
+            onPress: () => setShowReportModal(true),
+          },
+        ]),
+  ];
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={handleClose}
-    >
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
-        <View style={styles.modalBackground}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.keyboardAvoid}
-          >
-            <View style={styles.header}>
-              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                <Ionicons name="close" size={28} color="#fff" />
-              </TouchableOpacity>
-              <ThemedText style={styles.headerTitle}>{memory.title || 'Memory'}</ThemedText>
-              <View style={{ width: 40 }} /> 
-            </View>
+        <View style={styles.header}>
+          <Pressable onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </Pressable>
+          <View style={styles.headerTitle}>
+            <ThemedText style={styles.title} type="title">
+              {memory.title || 'Memory'}
+            </ThemedText>
+          </View>
+          <Pressable onPress={() => setShowMenu(true)} style={styles.menuButton}>
+            <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+          </Pressable>
+        </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-              {/* Creator Profile */}
-              {memory.user && (
-                <View style={styles.creatorSection}>
-                  <View style={styles.creatorAvatar}>
-                    {memory.user.avatarUrl ? (
-                      <Image source={{ uri: memory.user.avatarUrl }} style={styles.avatarImage} />
-                    ) : (
-                      <Ionicons name="person-circle" size={40} color="#ccc" />
-                    )}
-                  </View>
-                  <ThemedText style={styles.creatorName}>
-                    {memory.user.name || 'Anonymous'}
-                  </ThemedText>
-                </View>
-              )}
+        <View style={styles.content}>
+          {/* Photo/Mixed type - show image */}
+          {memory.mediaUrl && (memory.type === 'photo' || memory.type === 'mixed') && (
+            <Image source={{ uri: memory.mediaUrl }} style={styles.media} resizeMode="contain" />
+          )}
 
-              {/* Media Content with DoubleTapLike */}
-              <DoubleTapLike onDoubleTap={handleDoubleTapLike} disabled={!isAuthenticated}>
-                <View style={styles.mediaContainer}>
-                  {memory.type === 'photo' && memory.mediaUrl ? (
-                    <Image source={{ uri: memory.mediaUrl }} style={styles.photo} resizeMode="cover" />
-                  ) : memory.type === 'voice' ? (
-                    <View style={StyleSheet.flatten([styles.placeholder, { backgroundColor: '#333' }])}>
-                      <TouchableOpacity onPress={handleToggleAudio} style={styles.audioPlayButton}>
-                        <Ionicons 
-                          name={isPlaying ? 'pause-circle' : 'play-circle'} 
-                          size={64} 
-                          color="#fff" 
-                        />
-                      </TouchableOpacity>
-                      <ThemedText style={styles.audioLabel}>
-                        {isPlaying ? 'Playing...' : 'Tap to play voice memory'}
-                      </ThemedText>
-                    </View>
-                  ) : (
-                    <View style={StyleSheet.flatten([styles.placeholder, { backgroundColor: '#333' }])}>
-                      <Ionicons name="text" size={48} color="#fff" />
-                    </View>
-                  )}
-                  
-                  {/* Overlay Metadata */}
-                  <View style={styles.metaOverlay}>
-                    <ThemedText style={styles.dateText}>{dateStr}</ThemedText>
-                    <View style={styles.statsRow}>
-                      <Ionicons name="heart" size={16} color="#fff" />
-                      <ThemedText style={styles.statText}>{likeCount}</ThemedText>
-                      <View style={{ width: 12 }} />
-                      <Ionicons name="chatbubble" size={16} color="#fff" />
-                      <ThemedText style={styles.statText}>{commentCount}</ThemedText>
-                    </View>
-                  </View>
-                </View>
-              </DoubleTapLike>
-
-              {/* Interactions */}
-              <View style={styles.interactionSection}>
-                 <LikeButton 
-                   itemId={memory.id} 
-                   targetType="memory"
-                   initialLiked={liked} 
-                   initialCount={likeCount}
-                   isAuthenticated={isAuthenticated}
-                   accessToken={accessToken || undefined}
-                   onLikeChange={handleLikeChange}
-                   onLoginRequired={onLoginRequired}
-                   size="large"
-                   showCount
-                   style={styles.likeBtn}
-                 />
-                 
-                 <View style={styles.divider} />
-                 
-                 <ThemedText style={styles.commentsTitle}>Comments</ThemedText>
-                 <CommentList
-                   key={commentListKey}
-                   itemId={memory.id}
-                   targetType="memory"
-                   accessToken={accessToken || undefined}
-                   isAuthenticated={isAuthenticated}
-                   onLoginRequired={onLoginRequired}
-                   onCommentCountChange={handleCommentCountChange}
-                 />
+          {/* Voice type - show audio player */}
+          {memory.mediaUrl && (memory.type === 'voice' || memory.type === 'mixed') && (
+            <View style={styles.audioPlayerContainer}>
+              <View style={styles.voiceMemoryHeader}>
+                <Ionicons name="mic" size={32} color="#5856D6" />
+                <ThemedText style={styles.voiceMemoryTitle}>Voice Memory</ThemedText>
               </View>
-            </ScrollView>
-
-            <View style={styles.inputContainer}>
-              <CommentInput 
-                onSubmit={handleSubmitComment}
-                isAuthenticated={isAuthenticated}
-                onLoginRequired={onLoginRequired}
-                placeholder="Add a comment..." 
+              <MemoryAudioPlayer
+                audioUrl={memory.mediaUrl}
+                duration={memory.duration}
+                autoPlay={autoPlay}
               />
             </View>
-          </KeyboardAvoidingView>
+          )}
+
+          {/* Text only or no media - show placeholder */}
+          {(!memory.mediaUrl || memory.type === 'text_only') && (
+            <View style={styles.placeholder}>
+              <Ionicons name="text" size={64} color="#fff" />
+            </View>
+          )}
+
+          <View style={styles.infoContainer}>
+            <ThemedText style={styles.infoText}>Type: {memory.type}</ThemedText>
+            {memory.feeling && (
+              <ThemedText style={styles.infoText}>Feeling: {memory.feeling}</ThemedText>
+            )}
+            <ThemedText style={styles.infoText}>Privacy: {memory.privacy}</ThemedText>
+          </View>
         </View>
+
+        <ActionMenu visible={showMenu} onClose={() => setShowMenu(false)} items={menuItems} />
+
+        <ReportModal
+          visible={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          targetType="MEMORY"
+          targetId={memory.id}
+        />
+
+        <EditMemoryModal
+          visible={showEditModal}
+          memoryId={memory.id}
+          onClose={() => setShowEditModal(false)}
+        />
       </View>
     </Modal>
   );
@@ -272,135 +154,74 @@ export function MemoryDetailModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  modalBackground: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 40 : 20,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-  },
-  keyboardAvoid: {
-    flex: 1,
+    backgroundColor: '#000',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
+    paddingTop: 48,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   closeButton: {
     padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
   },
   headerTitle: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  menuButton: {
+    padding: 8,
+  },
+  title: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
   },
-  scrollContent: {
-    paddingBottom: 80,
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  mediaContainer: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#000',
-    marginBottom: 0,
-    position: 'relative',
-  },
-  photo: {
-    width: '100%',
-    height: '100%',
+  media: {
+    width: width,
+    height: height * 0.6,
   },
   placeholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
+    width: width,
+    height: height * 0.4,
     justifyContent: 'center',
-  },
-  metaOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.3)', // Fallback
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  dateText: {
-    color: '#fff',
-    fontSize: 14,
-    opacity: 0.9,
-  },
-  statsRow: {
-    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#1c1c1e',
   },
-  statText: {
-    color: '#fff',
-    marginLeft: 6,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  interactionSection: {
-    backgroundColor: '#fff', // Light theme for comments section? Or dark? Let's go with white for now or card-like.
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -20, // Overlap
-    padding: 24,
-    minHeight: 400,
-  },
-  likeBtn: {
-    marginBottom: 16,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#eee',
+  audioPlayerContainer: {
+    width: width - 32,
+    padding: 16,
     marginVertical: 16,
   },
-  commentsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
-    color: '#333',
-  },
-  inputContainer: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  // Creator profile styles
-  creatorSection: {
+  voiceMemoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: 'transparent',
+    gap: 12,
+    marginBottom: 16,
   },
-  creatorAvatar: {
-    marginRight: 12,
-  },
-  avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  creatorName: {
-    fontSize: 16,
+  voiceMemoryTitle: {
+    color: '#fff',
+    fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
   },
-  // Audio player styles
-  audioPlayButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+  infoContainer: {
+    padding: 20,
+    width: '100%',
   },
-  audioLabel: {
+  infoText: {
     color: '#fff',
-    fontSize: 14,
-    opacity: 0.8,
+    fontSize: 16,
+    marginBottom: 8,
   },
 });

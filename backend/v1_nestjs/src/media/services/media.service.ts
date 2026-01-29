@@ -29,6 +29,11 @@ export class MediaService implements OnModuleInit {
         {
           folder: folder,
           resource_type: 'auto',
+          // Strip EXIF metadata from images for privacy (Story 2.2, NFR1)
+          // This removes GPS, camera info, and other sensitive metadata
+          // from the publicly-served image while keeping the original data
+          // in the Memory record for location/time purposes
+          flags: 'strip_profile',
         },
         async (error, result) => {
           if (error) {
@@ -47,6 +52,7 @@ export class MediaService implements OnModuleInit {
                 type: result.resource_type, // 'image', 'video'
                 mimeType: file.mimetype,
                 size: file.size,
+                duration: result.duration || null, // Duration for audio/video
                 uploaderId: uploaderId,
               },
             });
@@ -58,7 +64,8 @@ export class MediaService implements OnModuleInit {
         },
       );
 
-      streamifier.createReadStream(file.buffer).pipe(uploadStream);
+      const { Readable } = require('stream');
+      Readable.from(file.buffer).pipe(uploadStream);
     });
   }
 

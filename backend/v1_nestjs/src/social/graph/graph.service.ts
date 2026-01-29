@@ -1,10 +1,16 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Follow } from '@prisma/client';
+import { Follow, NotificationType } from '@prisma/client';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class GraphService {
-  constructor(private prisma: PrismaService) { }
+  private readonly logger = new Logger(GraphService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) { }
 
   async followUser(followerId: string, followingId: string): Promise<Follow> {
     if (followerId === followingId) {
@@ -19,9 +25,9 @@ export class GraphService {
 
     // Idempotent follow: transactionally create follow and update counts
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const follow = await this.prisma.$transaction(async (tx) => {
         // 1. Create the follow record
-        const follow = await tx.follow.create({
+        const newFollow = await tx.follow.create({
           data: {
             followerId,
             followingId,
@@ -40,11 +46,34 @@ export class GraphService {
           data: { followerCount: { increment: 1 } },
         });
 
-        return follow;
+        return newFollow;
       });
+
+      // Story 9.2: Notify the followed user (only for new follows, not duplicates)
+      // Fire-and-forget: notification failure should not fail the follow operation
+      try {
+        const follower = await this.prisma.user.findUnique({
+          where: { id: followerId },
+          select: { name: true },
+        });
+        const followerName = follower?.name || 'Someone';
+
+        await this.notificationsService.create({
+          userId: followingId,
+          type: NotificationType.FOLLOW,
+          title: 'New Follower',
+          message: `${followerName} started following you`,
+          data: { followerId, followerName },
+        });
+        this.logger.debug(`Sent FOLLOW notification to ${followingId}`);
+      } catch (notificationError) {
+        this.logger.warn(`Failed to send FOLLOW notification to ${followingId}: ${notificationError.message}`);
+      }
+
+      return follow;
     } catch (error) {
       if (error.code === 'P2002') {
-        // Already following - return existing record
+        // Already following - return existing record (no notification for re-follow)
         return this.prisma.follow.findUniqueOrThrow({
           where: {
             followerId_followingId: {
@@ -123,5 +152,24 @@ export class GraphService {
     });
 
     return follows.map(f => f.following);
+  }
+
+  async getFollowers(userId: string) {
+    const follows = await this.prisma.follow.findMany({
+      where: { followingId: userId },
+      include: {
+        follower: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            bio: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return follows.map(f => f.follower);
   }
 }

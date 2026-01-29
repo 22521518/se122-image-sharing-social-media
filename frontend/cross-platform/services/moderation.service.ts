@@ -6,7 +6,7 @@
 
 import { ApiService } from './api.service';
 
-export type TargetType = 'POST' | 'COMMENT' | 'USER';
+export type TargetType = 'POST' | 'COMMENT' | 'USER' | 'MEMORY';
 export type ReportReason = 'SPAM' | 'HARASSMENT' | 'INAPPROPRIATE' | 'OTHER';
 
 export interface CreateReportRequest {
@@ -39,7 +39,7 @@ export const moderationService = {
     token: string | null,
   ): Promise<ReportResponse> {
     return ApiService.post<CreateReportRequest, ReportResponse>(
-      '/moderation/reports',
+      '/api/moderation/reports',
       request,
       token,
     );

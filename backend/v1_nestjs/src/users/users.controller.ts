@@ -11,17 +11,19 @@ import { User } from '@prisma/client';
 import { AuditService, AuditAction } from '../audit/audit.service';
 import { MediaService } from '../media/services/media.service';
 import { GraphService } from '../social/graph/graph.service';
+import { FriendshipService } from '../social/graph/friendship.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
 @UseGuards(JwtAuthGuard)
-export class UsersController {
+export class UsersController { // Force refresh
   constructor(
     private readonly usersService: UsersService,
     private readonly auditService: AuditService,
     private readonly mediaService: MediaService,
     private readonly graphService: GraphService,
+    private readonly friendshipService: FriendshipService,
   ) { }
 
   @Get('profile')
@@ -32,6 +34,10 @@ export class UsersController {
     if (!user) {
       return null;
     }
+
+    // Get post count
+    const postCount = await this.usersService.getPostCount(req.user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -41,6 +47,10 @@ export class UsersController {
       defaultPrivacy: user.defaultPrivacy,
       hasOnboarded: user.hasOnboarded,
       createdAt: user.createdAt,
+      postCount,
+      followerCount: user.followerCount,
+      followingCount: user.followingCount,
+      friendCount: user.friendCount,
     };
   }
 
@@ -172,6 +182,9 @@ export class UsersController {
       isFollowing = await this.graphService.isFollowing(req.user.id, userId);
     }
 
+    // Get post count
+    const postCount = await this.usersService.getPostCount(userId);
+
     // TODO: Add privacy filtering based on user.defaultPrivacy settings
     // For now, return basic public info for all users
     return {
@@ -179,10 +192,33 @@ export class UsersController {
       name: user.name,
       bio: user.bio,
       avatarUrl: user.avatarUrl,
+      postCount,
       followerCount: user.followerCount,
       followingCount: user.followingCount,
+      friendCount: user.friendCount,
       isFollowing,
       isAuthenticated: !!req.user,
     };
+  }
+
+  @Public()
+  @Get(':id/followers')
+  @ApiOperation({ summary: 'Get user followers list' })
+  async getFollowers(@Param('id') userId: string) {
+    return this.graphService.getFollowers(userId);
+  }
+
+  @Public()
+  @Get(':id/following')
+  @ApiOperation({ summary: 'Get user following list' })
+  async getFollowing(@Param('id') userId: string) {
+    return this.graphService.getFollowing(userId);
+  }
+
+  @Public()
+  @Get(':id/friends')
+  @ApiOperation({ summary: 'Get user friends list' })
+  async getFriends(@Param('id') userId: string) {
+    return this.friendshipService.getFriends(userId);
   }
 }

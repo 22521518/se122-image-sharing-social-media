@@ -24,6 +24,13 @@ enum UserRole {
   admin
 }
 
+enum FriendshipStatus {
+  PENDING    // Friend request sent, waiting for response
+  ACCEPTED   // Both users are friends
+  REJECTED   // Request was rejected
+  BLOCKED    // One user blocked the other
+}
+
 model User {
   id              String       @id @default(uuid())
   email           String       @unique
@@ -34,6 +41,10 @@ model User {
   googleId        String?      @unique @map("google_id")
   defaultPrivacy  PrivacyLevel @default(private) @map("default_privacy")
   role            UserRole     @default(user)
+  isLocked        Boolean      @default(false) @map("is_locked")
+  isBanned        Boolean      @default(false) @map("is_banned")
+  bannedUntil     DateTime?    @map("banned_until")
+  tokenVersion    Int          @default(0) @map("token_version")
   hasOnboarded    Boolean      @default(false) @map("has_onboarded")
   privacySettings Json?        @map("privacy_settings")
   createdAt       DateTime     @default(now()) @map("created_at")
@@ -59,6 +70,17 @@ model User {
   // Postcards (Epic 4)
   sentPostcards     Postcard[] @relation("sentPostcards")
   receivedPostcards Postcard[] @relation("receivedPostcards")
+  
+  // Notifications (Epic 9)
+  notifications     Notification[]
+  
+  // Friendships
+  friendRequestsSent     Friendship[] @relation("friendRequestsSent")
+  friendRequestsReceived Friendship[] @relation("friendRequestsReceived")
+  friendCount            Int          @default(0) @map("friend_count")
+  
+  // Memory tags (tagged in)
+  memoryTags             MemoryTag[]
 }
 
 model Follow {
@@ -126,11 +148,32 @@ model Memory {
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
   deletedAt           DateTime?    @map("deleted_at")
+  
+  // User tagging
+  tags                MemoryTag[]
 
   @@map("memories")
   @@index([userId])
   @@index([latitude, longitude])
   @@index([contentHash]) // Index for fast duplicate lookup
+}
+
+// User tagging in memories
+model MemoryTag {
+  id        String   @id @default(uuid())
+  
+  memoryId  String   @map("memory_id")
+  memory    Memory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  
+  userId    String   @map("user_id")  // Tagged user
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@unique([memoryId, userId])
+  @@map("memory_tags")
+  @@index([memoryId])
+  @@index([userId])
 }
 
 // Social Posts (Epic 5 - minimal fields for Epic 6 dependencies)
@@ -146,10 +189,13 @@ model Post {
   updatedAt    DateTime     @updatedAt @map("updated_at")
   deletedAt    DateTime?    @map("deleted_at")
 
-  likes    Like[]
-  comments Comment[]
-  hashtags PostHashtag[]
-  media    Media[]
+  likes           Like[]
+  comments        Comment[]
+  hashtags        PostHashtag[]
+  media           Media[]
+  
+  // Moderation: Lock thread to prevent new comments (Story 7.3)
+  commentsLocked  Boolean      @default(false) @map("comments_locked")
 
   @@map("posts")
   @@index([authorId])
@@ -162,6 +208,7 @@ model Media {
   type      String   // 'image' | 'video' | 'audio'
   mimeType  String?  @map("mime_type")
   size      Int?
+  duration  Float?   // Duration in seconds for audio/video
   caption   String?  // Per-image caption (max 200 chars, enforced at service layer)
   sortOrder Int?     @map("sort_order") // Display order in post gallery (0-based)
   
@@ -308,6 +355,7 @@ enum TargetType {
   POST
   COMMENT
   USER
+  MEMORY
 }
 
 model Report {
@@ -359,4 +407,174 @@ model ModerationLog {
   @@index([moderatorId])
   @@index([targetType, targetId])
   @@index([createdAt])
+}
+
+// ===== ADMIN AUDIT (Epic 8) =====
+
+enum AdminAction {
+  ROLE_CHANGE    // Changed user's role(s)
+  ACCOUNT_LOCK   // Locked user account
+  ACCOUNT_UNLOCK // Unlocked user account
+  USER_BAN       // Banned user (permanent or temporary)
+  USER_WARN      // Sent warning to user
+  USER_DISMISS   // Dismissed report against user
+}
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  
+  adminId      String      @map("admin_id")
+  
+  targetUserId String      @map("target_user_id")
+  
+  action       AdminAction
+  details      Json?       // Additional context (e.g., old roles -> new roles)
+  
+  createdAt    DateTime    @default(now()) @map("created_at")
+  
+  @@map("audit_logs")
+  @@index([adminId])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
+// ===== NOTIFICATIONS (Epic 9) =====
+
+enum NotificationType {
+  LIKE         // Someone liked your post/memory
+  COMMENT      // Someone commented on your post/memory
+  FOLLOW       // Someone started following you
+  SYSTEM_WARN  // Admin/moderator warning
+  ADMIN_INFO   // Admin/system informational message
+  POSTCARD_RECEIVED  // You received a postcard
+  POSTCARD_UNLOCKED  // A postcard you sent was unlocked
+  FRIEND_REQUEST     // Someone sent you a friend request
+  FRIEND_ACCEPTED    // Someone accepted your friend request
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  
+  userId    String           @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // e.g. { postId: "...", actorId: "...", actorName: "..." }
+  
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+  
+  @@map("notifications")
+  @@index([userId])
+  @@index([userId, isRead]) // For unread count queries
+  @@index([createdAt])
+}
+
+// ===== FRIENDSHIPS =====
+
+model Friendship {
+  id          String           @id @default(uuid())
+  
+  requesterId String           @map("requester_id")
+  requester   User             @relation("friendRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+  
+  addresseeId String           @map("addressee_id")
+  addressee   User             @relation("friendRequestsReceived", fields: [addresseeId], references: [id], onDelete: Cascade)
+  
+  status      FriendshipStatus @default(PENDING)
+  
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  
+  @@unique([requesterId, addresseeId])
+  @@map("friendships")
+  @@index([requesterId])
+  @@index([addresseeId])
+  @@index([status])
+}
+
+// ===== MESSAGING (Epic 10) =====
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  FILE   // Documents, PDFs, etc.
+  MIXED  // Text + media
+}
+
+model Conversation {
+  id            String   @id @default(uuid())
+  name          String?  // Null for 1-1 chats, set for group chats
+  isGroup       Boolean  @default(false) @map("is_group")
+  
+  participants  ConversationParticipant[]
+  messages      Message[]
+  
+  lastMessageAt DateTime? @map("last_message_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  @@map("conversations")
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  userId         String       @map("user_id")
+  
+  joinedAt       DateTime     @default(now()) @map("joined_at")
+  lastReadAt     DateTime?    @map("last_read_at")
+  
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+  @@index([userId])
+  @@index([conversationId])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  
+  conversationId String        @map("conversation_id")
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  senderId       String        @map("sender_id")
+  
+  content        String?       // Text content (null for media-only messages)
+  type           MessageType   @default(TEXT)
+  
+  media          MessageMedia[]
+  
+  isEdited       Boolean       @default(false) @map("is_edited")
+  deletedAt      DateTime?     @map("deleted_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  
+  @@map("messages")
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+}
+
+model MessageMedia {
+  id        String   @id @default(uuid())
+  
+  messageId String   @map("message_id")
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  url       String
+  type      String   // 'image' | 'audio'
+  mimeType  String?  @map("mime_type")
+  size      Int?
+  duration  Float?   // For audio messages (seconds)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@map("message_media")
+  @@index([messageId])
 }

@@ -1,290 +1,364 @@
-import CreatePostModal from '@/components/social/CreatePostModal';
-import { PostCard } from '@/components/social/PostCard';
-import { ThemedText } from '@/components/themed-text';
+import { PageHeader } from '@/components/layout';
+import { EmptyState, FloatingActionButton } from '@/components/shared';
+import { CreatePostModal, PostCard, PostCardSkeleton } from '@/components/social';
 import { Colors } from '@/constants/Colors';
-import { Theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { useSocial } from '@/context/SocialContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useIsMobileView } from '@/hooks/usePlatform';
+import { mediaService } from '@/services/media.service';
+import { socialService } from '@/services/social.service';
+import type { PostDetail, PrivacyLevel } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
+    Pressable,
     RefreshControl,
     StyleSheet,
-    TouchableOpacity,
+    Text,
     View,
+    useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function HomeScreen() {
+const POST_MAX_WIDTH = 680;
+const HORIZONTAL_PADDING = 16;
+
+const Index = () => {
+  const isMobile = useIsMobileView();
+  const { accessToken } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  const { isAuthenticated, accessToken, user } = useAuth();
 
-  // AC 3, 4, 5: Feed with infinite scroll and pull-to-refresh
-  const { posts, refreshPosts, loadMorePosts, isLoading, isLoadingMore, hasMore } = useSocial();
+  // Calculate post width - max 600px, with padding on sides
+  const contentPadding =
+    screenWidth > POST_MAX_WIDTH + HORIZONTAL_PADDING * 2
+      ? (screenWidth - POST_MAX_WIDTH) / 3
+      : HORIZONTAL_PADDING;
+
+  const [posts, setPosts] = useState<PostDetail[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const cursorRef = React.useRef<string | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      refreshPosts();
-    }
-  }, [isAuthenticated, refreshPosts]);
+  // Sync cursor state with ref
+  const updateCursor = useCallback((newCursor: string | null) => {
+    setCursor(newCursor);
+    cursorRef.current = newCursor;
+  }, []);
 
-  // AC 5: Pull-to-refresh
-  const onRefresh = async () => {
+  // Initial fetch
+  const fetchFeed = useCallback(
+    async (reset = false) => {
+      if (!accessToken) return;
+
+      if (reset) {
+        setIsLoading(true);
+        updateCursor(null);
+      }
+
+      try {
+        const currentCursor = reset ? undefined : (cursorRef.current || undefined);
+        const response = await socialService.getFeed(
+          accessToken,
+          currentCursor,
+        );
+        setPosts((prev) => (reset ? response.posts : [...prev, ...response.posts]));
+        updateCursor(response.nextCursor);
+        setHasMore(response.hasMore);
+      } catch (error) {
+        console.error('Failed to load feed:', error);
+      } finally {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+        setIsRefreshing(false);
+      }
+    },
+    [accessToken, updateCursor],
+  );
+
+  // Load more posts
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore || !cursor) return;
+    setIsLoadingMore(true);
+    await fetchFeed();
+  }, [isLoadingMore, hasMore, cursor, fetchFeed]);
+
+  // Initial load
+  useFocusEffect(
+    useCallback(() => {
+      fetchFeed(true);
+    }, [fetchFeed]),
+  );
+
+  const handleRefresh = () => {
     setIsRefreshing(true);
-    await refreshPosts();
-    setIsRefreshing(false);
+    fetchFeed(true);
   };
 
-  // AC 5: Infinite scroll - load more when reaching end
-  const onEndReached = () => {
-    if (!isLoadingMore && hasMore) {
-      loadMorePosts();
+  const handleLike = async (postId: string) => {
+    if (!accessToken) return;
+    await socialService.likePost(postId, accessToken);
+  };
+
+  const handleCreatePost = async (data: {
+    content: string;
+    imageUrls?: string[];
+    privacy: PrivacyLevel;
+  }) => {
+    if (!accessToken) return;
+
+    // Upload images first and collect mediaIds
+    const mediaIds: string[] = [];
+    if (data.imageUrls && data.imageUrls.length > 0) {
+      for (const imageUri of data.imageUrls) {
+        try {
+          // Determine mime type from URI
+          const extension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+          const mimeType = extension === 'png' ? 'image/png' : 'image/jpeg';
+
+          const media = await mediaService.uploadMedia(imageUri, mimeType, accessToken);
+          mediaIds.push(media.id);
+        } catch (error) {
+          console.error('Failed to upload image:', error);
+        }
+      }
     }
+
+    const newPost = await socialService.createPost(
+      {
+        content: data.content,
+        privacy: data.privacy,
+        mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+        mediaMetadata:
+          mediaIds.length > 0
+            ? mediaIds.map((id, index) => ({ mediaId: id, sortOrder: index }))
+            : undefined,
+      },
+      accessToken,
+    );
+    setPosts((prev) => [newPost, ...prev]);
   };
 
-  const handleLogin = () => {
-    router.push('/(auth)/login');
+  const handlePostPress = (postId: string) => {
+    router.push({ pathname: '/post/[id]', params: { id: postId } });
   };
 
-  const handleCreatePostClose = () => {
-    setShowCreatePost(false);
-    // Refresh posts after creating
-    refreshPosts();
-  };
+  // Refresh a single post after edit
+  const handlePostUpdated = useCallback(async (postId: string) => {
+    if (!accessToken) return;
+    try {
+      const updatedPost = await socialService.getPost(postId, accessToken);
+      setPosts((prev) => prev.map((p) => (p.id === postId ? updatedPost : p)));
+    } catch (error) {
+      console.error('Failed to refresh post:', error);
+    }
+  }, [accessToken]);
 
-  // Footer component for loading indicator
+  const renderPost = ({ item }: { item: PostDetail }) => (
+    <Pressable style={styles.postWrapper} onPress={() => handlePostPress(item.id)}>
+      <PostCard 
+        post={item} 
+        onLike={handleLike} 
+        onUpdated={() => handlePostUpdated(item.id)} 
+      />
+    </Pressable>
+  );
+
+  const renderSkeletons = () => (
+    <View style={styles.skeletonContainer}>
+      {[...Array(3)].map((_, i) => (
+        <View key={i} style={styles.postWrapper}>
+          <PostCardSkeleton />
+        </View>
+      ))}
+    </View>
+  );
+
   const renderFooter = () => {
     if (!isLoadingMore) return null;
     return (
-      <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={colors.primary} />
-        <ThemedText style={StyleSheet.flatten([styles.loadingMoreText, { color: colors.textSecondary }])}>
-          Loading more...
-        </ThemedText>
+      <View style={styles.loadingMore}>
+        <ActivityIndicator size="small" color={Colors.light.primary} />
+        <Text style={styles.loadingMoreText}>Loading more...</Text>
       </View>
     );
   };
 
-  if (!isAuthenticated) {
-    return (
-      <View style={StyleSheet.flatten([styles.centered, { backgroundColor: colors.background }])}>
-        <View style={StyleSheet.flatten([styles.iconContainer, { backgroundColor: colors.muted }])}>
-          <Ionicons name="people-outline" size={48} color={colors.primary} />
-        </View>
-        <ThemedText style={StyleSheet.flatten([styles.title, { color: colors.text }])}>Welcome to LifeMapped</ThemedText>
-        <ThemedText style={StyleSheet.flatten([styles.subtitle, { color: colors.textSecondary }])}>
-          Sign in to discover and share memories
-        </ThemedText>
-        <TouchableOpacity 
-          style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: colors.primary }])} 
-          onPress={handleLogin}
-        >
-          <ThemedText style={styles.primaryButtonText}>Sign In</ThemedText>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (isLoading && posts.length === 0) {
-    return (
-      <View style={StyleSheet.flatten([styles.centered, { backgroundColor: colors.background }])}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const renderEmpty = () => (
+    <EmptyState
+      title="No posts yet"
+      description="Follow some friends or create your first post to get started!"
+      action={{
+        label: 'Create Post',
+        onPress: () => setCreateModalOpen(true),
+      }}
+    />
+  );
 
   return (
-    <SafeAreaView style={StyleSheet.flatten([styles.container, { backgroundColor: colors.background }])}>
-      {/* Header */}
-      <View style={StyleSheet.flatten([styles.header, { borderBottomColor: colors.border }])}>
-        <ThemedText style={StyleSheet.flatten([styles.headerTitle, { color: colors.text }])}>Feed</ThemedText>
-        <TouchableOpacity 
-          style={StyleSheet.flatten([styles.headerButton, { backgroundColor: colors.muted }])}
-          onPress={() => setShowCreatePost(true)}
-        >
-          <Ionicons name="add" size={22} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <PageHeader
+        title="Feed"
+        rightAction={
+          <View style={styles.headerRightActions}>
+            {/* Search - Desktop: Search bar, Mobile: Search icon */}
+            {!isMobile ? (
+              <Pressable
+                style={styles.searchBar}
+                onPress={() => router.push('/(tabs)/explore')}
+              >
+                <Ionicons name="search" size={16} color="#737373" />
+                <Text style={styles.searchBarPlaceholder}>Search...</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={styles.headerIconButton}
+                onPress={() => router.push('/(tabs)/explore')}
+              >
+                <Ionicons name="search" size={22} color="#171717" />
+              </Pressable>
+            )}
 
-      {/* AC 4, 5: Chronologically sorted with cursor-based pagination & infinite scroll */}
-      <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PostCard
-            post={item}
-            accessToken={accessToken || undefined}
-            isAuthenticated={isAuthenticated}
-            currentUserId={user?.id}
-            onLoginRequired={handleLogin}
-            showDoubleTapLike
-            style={styles.postCard}
-          />
-        )}
-        refreshControl={
-          <RefreshControl 
-            refreshing={isRefreshing} 
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={StyleSheet.flatten([styles.emptyIconContainer, { backgroundColor: colors.muted }])}>
-              <Ionicons name="create-outline" size={40} color={colors.primary} />
-            </View>
-            <ThemedText style={StyleSheet.flatten([styles.emptyText, { color: colors.text }])}>No posts yet</ThemedText>
-            <ThemedText style={StyleSheet.flatten([styles.emptySubtext, { color: colors.textSecondary }])}>
-              Follow friends or be the first to share!
-            </ThemedText>
-            <TouchableOpacity 
-              style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: colors.primary, marginTop: 20 }])} 
-              onPress={() => setShowCreatePost(true)}
-            >
-              <ThemedText style={styles.primaryButtonText}>Create Post</ThemedText>
-            </TouchableOpacity>
+            {/* New Post Button - Desktop only */}
+            {!isMobile && (
+              <Pressable style={styles.newPostButton} onPress={() => setCreateModalOpen(true)}>
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={styles.newPostButtonText}>New Post</Text>
+              </Pressable>
+            )}
           </View>
         }
-        contentContainerStyle={posts.length === 0 ? styles.centerContent : styles.listContent}
       />
 
-      {/* Floating Action Button */}
-      <TouchableOpacity 
-        style={StyleSheet.flatten([styles.fab, { backgroundColor: colors.primary }, Theme.shadows.lg])} 
-        onPress={() => setShowCreatePost(true)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      <View style={styles.content}>
+        {isLoading && posts.length === 0 ? (
+          renderSkeletons()
+        ) : (
+          <FlatList
+            data={posts}
+            keyExtractor={(item) => item.id}
+            renderItem={renderPost}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.3}
+            ListEmptyComponent={renderEmpty}
+            ListFooterComponent={renderFooter}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                colors={[Colors.light.primary]}
+                tintColor={Colors.light.primary}
+              />
+            }
+            contentContainerStyle={[
+              posts.length === 0 ? styles.emptyContainer : styles.listContent,
+              { paddingHorizontal: contentPadding },
+            ]}
+          />
+        )}
+      </View>
 
-      {/* Create Post Modal */}
+      {/* FAB for creating new memory */}
+      {isMobile && (
+        <FloatingActionButton
+          onPress={() => setCreateModalOpen(true)}
+          icon={<Ionicons name="add" size={24} color="#fff" />}
+        />
+      )}
+
       <CreatePostModal
-        visible={showCreatePost}
-        onClose={handleCreatePostClose}
+        visible={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSubmit={handleCreatePost}
       />
-    </SafeAreaView>
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: {
-    fontSize: Theme.typography.fontSizes.xxl,
-    fontWeight: Theme.typography.fontWeights.bold,
-  },
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: Theme.borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
+  content: {
+    flex: 1,
   },
   listContent: {
-    paddingBottom: 100,
+    padding: 16,
+    paddingBottom: 80,
   },
-  centerContent: {
-    flex: 1,
+  emptyContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 16,
   },
-  postCard: {
-    marginBottom: 1,
+  postWrapper: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    backgroundColor: '#fff',
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Theme.spacing.xxl,
+  skeletonContainer: {
+    padding: 16,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: Theme.borderRadius.xxl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.xl,
-  },
-  title: {
-    fontSize: Theme.typography.fontSizes.xxl,
-    fontWeight: Theme.typography.fontWeights.bold,
-    marginBottom: Theme.spacing.sm,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: Theme.typography.fontSizes.base,
-    textAlign: 'center',
-    marginBottom: Theme.spacing.xl,
-  },
-  primaryButton: {
-    paddingHorizontal: Theme.spacing.xxl,
-    paddingVertical: Theme.spacing.md,
-    borderRadius: Theme.borderRadius.lg,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: Theme.typography.fontWeights.semibold,
-    fontSize: Theme.typography.fontSizes.base,
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: Theme.spacing.xxl,
-  },
-  emptyIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: Theme.borderRadius.xxl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.lg,
-  },
-  emptyText: {
-    fontSize: Theme.typography.fontSizes.lg,
-    fontWeight: Theme.typography.fontWeights.semibold,
-  },
-  emptySubtext: {
-    fontSize: Theme.typography.fontSizes.sm,
-    marginTop: Theme.spacing.xs,
-    textAlign: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: Theme.sizes.fab.size,
-    height: Theme.sizes.fab.size,
-    borderRadius: Theme.sizes.fab.size / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerLoader: {
-    paddingVertical: Theme.spacing.xl,
-    alignItems: 'center',
+  newPostButton: {
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  newPostButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loadingMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: Theme.spacing.sm,
+    paddingVertical: 16,
+    gap: 8,
   },
   loadingMoreText: {
-    fontSize: Theme.typography.fontSizes.sm,
+    fontSize: 14,
+    color: '#737373',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderColor: '#e5e5e5',
+    borderWidth: 1, 
+    gap: 8,
+    minWidth: 360,
+  },
+  searchBarPlaceholder: {
+    fontSize: 14,
+    color: '#737373',
+  },
+  headerIconButton: {
+    padding: 8,
+    borderRadius: 8,
   },
 });
+
+export default Index;

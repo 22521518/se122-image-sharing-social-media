@@ -1,34 +1,79 @@
-import { Tabs, useRouter, useSegments } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { Platform, StyleSheet, ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { AppShell } from '@/components/layout';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useShouldShowSidebar } from '@/hooks/usePlatform';
+
+function Badge() {
+  const { unreadCount } = useNotifications();
+  
+  if (unreadCount === 0) return null;
+
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        right: -6,
+        top: -3,
+        backgroundColor: 'red',
+        borderRadius: 6,
+        width: 12,
+        height: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <View
+        style={{
+            backgroundColor: 'white',
+            borderRadius: 2,
+            width: 4,
+            height: 4,
+        }}
+      />
+    </View>
+  );
+}
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  const segments = useSegments();
-  const { user, isLoading } = useAuth();
+  const { isLoading, isAuthenticated } = useAuth();
   const colors = Colors[colorScheme ?? 'light'];
   const showSidebar = useShouldShowSidebar();
 
   useEffect(() => {
-    // Check if user needs onboarding (AC 1, 2)
-    if (!isLoading && user && !user.hasOnboarded) {
-      // Redirect to onboarding if not already there
-      const inTabs = segments[0] === '(tabs)';
-      if (inTabs) {
-        router.replace('/onboarding' as any);
-      }
+    // Don't do anything while loading
+    if (isLoading) return;
+
+    // Redirect to login if not authenticated
+    if (!isAuthenticated) {
+      router.replace('/(auth)/login');
+      return;
     }
-  }, [user, isLoading, segments]);
+  }, [isLoading, isAuthenticated]);
+
+  // Show loading while checking auth
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  // Don't render tabs if not authenticated (will redirect)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   /* Safe Area Insets for bottom navigation */
   const insets = useSafeAreaInsets();
@@ -41,9 +86,10 @@ export default function TabLayout() {
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: Platform.OS === 'web' 
-          ? `${colors.background}F2` // 95% opacity
-          : colors.background,
+        backgroundColor:
+          Platform.OS === 'web'
+            ? `${colors.background}F2` // 95% opacity
+            : colors.background,
         borderTopColor: colors.border,
         borderTopWidth: StyleSheet.hairlineWidth,
         height: Platform.select({
@@ -57,15 +103,17 @@ export default function TabLayout() {
           web: 0,
         }),
         // Blur effect simulation for web
-        ...(Platform.OS === 'web' && {
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        } as any),
+        ...(Platform.OS === 'web' &&
+          ({
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          } as any)),
       };
 
   return (
     <AppShell>
       <Tabs
+        backBehavior="history"
         screenOptions={{
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.tabIconDefault,
@@ -82,19 +130,15 @@ export default function TabLayout() {
           tabBarButton: HapticTab,
           // Hide tab bar labels to match more compact design
           tabBarShowLabel: true,
-        }}>
+        }}
+      >
         {/* Feed (Home) */}
         <Tabs.Screen
           name="index"
           options={{
             title: 'Feed',
             tabBarIcon: ({ color, focused }) => (
-              <IconSymbol 
-                size={22} 
-                name={focused ? 'house.fill' : 'house'} 
-                color={color}
-                style={focused && { opacity: 1 }}
-              />
+              <Ionicons size={22} name={focused ? 'home' : 'home-outline'} color={color} />
             ),
           }}
         />
@@ -104,25 +148,18 @@ export default function TabLayout() {
           options={{
             title: 'Map',
             tabBarIcon: ({ color, focused }) => (
-              <IconSymbol 
-                size={22} 
-                name={focused ? 'map.fill' : 'map'} 
-                color={color} 
-              />
+              <Ionicons size={22} name={focused ? 'map' : 'map-outline'} color={color} />
             ),
           }}
         />
-        {/* Explore */}
+        {/* Explore - Hidden from tab bar, accessed via header search */}
         <Tabs.Screen
           name="explore"
           options={{
+            href: null, // Hide from tab bar
             title: 'Explore',
             tabBarIcon: ({ color, focused }) => (
-              <IconSymbol 
-                size={22} 
-                name="magnifyingglass" 
-                color={color} 
-              />
+              <Ionicons size={22} name={focused ? 'search' : 'search-outline'} color={color} />
             ),
           }}
         />
@@ -132,11 +169,30 @@ export default function TabLayout() {
           options={{
             title: 'Postcards',
             tabBarIcon: ({ color, focused }) => (
-              <IconSymbol 
-                size={22} 
-                name={focused ? 'envelope.fill' : 'envelope'} 
-                color={color} 
-              />
+              <Ionicons size={22} name={focused ? 'mail' : 'mail-outline'} color={color} />
+            ),
+          }}
+        />
+        {/* Messages */}
+        <Tabs.Screen
+          name="messages"
+          options={{
+            title: 'Messages',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons size={22} name={focused ? 'chatbubbles' : 'chatbubbles-outline'} color={color} />
+            ),
+          }}
+        />
+        {/* Notifications */}
+        <Tabs.Screen
+          name="notifications"
+          options={{
+            title: 'Notifications',
+            tabBarIcon: ({ color, focused }) => (
+              <View>
+                <Ionicons size={22} name={focused ? 'notifications' : 'notifications-outline'} color={color} />
+                <Badge />
+              </View>
             ),
           }}
         />
@@ -146,11 +202,7 @@ export default function TabLayout() {
           options={{
             title: 'Profile',
             tabBarIcon: ({ color, focused }) => (
-              <IconSymbol 
-                size={22} 
-                name={focused ? 'person.fill' : 'person'} 
-                color={color} 
-              />
+              <Ionicons size={22} name={focused ? 'person' : 'person-outline'} color={color} />
             ),
           }}
         />
@@ -160,7 +212,31 @@ export default function TabLayout() {
           options={{
             href: null, // Hide from tab bar
             title: 'Settings',
-            tabBarIcon: ({ color }) => <IconSymbol size={22} name="gearshape.fill" color={color} />,
+            tabBarIcon: ({ color }) => <Ionicons size={22} name="settings" color={color} />,
+          }}
+        />
+        {/* Post Detail - Hidden from tab bar */}
+        <Tabs.Screen
+          name="post/[id]"
+          options={{
+            href: null, // Hide from tab bar
+            title: 'Post',
+          }}
+        />
+        {/* Memory Detail - Hidden from tab bar */}
+        <Tabs.Screen
+          name="memory/[id]"
+          options={{
+            href: null, // Hide from tab bar
+            title: 'Memory',
+          }}
+        />
+        {/* User Profile - Hidden from tab bar */}
+        <Tabs.Screen
+          name="user/[id]"
+          options={{
+            href: null, // Hide from tab bar
+            title: 'User',
           }}
         />
       </Tabs>

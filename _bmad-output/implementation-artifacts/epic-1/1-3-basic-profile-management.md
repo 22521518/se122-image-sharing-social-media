@@ -1,6 +1,6 @@
 # Story 1.3: Basic Profile Management
 
-Status: done
+Status: reivew
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

@@ -1,6 +1,6 @@
 # Story 1.1: User Registration and Login with Email/Password
 
-Status: done
+Status: reivew
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
