@@ -19,3 +19,5 @@ _bmad
 !*.example
 frontend/cross-platform/.env
 frontend/web-console/.env
+frontend/cross-platform/.env
+frontend/web-console/.env
