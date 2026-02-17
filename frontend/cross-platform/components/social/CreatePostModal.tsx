@@ -18,7 +18,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface CreatePostModalProps {
   visible: boolean;
@@ -206,7 +206,9 @@ export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalP
             </View>
         </View>
       ) : (
-        renderContent()
+        <SafeAreaView style={styles.container}>
+          {renderContent()}
+        </SafeAreaView>
       )}
     </Modal>
   );

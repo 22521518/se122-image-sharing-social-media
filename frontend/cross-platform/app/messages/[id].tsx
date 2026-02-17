@@ -7,8 +7,8 @@
 
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChatView } from '@/components/messages';
 import { Colors } from '@/constants/Colors';
@@ -19,21 +19,20 @@ export default function ChatPage() {
   
   // Force light theme for consistency
   const colors = Colors['light'];
-  const insets = useSafeAreaInsets();
 
   if (!id) {
     return null;
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ChatView 
         conversationId={id} 
         showHeader={true}
         onBack={() => router.back()}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

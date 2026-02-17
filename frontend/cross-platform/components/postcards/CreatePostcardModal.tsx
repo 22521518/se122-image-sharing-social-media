@@ -9,19 +9,20 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from './DateTimePicker';
 
 interface CreatePostcardModalProps {
@@ -508,7 +509,7 @@ export function CreatePostcardModal({ visible, onClose, onSubmit }: CreatePostca
           </View>
         </View>
       ) : (
-        <View style={styles.container}>{renderFormContent()}</View>
+        <SafeAreaView style={styles.container}>{renderFormContent()}</SafeAreaView>
       )}
     </Modal>
   );

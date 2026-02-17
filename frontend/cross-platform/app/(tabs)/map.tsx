@@ -11,9 +11,10 @@ import { useMemories, type Memory } from '@/context/MemoriesContext';
 import { useMapViewport, type MapRegion } from '@/hooks/useMapViewport';
 import { useIsMobileView } from '@/hooks/usePlatform';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -25,6 +26,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // const { width } = Dimensions.get('window');
 const FEELINGS: Feeling[] = ['JOY', 'CALM', 'ENERGETIC', 'INSPIRED', 'MELANCHOLY'];
@@ -99,8 +101,11 @@ export default function MapScreen() {
   });
 
   // Load memories on focus
-  useFocusEffect(
-    useCallback(() => {
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused) {
       const loadMemories = async () => {
         try {
           await fetchMemories();
@@ -111,8 +116,8 @@ export default function MapScreen() {
         }
       };
       loadMemories();
-    }, [fetchMemories]),
-  );
+    }
+  }, [isFocused, fetchMemories]);
 
   // Memory interaction state
   const handleLike = async () => {
@@ -419,12 +424,63 @@ export default function MapScreen() {
       {/* Capture Type Modal */}
       <Modal
         visible={captureModalVisible}
-        transparent
+        transparent={Platform.OS === 'web'}
         animationType="slide"
+        presentationStyle={Platform.OS === 'ios' || Platform.OS === 'android' ? 'pageSheet' : undefined}
         onRequestClose={() => setCaptureModalVisible(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setCaptureModalVisible(false)}>
-          <View style={styles.modalContent}>
+        {Platform.OS === 'web' ? (
+          <Pressable style={styles.modalOverlay} onPress={() => setCaptureModalVisible(false)}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Capture a Memory</Text>
+                <Pressable onPress={() => setCaptureModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="#171717" />
+                </Pressable>
+              </View>
+
+              <View style={styles.captureGrid}>
+                <CaptureOption
+                  icon="mic-outline"
+                  label="Voice"
+                  description="Record audio"
+                  onPress={() => {
+                    setCaptureModalVisible(false);
+                    setCreateModalVisible(true);
+                  }}
+                />
+                <CaptureOption
+                  icon="camera-outline"
+                  label="Photo"
+                  description="Take a photo"
+                  onPress={() => {
+                    setCaptureModalVisible(false);
+                    setCreateModalVisible(true);
+                  }}
+                />
+                <CaptureOption
+                  icon="happy-outline"
+                  label="Feeling"
+                  description="Log emotion"
+                  onPress={() => {
+                    setCaptureModalVisible(false);
+                    setCreateModalVisible(true);
+                  }}
+                />
+                <CaptureOption
+                  icon="sparkles-outline"
+                  label="Mixed"
+                  description="All types"
+                  onPress={() => {
+                    setCaptureModalVisible(false);
+                    setCreateModalVisible(true);
+                  }}
+                />
+              </View>
+            </View>
+          </Pressable>
+        ) : (
+          <SafeAreaView style={styles.nativeModalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Capture a Memory</Text>
               <Pressable onPress={() => setCaptureModalVisible(false)}>
@@ -470,8 +526,8 @@ export default function MapScreen() {
                 }}
               />
             </View>
-          </View>
-        </Pressable>
+          </SafeAreaView>
+        )}
       </Modal>
 
       {/* Create Memory Modal */}
@@ -485,129 +541,142 @@ export default function MapScreen() {
       {/* Memory Detail Modal */}
       <Modal
         visible={detailModalVisible}
-        transparent
+        transparent={Platform.OS === 'web'}
         animationType="slide"
+        presentationStyle={Platform.OS === 'ios' || Platform.OS === 'android' ? 'pageSheet' : undefined}
         onRequestClose={() => setDetailModalVisible(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setDetailModalVisible(false)}>
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            {selectedMemory && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{selectedMemory.title || 'Memory'}</Text>
-                  <Pressable onPress={() => setDetailModalVisible(false)}>
-                    <Ionicons name="close" size={24} color="#171717" />
-                  </Pressable>
-                </View>
-
-                <ScrollView style={styles.detailScroll}>
-                  {/* Image */}
-                  {selectedMemory.mediaUrl &&
-                    (selectedMemory.type === 'photo' || selectedMemory.type === 'mixed') && (
-                      <Image
-                        source={{ uri: selectedMemory.mediaUrl }}
-                        style={styles.detailImage}
-                        resizeMode="cover"
-                      />
-                    )}
-
-                  {/* Audio Player for voice memories */}
-                  {selectedMemory.mediaUrl &&
-                    (selectedMemory.type === 'voice' || selectedMemory.type === 'mixed') && (
-                      <View style={styles.audioPlayerWrapper}>
-                        <MemoryAudioPlayer
-                          audioUrl={selectedMemory.mediaUrl}
-                          duration={selectedMemory.duration}
-                          autoPlay={false}
-                        />
-                      </View>
-                    )}
-
-                  {/* Placeholder for text/voice memories */}
-                  {selectedMemory.placeholderMetadata && !selectedMemory.mediaUrl && (
-                    <View style={[styles.detailPlaceholder, styles.placeholderGradient]}>
-                      <Text style={styles.placeholderEmoji}>
-                        {FEELING_EMOJIS[selectedMemory.feeling || 'JOY']}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Actions */}
-                  <View style={styles.detailActions}>
-                    <View style={styles.leftActions}>
-                      <Pressable style={styles.actionButton} onPress={handleLike}>
-                        <Ionicons
-                          name={selectedMemory.liked ? 'heart' : 'heart-outline'}
-                          size={24}
-                          color={selectedMemory.liked ? '#ef4444' : '#171717'}
-                        />
-                        {selectedMemory.likeCount !== undefined && selectedMemory.likeCount > 0 && (
-                          <Text style={styles.actionCount}>{selectedMemory.likeCount}</Text>
-                        )}
-                      </Pressable>
-                      <Pressable style={styles.actionButton} onPress={handleComment}>
-                        <Ionicons name="chatbubble-outline" size={24} color="#171717" />
-                        {selectedMemory.commentCount !== undefined &&
-                          selectedMemory.commentCount > 0 && (
-                            <Text style={styles.actionCount}>{selectedMemory.commentCount}</Text>
-                          )}
-                      </Pressable>
-                    </View>
-                  </View>
-
-                  {/* Metadata */}
-                  <View style={styles.metadataRow}>
-                    <View style={styles.metadataBadge}>
-                      <Text style={styles.metadataText}>
-                        📍{' '}
-                        {`${selectedMemory.latitude.toFixed(4)}, ${selectedMemory.longitude.toFixed(4)}`}
-                      </Text>
-                    </View>
-                    {selectedMemory.feeling && (
-                      <View style={styles.metadataBadge}>
-                        <Text style={styles.metadataText}>
-                          {FEELING_EMOJIS[selectedMemory.feeling]} {selectedMemory.feeling}
-                        </Text>
-                      </View>
-                    )}
-                    {selectedMemory.placeholderMetadata?.timeOfDay && (
-                      <View style={styles.metadataBadge}>
-                        <Text style={styles.metadataText}>
-                          🕐 {selectedMemory.placeholderMetadata.timeOfDay}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={styles.metadataBadge}>
-                      <Ionicons
-                        name={
-                          selectedMemory.privacy?.toLowerCase() === 'public'
-                            ? 'globe-outline'
-                            : selectedMemory.privacy?.toLowerCase() === 'friends'
-                              ? 'people-outline'
-                              : 'lock-closed-outline'
-                        }
-                        size={12}
-                        color="#737373"
-                      />
-                    </View>
-                  </View>
-
-                  {/* View Full Button */}
-                  <Pressable
-                    style={styles.viewFullButton}
-                    onPress={() => goToMemoryDetail(selectedMemory.id)}
-                  >
-                    <Text style={styles.viewFullButtonText}>View Full Memory</Text>
-                    <Ionicons name="arrow-forward" size={16} color={Colors.light.primary} />
-                  </Pressable>
-                </ScrollView>
-              </>
-            )}
+        {Platform.OS === 'web' ? (
+          <Pressable style={styles.modalOverlay} onPress={() => setDetailModalVisible(false)}>
+            <View style={styles.modalContent}>
+              {selectedMemory && renderMemoryDetailContent()}
+            </View>
           </Pressable>
-        </Pressable>
+        ) : (
+          <SafeAreaView style={styles.nativeModalContainer}>
+            {selectedMemory && renderMemoryDetailContent()}
+          </SafeAreaView>
+        )}
       </Modal>
     </View>
   );
+
+  // Helper function to render memory detail content
+  function renderMemoryDetailContent() {
+    if (!selectedMemory) return null;
+    return (
+      <>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{selectedMemory.title || 'Memory'}</Text>
+          <Pressable onPress={() => setDetailModalVisible(false)}>
+            <Ionicons name="close" size={24} color="#171717" />
+          </Pressable>
+        </View>
+
+        <ScrollView style={styles.detailScroll}>
+          {/* Image */}
+          {selectedMemory.mediaUrl &&
+            (selectedMemory.type === 'photo' || selectedMemory.type === 'mixed') && (
+              <Image
+                source={{ uri: selectedMemory.mediaUrl }}
+                style={styles.detailImage}
+                resizeMode="cover"
+              />
+            )}
+
+          {/* Audio Player for voice memories */}
+          {selectedMemory.mediaUrl &&
+            (selectedMemory.type === 'voice' || selectedMemory.type === 'mixed') && (
+              <View style={styles.audioPlayerWrapper}>
+                <MemoryAudioPlayer
+                  audioUrl={selectedMemory.mediaUrl}
+                  duration={selectedMemory.duration}
+                  autoPlay={false}
+                />
+              </View>
+            )}
+
+          {/* Placeholder for text/voice memories */}
+          {selectedMemory.placeholderMetadata && !selectedMemory.mediaUrl && (
+            <View style={[styles.detailPlaceholder, styles.placeholderGradient]}>
+              <Text style={styles.placeholderEmoji}>
+                {FEELING_EMOJIS[selectedMemory.feeling || 'JOY']}
+              </Text>
+            </View>
+          )}
+
+          {/* Actions */}
+          <View style={styles.detailActions}>
+            <View style={styles.leftActions}>
+              <Pressable style={styles.actionButton} onPress={handleLike}>
+                <Ionicons
+                  name={selectedMemory.liked ? 'heart' : 'heart-outline'}
+                  size={24}
+                  color={selectedMemory.liked ? '#ef4444' : '#171717'}
+                />
+                {selectedMemory.likeCount !== undefined && selectedMemory.likeCount > 0 && (
+                  <Text style={styles.actionCount}>{selectedMemory.likeCount}</Text>
+                )}
+              </Pressable>
+              <Pressable style={styles.actionButton} onPress={handleComment}>
+                <Ionicons name="chatbubble-outline" size={24} color="#171717" />
+                {selectedMemory.commentCount !== undefined &&
+                  selectedMemory.commentCount > 0 && (
+                    <Text style={styles.actionCount}>{selectedMemory.commentCount}</Text>
+                  )}
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Metadata */}
+          <View style={styles.metadataRow}>
+            <View style={styles.metadataBadge}>
+              <Text style={styles.metadataText}>
+                📍{' '}
+                {`${selectedMemory.latitude.toFixed(4)}, ${selectedMemory.longitude.toFixed(4)}`}
+              </Text>
+            </View>
+            {selectedMemory.feeling && (
+              <View style={styles.metadataBadge}>
+                <Text style={styles.metadataText}>
+                  {FEELING_EMOJIS[selectedMemory.feeling]} {selectedMemory.feeling}
+                </Text>
+              </View>
+            )}
+            {selectedMemory.placeholderMetadata?.timeOfDay && (
+              <View style={styles.metadataBadge}>
+                <Text style={styles.metadataText}>
+                  🕐 {selectedMemory.placeholderMetadata.timeOfDay}
+                </Text>
+              </View>
+            )}
+            <View style={styles.metadataBadge}>
+              <Ionicons
+                name={
+                  selectedMemory.privacy?.toLowerCase() === 'public'
+                    ? 'globe-outline'
+                    : selectedMemory.privacy?.toLowerCase() === 'friends'
+                      ? 'people-outline'
+                      : 'lock-closed-outline'
+                }
+                size={12}
+                color="#737373"
+              />
+            </View>
+          </View>
+
+          {/* View Full Button */}
+          <Pressable
+            style={styles.viewFullButton}
+            onPress={() => goToMemoryDetail(selectedMemory.id)}
+          >
+            <Text style={styles.viewFullButtonText}>View Full Memory</Text>
+            <Ionicons name="arrow-forward" size={16} color={Colors.light.primary} />
+          </Pressable>
+        </ScrollView>
+      </>
+    );
+  }
 }
 
 // Capture Option Component
@@ -782,6 +851,11 @@ const styles = StyleSheet.create({
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24,
     }),
+  },
+  nativeModalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingTop: 16,
   },
   modalHeader: {
     flexDirection: 'row',

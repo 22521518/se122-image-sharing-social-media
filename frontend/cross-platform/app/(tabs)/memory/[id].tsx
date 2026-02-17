@@ -17,20 +17,21 @@ import { ApiService } from '@/services/api.service';
 import { socialService } from '@/services/social.service';
 import { Comment } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Alert,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -118,9 +119,14 @@ export default function MemoryDetailScreen() {
     }
   }, [id, accessToken]);
 
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
+
   useEffect(() => {
-    fetchMemoryData();
-  }, [fetchMemoryData]);
+    if (isFocused) {
+      fetchMemoryData();
+    }
+  }, [isFocused, fetchMemoryData]);
 
   const handleLike = async () => {
     if (!memory || !accessToken) return;

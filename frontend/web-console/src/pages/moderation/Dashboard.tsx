@@ -219,15 +219,15 @@ export default function ModerationDashboard({ onLogout }: ModerationDashboardPro
                   onClick={() => openConfirmDialog(report, 'APPROVE')}
                   disabled={actionPending === report.id}
                 >
-                  <FiCheck style={{ marginRight: 6 }} /> Approve
+                  <FiCheck style={{ marginRight: 6 }} /> Abort
                 </button>
-                <button
+                {/* <button
                   className="action-button hide"
                   onClick={() => openConfirmDialog(report, 'HIDE')}
                   disabled={actionPending === report.id}
                 >
                   <FiEyeOff style={{ marginRight: 6 }} /> Hide
-                </button>
+                </button> */}
                 <button
                   className="action-button delete"
                   onClick={() => openConfirmDialog(report, 'DELETE')}

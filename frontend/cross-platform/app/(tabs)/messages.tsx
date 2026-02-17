@@ -8,17 +8,18 @@
 
 import { API_BASE_URL } from '@/services/api.service';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
+import { useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { io } from 'socket.io-client';
@@ -29,8 +30,8 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { usePlatform } from '@/hooks/usePlatform';
 import {
-    Conversation,
-    messagingService,
+  Conversation,
+  messagingService,
 } from '@/services/messaging.service';
 import { socialService, UserSearchResult } from '@/services/social.service';
 
@@ -197,12 +198,15 @@ export default function MessagesPage() {
     }
   }, [accessToken, cursor]);
 
-  useFocusEffect(
-    useCallback(() => {
-    loadConversations(true);
-    loadFriends();
-  }, [accessToken])
-  );
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused && accessToken) {
+      loadConversations(true);
+      loadFriends();
+    }
+  }, [isFocused, accessToken]);
 
   // Friends list for suggestions
   const [friends, setFriends] = useState<UserSearchResult[]>([]);

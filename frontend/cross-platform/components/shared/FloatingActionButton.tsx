@@ -1,7 +1,8 @@
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import React, { ReactNode } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface FloatingActionButtonProps {
   onPress: () => void;
@@ -9,22 +10,35 @@ interface FloatingActionButtonProps {
   style?: object;
 }
 
+// Bottom navigation height (matches BottomNavigation.tsx)
+const BOTTOM_NAV_HEIGHT = 56;
+const FAB_MARGIN = 16;
+
 export function FloatingActionButton({ onPress, icon, style }: FloatingActionButtonProps) {
+  const insets = useSafeAreaInsets();
+  
+  // Calculate bottom position: nav height + safe area + margin
+  const bottomPosition = Platform.select({
+    ios: BOTTOM_NAV_HEIGHT + insets.bottom + FAB_MARGIN,
+    android: BOTTOM_NAV_HEIGHT + FAB_MARGIN + 8, // Extra padding for Android
+    default: 80, // Web/desktop
+  });
+
   return (
-    <Pressable
-      style={[styles.button, style]}
+    <TouchableOpacity
+      style={[styles.button, { bottom: bottomPosition }, style]}
       onPress={onPress}
-      android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
+      activeOpacity={0.8}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       {icon || <Ionicons name="add" size={24} color="#fff" />}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
     position: 'absolute',
-    bottom: 80,
     right: 16,
     width: 56,
     height: 56,

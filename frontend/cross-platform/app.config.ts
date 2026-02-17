@@ -3,11 +3,11 @@ import { ConfigContext, ExpoConfig } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Map Lifed',
-  slug: 'cross-platform',
+  slug: 'Map Lifed',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/images/logo.png',
-  scheme: 'crossplatform',
+  scheme: 'maplifed',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   ios: {
@@ -31,7 +31,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "android.permission.RECORD_AUDIO",
       "android.permission.MODIFY_AUDIO_SETTINGS"
     ],
-    package: 'com.anonymous.crossplatform',
+    package: 'com.anonymous.maplifed',
   },
   web: {
     bundler: 'metro',

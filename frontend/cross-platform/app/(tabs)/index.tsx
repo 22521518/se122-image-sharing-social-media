@@ -8,8 +8,9 @@ import { mediaService } from '@/services/media.service';
 import { socialService } from '@/services/social.service';
 import type { PostDetail, PrivacyLevel } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -88,12 +89,18 @@ const Index = () => {
     await fetchFeed();
   }, [isLoadingMore, hasMore, cursor, fetchFeed]);
 
-  // Initial load
-  useFocusEffect(
-    useCallback(() => {
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
+  const hasFetchedInitially = useRef(false);
+
+  // Initial load and refetch on focus
+  useEffect(() => {
+    if (isFocused) {
+      // Skip the first mount (handled by initial render) or always refetch
       fetchFeed(true);
-    }, [fetchFeed]),
-  );
+      hasFetchedInitially.current = true;
+    }
+  }, [isFocused, fetchFeed]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);

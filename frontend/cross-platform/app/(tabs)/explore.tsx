@@ -9,8 +9,9 @@ import type {
   UserSearchResult,
 } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -24,7 +25,8 @@ import {
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
-const GRID_ITEM_SIZE = (width - 8) / 3;
+const GRID_COLUMNS = 5;
+const GRID_ITEM_SIZE = (width - 16 - (GRID_COLUMNS - 1) * 2) / GRID_COLUMNS; // 16 = horizontal padding, 2 = gap between items
 
 export default function ExplorePage() {
   const router = useRouter();
@@ -35,18 +37,25 @@ export default function ExplorePage() {
   const [isLoadingTrending, setIsLoadingTrending] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'users' | 'posts' | 'hashtags'>('all');
 
-  // Load trending content on mount
-  useEffect(() => {
-    const loadTrending = async () => {
-      try {
-        const data = await socialService.getTrending();
-        setTrending(data);
-      } finally {
-        setIsLoadingTrending(false);
-      }
-    };
-    loadTrending();
+  // Load trending content on focus
+  const loadTrending = useCallback(async () => {
+    setIsLoadingTrending(true);
+    try {
+      const data = await socialService.getTrending();
+      setTrending(data);
+    } finally {
+      setIsLoadingTrending(false);
+    }
   }, []);
+
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused) {
+      loadTrending();
+    }
+  }, [isFocused, loadTrending]);
 
   // Debounced search
   useEffect(() => {

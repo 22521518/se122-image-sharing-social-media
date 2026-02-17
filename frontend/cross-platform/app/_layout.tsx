@@ -20,7 +20,7 @@ export const unstable_settings = {
  * Authentication guard component that redirects users based on auth state
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, refreshUserProfile } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -44,6 +44,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       // For now, disabling per user request.
     // }
   }, [isAuthenticated, isLoading, segments]);
+
+  // Refresh user profile from server when authenticated to ensure avatar/name are synced
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      refreshUserProfile();
+    }
+  }, [isAuthenticated, isLoading]);
 
   // Show loading indicator while checking auth state
   if (isLoading) {

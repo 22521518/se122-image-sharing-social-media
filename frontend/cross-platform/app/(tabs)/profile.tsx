@@ -8,10 +8,11 @@ import { useIsMobileView } from '@/hooks/usePlatform';
 import { usersService } from '@/services/users.service';
 import type { PostDetail, Profile } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { format } from 'date-fns';
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -25,6 +26,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -52,34 +54,37 @@ export default function SelfProfilePage() {
     setShowUserList(true);
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      const loadProfile = async () => {
-        if (!accessToken || !user?.id) {
-          setIsLoading(false);
-          return;
-        }
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
 
-        try {
-          const [profileData, postsData] = await Promise.all([
-            usersService.getCurrentUserProfile(accessToken),
-            usersService.getUserPosts(user.id, accessToken),
-          ]);
-          setProfile(profileData);
-          setPosts(postsData);
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!accessToken || !user?.id) {
+        setIsLoading(false);
+        return;
+      }
 
-          // Also fetch user's memories
-          await fetchMemories();
-        } catch (error) {
-          console.error('Failed to load profile:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
+      try {
+        const [profileData, postsData] = await Promise.all([
+          usersService.getCurrentUserProfile(accessToken),
+          usersService.getUserPosts(user.id, accessToken),
+        ]);
+        setProfile(profileData);
+        setPosts(postsData);
 
+        // Also fetch user's memories
+        await fetchMemories();
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isFocused) {
       loadProfile();
-    }, [user?.id, accessToken, fetchMemories]),
-  );
+    }
+  }, [isFocused, user?.id, accessToken, fetchMemories]);
 
   const handleLogout = async () => {
     await logout();
@@ -442,7 +447,7 @@ function EditProfileForm({
   onClose: () => void;
   isMobileView: boolean;
 }) {
-  const { accessToken } = useAuth();
+  const { accessToken, updateUser } = useAuth();
   const isDesktop = !isMobileView;
   const [name, setName] = useState(profile.name ?? '');
   const [bio, setBio] = useState(profile.bio ?? '');
@@ -480,6 +485,9 @@ function EditProfileForm({
       await usersService.removeAvatar(accessToken);
       setAvatarUri(null);
       setAvatarPreview(null);
+      
+      // Sync with AuthContext
+      await updateUser({ avatarUrl: undefined });
     } catch (error) {
       console.error('Failed to remove avatar:', error);
     } finally {
@@ -497,6 +505,13 @@ function EditProfileForm({
         avatarUri,
         accessToken,
       );
+      
+      // Sync with AuthContext so all components get updated
+      await updateUser({
+        name: updated.name ?? undefined,
+        avatarUrl: updated.avatarUrl ?? undefined,
+      });
+      
       onSave(updated);
     } catch (error) {
       console.error('Failed to update profile:', error);
@@ -590,7 +605,7 @@ function EditProfileForm({
     );
   }
 
-  return modalContent;
+  return <SafeAreaView style={styles.modalContainer}>{modalContent}</SafeAreaView>;
 }
 
 // Settings Modal Wrapper
@@ -714,7 +729,7 @@ function SettingsContent({
     );
   }
 
-  return modalContent;
+  return <SafeAreaView style={styles.modalContainer}>{modalContent}</SafeAreaView>;
 }
 
 const styles = StyleSheet.create({

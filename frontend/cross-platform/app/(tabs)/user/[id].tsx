@@ -8,18 +8,19 @@ import { socialService } from '@/services/social.service';
 import { usersService } from '@/services/users.service';
 import type { PostDetail, Profile } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { format } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -54,51 +55,57 @@ export default function UserProfilePage() {
     setShowUserList(true);
   };
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      if (!userId || !accessToken) {
-        setIsLoading(false);
-        return;
-      }
+  const loadProfile = useCallback(async () => {
+    if (!userId || !accessToken) {
+      setIsLoading(false);
+      return;
+    }
 
-      // If viewing own profile, redirect to tabs/profile
-      if (currentUser && userId === currentUser.id) {
-        router.replace('/(tabs)/profile');
-        return;
-      }
+    // If viewing own profile, redirect to tabs/profile
+    if (currentUser && userId === currentUser.id) {
+      router.replace('/(tabs)/profile');
+      return;
+    }
 
+    setIsLoading(true);
+    try {
+      const [profileData, postsData, memoriesData] = await Promise.all([
+        usersService.getUserProfile(userId, accessToken),
+        usersService.getUserPosts(userId, accessToken),
+        usersService.getUserMemories(userId, accessToken),
+      ]);
+
+      if (profileData) {
+        setProfile(profileData);
+        // isFollowing comes from the public-profile endpoint
+        setIsFollowing(profileData.isFollowing || false);
+      }
+      setPosts(postsData);
+      setMemories(memoriesData || []);
+
+      // Load friendship status
       try {
-        const [profileData, postsData, memoriesData] = await Promise.all([
-          usersService.getUserProfile(userId, accessToken),
-          usersService.getUserPosts(userId, accessToken),
-          usersService.getUserMemories(userId, accessToken),
-        ]);
-
-        if (profileData) {
-          setProfile(profileData);
-          // isFollowing comes from the public-profile endpoint
-          setIsFollowing(profileData.isFollowing || false);
-        }
-        setPosts(postsData);
-        setMemories(memoriesData || []);
-
-        // Load friendship status
-        try {
-          const friendStatus = await friendshipService.getFriendshipStatus(userId, accessToken);
-          setFriendshipStatus(friendStatus.status);
-          setFriendshipId(friendStatus.friendshipId || null);
-        } catch (err) {
-          console.error('Failed to load friendship status:', err);
-        }
-      } catch (error) {
-        console.error('Failed to load profile:', error);
-      } finally {
-        setIsLoading(false);
+        const friendStatus = await friendshipService.getFriendshipStatus(userId, accessToken);
+        setFriendshipStatus(friendStatus.status);
+        setFriendshipId(friendStatus.friendshipId || null);
+      } catch (err) {
+        console.error('Failed to load friendship status:', err);
       }
-    };
-
-    loadProfile();
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, [userId, router, accessToken, currentUser]);
+
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused) {
+      loadProfile();
+    }
+  }, [isFocused, loadProfile]);
 
   const handleFollow = async () => {
     if (!profile || !accessToken) return;

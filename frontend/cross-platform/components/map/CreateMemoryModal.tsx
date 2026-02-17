@@ -6,19 +6,21 @@ import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface CreateMemoryModalProps {
   visible: boolean;
@@ -424,10 +426,12 @@ export function CreateMemoryModal({
         </View>
 
         {/* Submit Button */}
-        <Pressable 
+        <TouchableOpacity 
             style={[styles.submitButton, (isRecording || isSubmitting) && styles.disabledButton]} 
             onPress={handleSubmit}
             disabled={isRecording || isSubmitting}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           {isSubmitting ? (
              <ActivityIndicator color="#fff" />
@@ -436,20 +440,21 @@ export function CreateMemoryModal({
                {isRecording ? "Finish Recording..." : "Create Memory"}
             </Text>
           )}
-        </Pressable>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 
   const isWindowsOrMac = Platform.OS === 'windows' || Platform.OS === 'macos';
+  const isNativeMobile = Platform.OS === 'ios' || Platform.OS === 'android';
   const showDesktopModal = isDesktop || isWindowsOrMac;
 
   return (
     <Modal
       visible={visible}
-      transparent={true} // Always transparent for overlay effects
+      transparent={showDesktopModal || !isNativeMobile}
       animationType={showDesktopModal ? 'fade' : 'slide'}
-      presentationStyle={showDesktopModal ? 'overFullScreen' : 'pageSheet'}
+      presentationStyle={isNativeMobile ? 'pageSheet' : 'overFullScreen'}
       onRequestClose={onClose}
     >
       {showDesktopModal ? (
@@ -459,10 +464,16 @@ export function CreateMemoryModal({
             {renderContent()}
           </View>
         </View>
+      ) : isNativeMobile ? (
+        // Native mobile: pageSheet handles safe areas, simpler structure
+        <SafeAreaView style={styles.nativeMobileContainer}>
+          {renderContent()}
+        </SafeAreaView>
       ) : (
+        // Mobile web: bottom sheet style with overlay
         <Pressable style={styles.mobileOverlay} onPress={onClose}>
             <Pressable style={styles.mobileContent} onPress={(e) => e.stopPropagation()}>
-                 {renderContent()}
+                {renderContent()}
             </Pressable>
         </Pressable>
       )}
@@ -510,6 +521,10 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     maxHeight: '80%',
+  },
+  nativeMobileContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
   },
   // Common Form Styles
   modalHeader: {

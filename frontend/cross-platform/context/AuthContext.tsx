@@ -23,6 +23,8 @@ interface AuthContextType {
   refreshAuth: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
   checkSessionValidity: () => Promise<boolean>;
+  updateUser: (updates: Partial<User>) => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -217,6 +219,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
+  // Update user data (for profile updates like avatar, name)
+  const updateUser = async (updates: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
+
+  // Refresh user profile from API
+  const refreshUserProfile = async () => {
+    if (!accessToken || !user) return;
+    
+    try {
+      const profileData = await ApiService.get<{
+        id: string;
+        email: string;
+        name?: string;
+        avatarUrl?: string;
+        hasOnboarded?: boolean;
+      }>('/api/users/me', accessToken);
+      
+      if (profileData) {
+        const updatedUser: User = {
+          id: profileData.id,
+          email: profileData.email,
+          name: profileData.name,
+          avatarUrl: profileData.avatarUrl,
+          hasOnboarded: profileData.hasOnboarded ?? user.hasOnboarded,
+        };
+        setUser(updatedUser);
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch (error) {
+      console.error('Failed to refresh user profile:', error);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -230,6 +270,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshAuth,
         completeOnboarding,
         checkSessionValidity,
+        updateUser,
+        refreshUserProfile,
       }}
     >
       {children}

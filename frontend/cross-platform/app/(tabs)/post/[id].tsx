@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { socialService } from '@/services/social.service';
 import type { Comment, PostDetail } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -101,6 +102,9 @@ export default function PostDetailPage() {
     }
   }, [postId, accessToken]);
 
+  // Use isFocused as a more reliable trigger for refetching data
+  const isFocused = useIsFocused();
+
   useEffect(() => {
     const fetchNextPost = async () => {
       if (!accessToken || !postId) return;
@@ -125,9 +129,11 @@ export default function PostDetailPage() {
       }
     };
 
-    fetchPostData();
-    fetchNextPost();
-  }, [postId, accessToken, fetchPostData]);
+    if (isFocused) {
+      fetchPostData();
+      fetchNextPost();
+    }
+  }, [isFocused, postId, accessToken, fetchPostData]);
 
   const handleNextPost = () => {
     if (nextPostId) {

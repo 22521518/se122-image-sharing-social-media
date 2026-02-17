@@ -5,9 +5,9 @@
  * Provides loading, updating, and error handling.
  */
 
-import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { usersService, Profile, UpdateProfileDto } from '../services/users.service';
+import { useCallback, useEffect, useState } from 'react';
+import { Profile, UpdateProfileDto, usersService } from '../services/users.service';
 
 interface UseUserProfileResult {
   profile: Profile | null;
@@ -21,7 +21,7 @@ interface UseUserProfileResult {
 }
 
 export function useUserProfile(): UseUserProfileResult {
-  const { accessToken, isLoading: authLoading } = useAuth();
+  const { accessToken, isLoading: authLoading, updateUser } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -87,6 +87,12 @@ export function useUserProfile(): UseUserProfileResult {
       const updated = await usersService.updateProfile(dto, accessToken);
       setProfile(updated);
       setSuccess('Profile updated successfully!');
+
+      // Sync with AuthContext so all components get updated
+      await updateUser({
+        name: updated.name ?? undefined,
+        avatarUrl: updated.avatarUrl ?? undefined,
+      });
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(''), 3000);

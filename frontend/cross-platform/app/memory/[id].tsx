@@ -10,16 +10,16 @@ import { useAuth } from '@/context/AuthContext';
 import { Memory } from '@/context/MemoriesContext';
 import { ApiService } from '@/services/api.service';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -40,26 +40,29 @@ export default function MemoryDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchMemory = useCallback(async () => {
     if (!id || !accessToken) {
       setLoading(false);
       return;
     }
 
-    const fetchMemory = async () => {
-      try {
-        const data = await ApiService.get<Memory>(`/api/memories/${id}`, accessToken);
-        setMemory(data);
-      } catch (err: any) {
-        console.error('Failed to fetch memory:', err);
-        setError(err.message || 'Memory not found');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMemory();
+    setLoading(true);
+    try {
+      const data = await ApiService.get<Memory>(`/api/memories/${id}`, accessToken);
+      setMemory(data);
+    } catch (err: any) {
+      console.error('Failed to fetch memory:', err);
+      setError(err.message || 'Memory not found');
+    } finally {
+      setLoading(false);
+    }
   }, [id, accessToken]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMemory();
+    }, [fetchMemory])
+  );
 
   const handleClose = () => {
     // Navigate back to map or previous screen

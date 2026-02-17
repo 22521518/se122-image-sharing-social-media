@@ -2,20 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { usersService } from '@/services/users.service';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface User {
   id: string;
@@ -101,7 +102,7 @@ export function UserListModal({ visible, onClose, userId, type, title }: UserLis
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -125,7 +126,7 @@ export function UserListModal({ visible, onClose, userId, type, title }: UserLis
               contentContainerStyle={styles.listContent}
             />
           )}
-        </View>
+        </SafeAreaView>
       </View>
     </Modal>
   );
