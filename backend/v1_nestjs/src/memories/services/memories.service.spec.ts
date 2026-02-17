@@ -3,7 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { MemoriesService } from './memories.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService } from '../../media/services/media.service';
-import { MemoryType, PrivacyLevel, Memory, User } from '@prisma/client';
+import { MemoryType, PrivacyLevel, Memory, User, Feeling } from '@prisma/client';
 
 describe('MemoriesService', () => {
   let service: MemoriesService;
@@ -13,6 +13,7 @@ describe('MemoriesService', () => {
       findMany: jest.Mock;
       findFirst: jest.Mock;
       update: jest.Mock;
+      count: jest.Mock;
     };
     user: {
       findUnique: jest.Mock;
@@ -64,6 +65,7 @@ describe('MemoriesService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
+        count: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
@@ -104,13 +106,13 @@ describe('MemoriesService', () => {
     };
 
     it('should create a voice memory successfully', async () => {
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-audio.m4a');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-audio.m4a' });
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.memory.create.mockResolvedValue(mockMemory);
 
       const result = await service.createVoiceMemory('user-uuid-123', mockFile, validDto);
 
-      expect(mediaService.uploadFile).toHaveBeenCalledWith(mockFile, 'memories/voice');
+      expect(mediaService.uploadFile).toHaveBeenCalledWith(mockFile, 'user-uuid-123', 'memories/voice');
       expect(prisma.memory.create).toHaveBeenCalledWith({
         data: {
           userId: 'user-uuid-123',
@@ -160,7 +162,7 @@ describe('MemoriesService', () => {
     });
 
     it('should use user default privacy when not specified', async () => {
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-audio.m4a');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-audio.m4a' });
       prisma.user.findUnique.mockResolvedValue({ ...mockUser, defaultPrivacy: PrivacyLevel.public });
       prisma.memory.create.mockResolvedValue({ ...mockMemory, privacy: PrivacyLevel.public });
 
@@ -283,13 +285,13 @@ describe('MemoriesService', () => {
     };
 
     it('should create a photo memory successfully', async () => {
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-photo.jpg' });
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.memory.create.mockResolvedValue(mockPhotoMemory);
 
       const result = await service.createPhotoMemory('user-uuid-123', mockImageFile, validPhotoDto);
 
-      expect(mediaService.uploadFile).toHaveBeenCalledWith(mockImageFile, 'memories/photos');
+      expect(mediaService.uploadFile).toHaveBeenCalledWith(mockImageFile, 'user-uuid-123', 'memories/photos');
       expect(prisma.memory.create).toHaveBeenCalledWith({
         data: {
           userId: 'user-uuid-123',
@@ -309,7 +311,7 @@ describe('MemoriesService', () => {
       const expectedDate = new Date('2023-12-25T14:30:00');
       const dtoWithTime = { ...validPhotoDto, timestamp: exifTime };
 
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-photo.jpg' });
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.memory.create.mockResolvedValue({
         ...mockPhotoMemory,
@@ -331,7 +333,7 @@ describe('MemoriesService', () => {
       const invalidTime = 'invalid-date-string';
       const dtoWithInvalidTime = { ...validPhotoDto, timestamp: invalidTime };
 
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-photo.jpg' });
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.memory.create.mockResolvedValue(mockPhotoMemory);
 
@@ -366,7 +368,7 @@ describe('MemoriesService', () => {
 
     it('should accept PNG images', async () => {
       const pngFile = { ...mockImageFile, mimetype: 'image/png' };
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.png');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-photo.png' });
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.memory.create.mockResolvedValue({ ...mockPhotoMemory, mediaUrl: 'https://cloudinary.com/test-photo.png' });
 
@@ -377,7 +379,7 @@ describe('MemoriesService', () => {
 
     it('should accept WebP images', async () => {
       const webpFile = { ...mockImageFile, mimetype: 'image/webp' };
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.webp');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-photo.webp' });
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.memory.create.mockResolvedValue({ ...mockPhotoMemory, mediaUrl: 'https://cloudinary.com/test-photo.webp' });
 
@@ -387,7 +389,7 @@ describe('MemoriesService', () => {
     });
 
     it('should use user default privacy when not specified', async () => {
-      mediaService.uploadFile.mockResolvedValue('https://cloudinary.com/test-photo.jpg');
+      mediaService.uploadFile.mockResolvedValue({ url: 'https://cloudinary.com/test-photo.jpg' });
       prisma.user.findUnique.mockResolvedValue({ ...mockUser, defaultPrivacy: PrivacyLevel.public });
       prisma.memory.create.mockResolvedValue({ ...mockPhotoMemory, privacy: PrivacyLevel.public });
 
@@ -464,6 +466,12 @@ describe('MemoriesService', () => {
           placeholderMetadata: true,
           title: true,
           createdAt: true,
+          likeCount: true,
+          commentCount: true,
+          likes: {
+            where: { userId: 'user-uuid-123' },
+            select: { id: true },
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -570,5 +578,121 @@ describe('MemoriesService', () => {
       );
     });
   });
-});
 
+  describe('getRandomMemory', () => {
+    const mockRandomMemory = {
+      id: 'memory-random-123',
+      latitude: 10.762622,
+      longitude: 106.660172,
+      mediaUrl: 'https://cloudinary.com/test-audio.m4a',
+      type: MemoryType.voice,
+      feeling: Feeling.JOY,
+      title: 'Random memory',
+    };
+
+    it('should return a random memory for teleport', async () => {
+      prisma.memory.count.mockResolvedValue(10);
+      prisma.memory.findFirst.mockResolvedValue(mockRandomMemory);
+
+      const result = await service.getRandomMemory('user-uuid-123', []);
+
+      expect(prisma.memory.count).toHaveBeenCalledWith({
+        where: { userId: 'user-uuid-123', deletedAt: null },
+      });
+      expect(prisma.memory.findFirst).toHaveBeenCalled();
+      expect(result).toEqual({
+        id: 'memory-random-123',
+        latitude: 10.762622,
+        longitude: 106.660172,
+        voiceUrl: 'https://cloudinary.com/test-audio.m4a',
+        imageUrl: null,
+        feeling: Feeling.JOY,
+        title: 'Random memory',
+      });
+    });
+
+    it('should return null when user has no memories', async () => {
+      prisma.memory.count.mockResolvedValue(0);
+
+      const result = await service.getRandomMemory('user-uuid-123', []);
+
+      expect(result).toBeNull();
+      expect(prisma.memory.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should exclude specified memory IDs from random selection', async () => {
+      prisma.memory.count.mockResolvedValueOnce(10); // total count
+      prisma.memory.count.mockResolvedValueOnce(7); // available count after exclusion
+      prisma.memory.count.mockResolvedValueOnce(7); // final count for offset
+      prisma.memory.findFirst.mockResolvedValue(mockRandomMemory);
+
+      await service.getRandomMemory('user-uuid-123', ['id1', 'id2', 'id3']);
+
+      expect(prisma.memory.count).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-uuid-123',
+          deletedAt: null,
+          id: { notIn: ['id1', 'id2', 'id3'] },
+        },
+      });
+    });
+
+    it('should allow repeats when all memories are in exclusion list', async () => {
+      prisma.memory.count.mockResolvedValueOnce(5); // total count
+      prisma.memory.count.mockResolvedValueOnce(0); // available count after exclusion = 0
+      prisma.memory.count.mockResolvedValueOnce(5); // final count (all memories)
+      prisma.memory.findFirst.mockResolvedValue(mockRandomMemory);
+
+      await service.getRandomMemory('user-uuid-123', ['id1', 'id2', 'id3', 'id4', 'id5']);
+
+      // Should fall back to allowing repeats
+      expect(prisma.memory.findFirst).toHaveBeenCalled();
+    });
+
+    it('should return imageUrl for photo memories', async () => {
+      const photoMemory = {
+        ...mockRandomMemory,
+        type: MemoryType.photo,
+        mediaUrl: 'https://cloudinary.com/test-photo.jpg',
+      };
+      prisma.memory.count.mockResolvedValue(10);
+      prisma.memory.findFirst.mockResolvedValue(photoMemory);
+
+      const result = await service.getRandomMemory('user-uuid-123', []);
+
+      expect(result).toEqual({
+        id: 'memory-random-123',
+        latitude: 10.762622,
+        longitude: 106.660172,
+        voiceUrl: null,
+        imageUrl: 'https://cloudinary.com/test-photo.jpg',
+        feeling: Feeling.JOY,
+        title: 'Random memory',
+      });
+    });
+  });
+
+  describe('getMemoryCount', () => {
+    it('should return the count of user memories', async () => {
+      prisma.memory.count.mockResolvedValue(42);
+
+      const result = await service.getMemoryCount('user-uuid-123');
+
+      expect(prisma.memory.count).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-uuid-123',
+          deletedAt: null,
+        },
+      });
+      expect(result).toBe(42);
+    });
+
+    it('should return 0 when user has no memories', async () => {
+      prisma.memory.count.mockResolvedValue(0);
+
+      const result = await service.getMemoryCount('user-uuid-123');
+
+      expect(result).toBe(0);
+    });
+  });
+});

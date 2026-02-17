@@ -11,6 +11,7 @@
   "workspaces": [
     "backend/v1_nestjs",
     "frontend/cross-platform",
+    "frontend/cross-platform-migration",
     "frontend/web-console"
   ],
   "author": "",

@@ -1,7 +1,8 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService } from '../../media/services/media.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, CheckDuplicatesDto } from '../dto';
+import { UpdateMemoryDto } from '../dto/update-memory.dto';
 import { MemoryType, PrivacyLevel, Feeling } from '@prisma/client';
 
 // Gradient ID mappings for feeling + time of day combinations
@@ -136,7 +137,8 @@ export class MemoriesService {
 
     // Upload to Cloudinary
     this.logger.log(`Uploading voice memory for user ${userId}`);
-    const mediaUrl = await this.mediaService.uploadFile(file, 'memories/voice');
+    const media = await this.mediaService.uploadFile(file, userId, 'memories/voice');
+    const mediaUrl = media.url;
 
     // Get user's default privacy setting if not specified
     let privacy = dto.privacy;
@@ -187,7 +189,8 @@ export class MemoriesService {
 
     // Upload to Cloudinary (photos folder)
     this.logger.log(`Uploading photo memory for user ${userId}`);
-    const mediaUrl = await this.mediaService.uploadFile(file, 'memories/photos');
+    const media = await this.mediaService.uploadFile(file, userId, 'memories/photos');
+    const mediaUrl = media.url;
 
     // Get user's default privacy setting if not specified
     let privacy = dto.privacy;
@@ -233,6 +236,87 @@ export class MemoriesService {
     return memory;
   }
 
+  /**
+   * Helper to get IDs of relevant users (Self + Followed + Friends)
+   * Used for feed generation and map filtering
+   */
+  private async getRelevantUserIds(userId: string): Promise<{
+    followingIds: string[];
+    friendIds: string[];
+    allIds: string[];
+  }> {
+    // 1. Get Followed Users
+    const follows = await this.prisma.follow.findMany({
+      where: { followerId: userId },
+      select: { followingId: true },
+    });
+    const followingIds = follows.map(f => f.followingId);
+
+    // 2. Get Friends (Accepted Friendships)
+    const friendships = await this.prisma.friendship.findMany({
+      where: {
+        OR: [{ requesterId: userId }, { addresseeId: userId }],
+        status: 'ACCEPTED',
+      },
+      select: { requesterId: true, addresseeId: true },
+    });
+
+    const friendIds = friendships.map(f =>
+      f.requesterId === userId ? f.addresseeId : f.requesterId
+    );
+
+    // 3. Combine unique IDs (excluding self, which is added explicitly where needed)
+    const allIds = Array.from(new Set([...followingIds, ...friendIds]));
+
+    return { followingIds, friendIds, allIds };
+  }
+
+  /**
+   * Get memories feed for filmstrip (Self + Friends + Followed)
+   * Replaces simple getMemoriesByUser
+   */
+  async getMemoriesFeed(userId: string, limit: number = 20) {
+    const { friendIds, allIds } = await this.getRelevantUserIds(userId);
+
+    // Users whose content we want to see: Self + (Friends/Following)
+    // Note: We need to filter by privacy for others
+    const targetUserIds = [...allIds, userId];
+
+    return this.prisma.memory.findMany({
+      where: {
+        userId: { in: targetUserIds },
+        deletedAt: null,
+        OR: [
+          // 1. My own memories (always visible)
+          { userId },
+          // 2. Public memories from others
+          {
+            userId: { not: userId },
+            privacy: PrivacyLevel.public
+          },
+          // 3. Friends-only memories from friends
+          {
+            userId: { in: friendIds },
+            privacy: PrivacyLevel.friends
+          }
+        ]
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          }
+        }
+      }
+    });
+  }
+
   async getMemoriesByUser(userId: string) {
     return this.prisma.memory.findMany({
       where: {
@@ -245,7 +329,54 @@ export class MemoriesService {
     });
   }
 
+  /**
+   * Get memories for a specific user with privacy filtering
+   * - If viewing own profile: return all memories
+   * - If friend: return public + friends memories
+   * - If not friend: return only public memories
+   */
+  async getPublicMemoriesByUser(targetUserId: string, viewerId: string, limit: number = 50) {
+    // If viewing own memories, return all
+    if (targetUserId === viewerId) {
+      return this.getMemoriesByUser(targetUserId);
+    }
+
+    // Check if viewer is a friend
+    const { friendIds } = await this.getRelevantUserIds(viewerId);
+    const isFriend = friendIds.includes(targetUserId);
+
+    // Build privacy filter
+    const privacyConditions: PrivacyLevel[] = [PrivacyLevel.public];
+    if (isFriend) {
+      privacyConditions.push(PrivacyLevel.friends);
+    }
+
+    return this.prisma.memory.findMany({
+      where: {
+        userId: targetUserId,
+        deletedAt: null,
+        privacy: { in: privacyConditions },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+  }
+
   async getMemoryById(id: string, userId: string) {
+    // Get friends to check permission
+    const { friendIds } = await this.getRelevantUserIds(userId);
+
     const memory = await this.prisma.memory.findFirst({
       where: {
         id,
@@ -253,8 +384,17 @@ export class MemoriesService {
         OR: [
           { userId }, // Owner can always see
           { privacy: PrivacyLevel.public }, // Public memories
-          // TODO: Add friends logic when social features are implemented
+          { userId: { in: friendIds }, privacy: PrivacyLevel.friends }, // Friend memories
         ],
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 
@@ -306,7 +446,8 @@ export class MemoriesService {
       this.logger.debug(`Received file with mimetype: ${file.mimetype}`);
       if (this.isValidAudioType(file.mimetype)) {
         type = MemoryType.voice;
-        mediaUrl = await this.mediaService.uploadFile(file, 'memories/voice');
+        const voiceMedia = await this.mediaService.uploadFile(file, userId, 'memories/voice');
+        mediaUrl = voiceMedia.url;
         // Duration validation (if duration is provided in future)
         // Note: Duration extraction from file metadata could be added here
       }
@@ -375,29 +516,46 @@ export class MemoriesService {
       `Fetching memories in bbox: [${minLat}, ${minLng}] -> [${maxLat}, ${maxLng}] for user ${userId}`,
     );
 
+    const { friendIds, allIds } = await this.getRelevantUserIds(userId);
+    const targetUserIds = [...allIds, userId];
+
     // Use the requested bounding box directly or default logic
     const isCrossMeridian = minLng > maxLng;
-    const whereClause: any = {
-      userId,
-      deletedAt: null,
+
+    // Base filter: inside box AND (my memory OR public OR friend's memory)
+    const geoFilter: any = {
       latitude: {
         gte: minLat,
         lte: maxLat,
       },
     };
 
-    // Handle International Date Line crossing (e.g. minLng=179, maxLng=-179)
     if (isCrossMeridian) {
-      whereClause.OR = [
+      geoFilter.OR = [
         { longitude: { gte: minLng, lte: 180 } },
         { longitude: { gte: -180, lte: maxLng } },
       ];
     } else {
-      whereClause.longitude = {
+      geoFilter.longitude = {
         gte: minLng,
         lte: maxLng,
       };
     }
+
+    const whereClause: any = {
+      deletedAt: null,
+      userId: { in: targetUserIds },
+      AND: [
+        geoFilter, // Location filter
+        {
+          OR: [
+            { userId }, // Mine
+            { userId: { not: userId }, privacy: PrivacyLevel.public }, // Public
+            { userId: { in: friendIds }, privacy: PrivacyLevel.friends } // Friends
+          ]
+        }
+      ]
+    };
 
     const memories = await this.prisma.memory.findMany({
       where: whereClause,
@@ -411,6 +569,21 @@ export class MemoriesService {
         placeholderMetadata: true,
         title: true,
         createdAt: true,
+        privacy: true, // Needed for frontend icons
+        userId: true,  // Needed to identify owner
+        likeCount: true,
+        commentCount: true,
+        likes: {
+          where: { userId },
+          select: { id: true },
+        },
+        user: { // Sender info
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
@@ -423,6 +596,194 @@ export class MemoriesService {
     );
 
     return memories;
+  }
+
+  /**
+   * Check for duplicate memories by content hash.
+   * Used during bulk import to detect files already uploaded.
+   * 
+   * Story 3.2: Bulk-Drop Wall for Historical Import
+   * - Accepts array of hashes (SHA-256 of first 4KB + file size)
+   * - Returns set of hashes that already exist in user's memories
+   * - Enables client to mark duplicates before upload
+   */
+  async checkDuplicates(
+    userId: string,
+    hashes: string[],
+  ): Promise<{ duplicates: string[]; count: number }> {
+    if (!hashes || hashes.length === 0) {
+      return { duplicates: [], count: 0 };
+    }
+
+    this.logger.debug(
+      `Checking ${hashes.length} hashes for duplicates for user ${userId}`,
+    );
+
+    // Find memories with matching hashes for this user
+    const existingMemories = await this.prisma.memory.findMany({
+      where: {
+        userId,
+        contentHash: {
+          in: hashes,
+        },
+        deletedAt: null,
+      },
+      select: {
+        contentHash: true,
+      },
+    });
+
+    const duplicates = existingMemories
+      .map(m => m.contentHash)
+      .filter((hash): hash is string => hash !== null);
+
+    this.logger.log(
+      `Found ${duplicates.length} duplicates out of ${hashes.length} hashes for user ${userId}`,
+    );
+
+    return {
+      duplicates,
+      count: duplicates.length,
+    };
+  }
+
+  /**
+   * Get a random memory for the Teleport feature.
+   * Excludes recently teleported memories to avoid immediate repeats.
+   * 
+   * Story 4.1: Serendipitous Teleportation
+   * - Excludes IDs in the exclusion list (last 5 teleported)
+   * - If user has ≤5 memories, allow repeats but still randomize
+   * - Returns full memory object for camera animation and audio playback
+   */
+  async getRandomMemory(
+    userId: string,
+    excludeIds: string[] = [],
+  ): Promise<{
+    id: string;
+    latitude: number;
+    longitude: number;
+    voiceUrl: string | null;
+    imageUrl: string | null;
+    feeling: Feeling | null;
+    title: string | null;
+    liked: boolean;
+  } | null> {
+    // First, count user's total memories
+    const totalCount = await this.prisma.memory.count({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+    });
+
+    if (totalCount === 0) {
+      return null;
+    }
+
+    // If user has ≤5 memories or exclusion list would exclude all, allow repeats
+    let whereClause: any = {
+      userId,
+      deletedAt: null,
+    };
+
+    // Only apply exclusions if we have enough memories
+    if (excludeIds.length > 0 && totalCount > excludeIds.length) {
+      whereClause.id = {
+        notIn: excludeIds,
+      };
+    }
+
+    // Get count of available memories
+    const availableCount = await this.prisma.memory.count({
+      where: whereClause,
+    });
+
+    if (availableCount === 0) {
+      // All memories are excluded but user has memories - allow repeats
+      whereClause = {
+        userId,
+        deletedAt: null,
+      };
+    }
+
+    // Select a random offset
+    const finalCount = await this.prisma.memory.count({ where: whereClause });
+    const randomOffset = Math.floor(Math.random() * finalCount);
+
+    // Fetch the random memory
+    const memory = await this.prisma.memory.findFirst({
+      where: whereClause,
+      select: {
+        id: true,
+        latitude: true,
+        longitude: true,
+        mediaUrl: true,
+        type: true,
+        feeling: true,
+        title: true,
+        likes: {
+          where: { userId },
+          select: { id: true },
+        },
+      },
+      skip: randomOffset,
+      take: 1,
+    });
+
+    if (!memory) {
+      return null;
+    }
+
+    // Map mediaUrl to voiceUrl/imageUrl based on type
+    return {
+      id: memory.id,
+      latitude: memory.latitude,
+      longitude: memory.longitude,
+      voiceUrl: memory.type === MemoryType.voice || memory.type === MemoryType.mixed
+        ? memory.mediaUrl
+        : null,
+      imageUrl: memory.type === MemoryType.photo || memory.type === MemoryType.mixed
+        ? memory.mediaUrl
+        : null,
+      feeling: memory.feeling,
+      title: memory.title,
+      liked: memory.likes.length > 0,
+    };
+  }
+
+  /**
+   * Get the total count of user's memories.
+   * Used for empty state check before teleport.
+   * 
+   * Story 4.1: Serendipitous Teleportation (AC 6)
+   */
+  async getMemoryCount(userId: string): Promise<number> {
+    return this.prisma.memory.count({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+    });
+  }
+
+  async updateMemory(id: string, userId: string, dto: UpdateMemoryDto) {
+    const memory = await this.prisma.memory.findFirst({
+      where: { id, userId, deletedAt: null },
+    });
+
+    if (!memory) {
+      throw new NotFoundException('Memory not found or you are not the owner');
+    }
+
+    return this.prisma.memory.update({
+      where: { id },
+      data: {
+        title: dto.title,
+        privacy: dto.privacy,
+        feeling: dto.feeling,
+      },
+    });
   }
 }
 

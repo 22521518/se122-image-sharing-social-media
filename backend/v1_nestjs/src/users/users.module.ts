@@ -6,6 +6,7 @@ import { AuthCoreModule } from '../auth-core/auth-core.module';
 
 import { AuditModule } from '../audit/audit.module';
 import { MediaModule } from '../media/media.module';
+import { GraphModule } from '../social/graph/graph.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MediaModule } from '../media/media.module';
     forwardRef(() => AuthCoreModule),
     AuditModule,
     MediaModule,
+    GraphModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],

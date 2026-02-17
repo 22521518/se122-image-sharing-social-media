@@ -29,6 +29,7 @@ interface ApiResponse<T> {
 }
 
 // 2. Create ApiService in src/services/api.service.ts
+// NOTE: endpoint start with /api/
 // 3. Access data via response.data, NOT response directly
 const response = await fetch('/auth/login');
 const json = await response.json();

@@ -1,23 +1,29 @@
-import { Controller, Get, Patch, Body, UseGuards, Req, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Req, Delete, UseInterceptors, UploadedFile, Param, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpdateSettingsDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../auth-core/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth-core/guards/optional-jwt-auth.guard';
+import { Public } from '../auth-core/decorators/public.decorator';
 import { User } from '@prisma/client';
 import { AuditService, AuditAction } from '../audit/audit.service';
 import { MediaService } from '../media/services/media.service';
+import { GraphService } from '../social/graph/graph.service';
+import { FriendshipService } from '../social/graph/friendship.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
 @UseGuards(JwtAuthGuard)
-export class UsersController {
+export class UsersController { // Force refresh
   constructor(
     private readonly usersService: UsersService,
     private readonly auditService: AuditService,
     private readonly mediaService: MediaService,
+    private readonly graphService: GraphService,
+    private readonly friendshipService: FriendshipService,
   ) { }
 
   @Get('profile')
@@ -28,6 +34,10 @@ export class UsersController {
     if (!user) {
       return null;
     }
+
+    // Get post count
+    const postCount = await this.usersService.getPostCount(req.user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -35,7 +45,12 @@ export class UsersController {
       bio: user.bio,
       avatarUrl: user.avatarUrl,
       defaultPrivacy: user.defaultPrivacy,
+      hasOnboarded: user.hasOnboarded,
       createdAt: user.createdAt,
+      postCount,
+      followerCount: user.followerCount,
+      followingCount: user.followingCount,
+      friendCount: user.friendCount,
     };
   }
 
@@ -53,7 +68,8 @@ export class UsersController {
 
     if (file) {
       // Upload new avatar
-      avatarUrl = await this.mediaService.uploadFile(file, 'avatars');
+      const media = await this.mediaService.uploadFile(file, req.user.id, 'avatars');
+      avatarUrl = media.url;
 
       // Delete old avatar if exists and different
       if (req.user.avatarUrl) {
@@ -116,6 +132,16 @@ export class UsersController {
     };
   }
 
+  @Patch('me/onboarding')
+  @ApiOperation({ summary: 'Mark user as onboarded' })
+  @ApiResponse({ status: 200, description: 'Onboarding status updated.' })
+  async completeOnboarding(@Req() req: Request & { user: User }) {
+    const updated = await this.usersService.update(req.user.id, { hasOnboarded: true });
+    return {
+      hasOnboarded: updated?.hasOnboarded ?? true,
+    };
+  }
+
   @Delete('account')
   @ApiOperation({ summary: 'Delete user account (soft delete)' })
   @ApiResponse({ status: 200, description: 'Account scheduled for deletion.' })
@@ -135,5 +161,64 @@ export class UsersController {
     return {
       message: 'Account scheduled for deletion. You have 30 days to reactivate by logging in.',
     };
+  }
+
+  // Parameterized routes MUST come AFTER static routes to avoid route conflicts
+  // This endpoint allows unauthenticated access - privacy filtering will be added later
+  @Public()
+  @Get(':id/public-profile')
+  @ApiOperation({ summary: 'Get another user public profile (no auth required)' })
+  @ApiResponse({ status: 200, description: 'Return public profile with optional follow status.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  async getPublicProfile(@Req() req: Request & { user?: User }, @Param('id') userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if following (only if viewer is authenticated)
+    let isFollowing = false;
+    if (req.user) {
+      isFollowing = await this.graphService.isFollowing(req.user.id, userId);
+    }
+
+    // Get post count
+    const postCount = await this.usersService.getPostCount(userId);
+
+    // TODO: Add privacy filtering based on user.defaultPrivacy settings
+    // For now, return basic public info for all users
+    return {
+      id: user.id,
+      name: user.name,
+      bio: user.bio,
+      avatarUrl: user.avatarUrl,
+      postCount,
+      followerCount: user.followerCount,
+      followingCount: user.followingCount,
+      friendCount: user.friendCount,
+      isFollowing,
+      isAuthenticated: !!req.user,
+    };
+  }
+
+  @Public()
+  @Get(':id/followers')
+  @ApiOperation({ summary: 'Get user followers list' })
+  async getFollowers(@Param('id') userId: string) {
+    return this.graphService.getFollowers(userId);
+  }
+
+  @Public()
+  @Get(':id/following')
+  @ApiOperation({ summary: 'Get user following list' })
+  async getFollowing(@Param('id') userId: string) {
+    return this.graphService.getFollowing(userId);
+  }
+
+  @Public()
+  @Get(':id/friends')
+  @ApiOperation({ summary: 'Get user friends list' })
+  async getFriends(@Param('id') userId: string) {
+    return this.friendshipService.getFriends(userId);
   }
 }

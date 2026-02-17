@@ -23,10 +23,18 @@ describe('UsersService', () => {
     googleId: null,
     defaultPrivacy: 'private' as PrivacyLevel,
     role: 'user' as UserRole,
+    isLocked: false,
+    isBanned: false,
+    bannedUntil: null,
+    tokenVersion: 0,
+    hasOnboarded: false,
     privacySettings: {},
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
+    followerCount: 0,
+    followingCount: 0,
+    friendCount: 0,
   };
 
   beforeEach(async () => {
@@ -110,6 +118,19 @@ describe('UsersService', () => {
         data: { name: 'Updated Name' },
       });
       expect(result?.name).toBe('Updated Name');
+    });
+
+    it('should update hasOnboarded status', async () => {
+      const onboardedUser = { ...mockUser, hasOnboarded: true };
+      prisma.user.update.mockResolvedValue(onboardedUser);
+
+      const result = await service.update('uuid-123', { hasOnboarded: true });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'uuid-123' },
+        data: { hasOnboarded: true },
+      });
+      expect(result?.hasOnboarded).toBe(true);
     });
   });
 });

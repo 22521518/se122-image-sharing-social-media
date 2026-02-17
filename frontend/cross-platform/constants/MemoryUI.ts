@@ -1,6 +1,6 @@
+import type { Memory } from '@/context/MemoriesContext';
+import type { MemoryFeeling } from '@/types/api.types';
 import { Ionicons } from '@expo/vector-icons';
-import { Memory } from '@/context/MemoriesContext';
-import { Feeling } from '@/components/FeelingSelector';
 
 export const MemoryColors = {
   Feeling: {
@@ -19,7 +19,7 @@ export const MemoryColors = {
   },
 };
 
-export function getFeelingColor(feeling?: Feeling | string): string {
+export function getFeelingColor(feeling?: MemoryFeeling | string): string {
   if (!feeling) return MemoryColors.Type.DEFAULT;
   return (MemoryColors.Feeling as Record<string, string>)[feeling] || MemoryColors.Feeling.DEFAULT;
 }

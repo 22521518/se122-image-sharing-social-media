@@ -1,0 +1,168 @@
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
+import { Alert } from 'react-native';
+import { socialService, PostDetail, FeedResponse } from '../services/social.service';
+import { useAuth } from './AuthContext';
+
+export interface SocialPost extends PostDetail {
+  localStatus?: 'pending' | 'published' | 'failed';
+  _retryData?: {
+    content: string;
+    privacy: string;
+    mediaIds?: string[];
+    mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>;
+  };
+}
+
+interface SocialContextType {
+  posts: SocialPost[];
+  createPost: (content: string, privacy: string, mediaIds?: string[], mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>) => Promise<void>;
+  retryPost: (postId: string) => Promise<void>;
+  deleteFailedPost: (postId: string) => void;
+  refreshPosts: () => Promise<void>;
+  loadMorePosts: () => Promise<void>;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
+}
+
+const SocialContext = createContext<SocialContextType | undefined>(undefined);
+
+export function SocialProvider({ children }: { children: ReactNode }) {
+  const { accessToken, user } = useAuth();
+  const [posts, setPosts] = useState<SocialPost[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const nextCursorRef = useRef<string | null>(null);
+
+  // AC 5: Pull-to-refresh - refreshes feed from beginning
+  const refreshPosts = useCallback(async () => {
+    if (!accessToken) return;
+    setIsLoading(true);
+    // Issue #7 Fix: Reset cursor on refresh to prevent stale state
+    nextCursorRef.current = null;
+    try {
+      const response: FeedResponse = await socialService.getFeed(accessToken);
+      setPosts(response.posts);
+      nextCursorRef.current = response.nextCursor;
+      setHasMore(response.hasMore);
+    } catch (e) {
+      console.error('Failed to fetch feed', e);
+      Alert.alert('Error', 'Failed to load feed. Pull to refresh.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [accessToken]);
+
+  // AC 5: Infinite scroll - loads next page
+  const loadMorePosts = useCallback(async () => {
+    if (!accessToken || !hasMore || isLoadingMore || !nextCursorRef.current) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const response: FeedResponse = await socialService.getFeed(accessToken, nextCursorRef.current);
+      setPosts(prev => [...prev, ...response.posts]);
+      nextCursorRef.current = response.nextCursor;
+      setHasMore(response.hasMore);
+    } catch (e) {
+      console.error('Failed to load more posts', e);
+      // Issue #6 Fix: User feedback on pagination error
+      Alert.alert('Error', 'Failed to load more posts. Please try again.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [accessToken, hasMore, isLoadingMore]);
+
+  const createPost = async (
+    content: string, 
+    privacy: string, 
+    mediaIds: string[] = [],
+    mediaMetadata?: Array<{ mediaId: string; caption?: string; sortOrder: number }>
+  ) => {
+    if (!user || !accessToken) return;
+
+    // Optimistic Update
+    const tempId = `temp-${Date.now()}`;
+    const newPost: SocialPost = {
+      id: tempId,
+      content,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      likeCount: 0,
+      commentCount: 0,
+      author: {
+        id: user.id,
+        name: user.name || 'Me',
+        avatarUrl: null,
+      },
+      liked: false,
+      localStatus: 'pending',
+      // Store original data for retry
+      _retryData: { content, privacy, mediaIds, mediaMetadata },
+    };
+
+    setPosts(prev => [newPost, ...prev]);
+
+    try {
+      const created = await socialService.createPost({ content, privacy, mediaIds, mediaMetadata }, accessToken);
+      // Replace temp with real
+      setPosts(prev => prev.map(p => p.id === tempId ? { ...created, localStatus: 'published' } : p));
+    } catch (e) {
+      console.error('Create post failed', e);
+      // Mark as failed with retry data
+      setPosts(prev => prev.map(p => p.id === tempId ? { ...p, localStatus: 'failed', _retryData: { content, privacy, mediaIds, mediaMetadata } } : p));
+      throw e;
+    }
+  };
+
+  const retryPost = async (postId: string) => {
+    if (!accessToken) return;
+
+    const post = posts.find(p => p.id === postId);
+    if (!post || post.localStatus !== 'failed' || !(post as any)._retryData) return;
+
+    const { content, privacy, mediaIds } = (post as any)._retryData;
+
+    // Mark as pending
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, localStatus: 'pending' } : p));
+
+    try {
+      const created = await socialService.createPost({ content, privacy, mediaIds, mediaMetadata: (post as any)._retryData.mediaMetadata }, accessToken);
+      // Replace failed post with real
+      setPosts(prev => prev.map(p => p.id === postId ? { ...created, localStatus: 'published' } : p));
+    } catch (e) {
+      console.error('Retry post failed', e);
+      // Mark as failed again
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, localStatus: 'failed' } : p));
+      throw e;
+    }
+  };
+
+  const deleteFailedPost = (postId: string) => {
+    setPosts(prev => prev.filter(p => p.id !== postId));
+  };
+
+  return (
+    <SocialContext.Provider value={{ 
+      posts, 
+      createPost, 
+      retryPost, 
+      deleteFailedPost, 
+      refreshPosts, 
+      loadMorePosts,
+      isLoading,
+      isLoadingMore,
+      hasMore,
+    }}>
+      {children}
+    </SocialContext.Provider>
+  );
+}
+
+export function useSocial() {
+  const context = useContext(SocialContext);
+  if (context === undefined) {
+    throw new Error('useSocial must be used within a SocialProvider');
+  }
+  return context;
+}

@@ -14,21 +14,72 @@
 }
 
 .App-header {
-  background-color: #282c34;
+  background-color: #ffffff;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: calc(10px + 2vmin);
-  color: white;
+  color: #0f0f11;
 }
 
 .App-link {
-  color: #61dafb;
+  color: #e8795a;
 }
 
 @keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Admin Navigation (Story 8.1) */
+.admin-nav {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-nav-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: #737880;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.admin-nav-btn:hover {
+  color: #0f0f11;
+  background: #f7f7f8;
+}
+
+.admin-nav-btn.active {
+  color: #ffffff;
+  background: #e8795a;
+}
+
+.admin-nav-btn.logout-btn {
+  margin-left: auto;
+  color: #ef4444;
+}
+
+.admin-nav-btn.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+/* Spin animation for icons */
+@keyframes spin {
   from {
     transform: rotate(0deg);
   }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
@@ -74,32 +75,39 @@ export default function AuthCallbackScreen() {
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Text 
-          style={styles.link}
-          onPress={() => router.replace('/(auth)/login')}
-        >
-          Return to Login
-        </Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Text 
+            style={styles.link}
+            onPress={() => router.replace('/(auth)/login')}
+          >
+            Return to Login
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color="#6366f1" />
-      <Text style={styles.text}>Completing sign in...</Text>
-    </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.text}>Completing sign in...</Text>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0f0f0f',
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f0f0f',
     padding: 24,
   },
   text: {

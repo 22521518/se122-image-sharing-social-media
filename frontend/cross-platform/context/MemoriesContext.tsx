@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
-import { ApiService } from '../services/api.service';
-import { useAuth } from './AuthContext';
+import React, { ReactNode, createContext, useCallback, useContext, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { ApiService } from '../services/api.service';
 import { BoundingBox, boundingBoxToQueryParams, boundingBoxesDiffer } from '../utils/geo';
+import { useAuth } from './AuthContext';
 
 // Types
 import { Feeling } from '../components/FeelingSelector';
@@ -28,6 +28,16 @@ export interface Memory {
   placeholderMetadata?: PlaceholderMetadata;
   createdAt: string;
   updatedAt: string;
+  // Social Interactions (Epic 6)
+  likeCount: number;
+  commentCount: number;
+  liked?: boolean;
+  // Creator info (Story 6.5)
+  user?: {
+    id: string;
+    name: string | null;
+    avatarUrl: string | null;
+  };
 }
 
 export type MemoryUploadState = 'idle' | 'recording' | 'uploading' | 'success' | 'error';
@@ -44,12 +54,14 @@ interface MemoriesContextType {
     latitude: number;
     longitude: number;
     title?: string;
+    privacy?: 'private' | 'friends' | 'public';
   }) => Promise<Memory | null>;
   uploadPhotoMemory: (data: {
     uri: string;
     latitude: number;
     longitude: number;
     title?: string;
+    privacy?: 'private' | 'friends' | 'public';
   }) => Promise<Memory | null>;
   uploadFeelingPin: (data: {
     latitude: number;
@@ -57,10 +69,16 @@ interface MemoriesContextType {
     feeling: Feeling;
     title?: string;
     voiceUri?: string;
+    privacy?: 'private' | 'friends' | 'public';
   }) => Promise<Memory | null>;
   fetchMemories: () => Promise<void>;
   fetchMemoriesByBoundingBox: (bbox: BoundingBox, limit?: number) => Promise<void>;
   deleteMemory: (id: string) => Promise<boolean>;
+  updateMemory: (id: string, data: {
+    title?: string;
+    privacy?: 'private' | 'friends' | 'public';
+    feeling?: Feeling;
+  }) => Promise<Memory | null>;
   setUploadState: (state: MemoryUploadState) => void;
   clearError: () => void;
 }
@@ -90,7 +108,7 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     if (!accessToken) return;
 
     try {
-      const data = await ApiService.get<Memory[]>('/api/memories', accessToken);
+      const data = await ApiService.get<Memory[]>('/api/memories?scope=all', accessToken);
       setMemories(data);
     } catch (err: any) {
       console.error('Failed to fetch memories:', err);
@@ -121,7 +139,7 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     try {
       const queryParams = boundingBoxToQueryParams(bbox);
       const data = await ApiService.get<Memory[]>(
-        `/api/memories/map?${queryParams}&limit=${limit}`,
+        `/api/memories/map?${queryParams}&limit=${limit}&scope=all`,
         accessToken
       );
       setMapMemories(data);
@@ -139,6 +157,7 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     latitude: number;
     longitude: number;
     title?: string;
+    privacy?: 'private' | 'friends' | 'public';
   }): Promise<Memory | null> => {
     if (!accessToken) {
       setError('Not authenticated');
@@ -173,6 +192,9 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
       if (data.title) {
         formData.append('title', data.title);
       }
+      if (data.privacy) {
+        formData.append('privacy', data.privacy);
+      }
 
       const memory = await ApiService.uploadFormData<Memory>(
         '/api/memories/voice',
@@ -180,8 +202,9 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
         accessToken
       );
 
-      // Add to local state
+      // Add to local state (both memories and mapMemories for map sync)
       setMemories(prev => [memory, ...prev]);
+      setMapMemories(prev => [memory, ...prev]);
       setUploadState('success');
 
       // Reset to idle after a short delay
@@ -201,6 +224,7 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     latitude: number;
     longitude: number;
     title?: string;
+    privacy?: 'private' | 'friends' | 'public';
   }): Promise<Memory | null> => {
     if (!accessToken) {
       setError('Not authenticated');
@@ -238,6 +262,9 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
       if (data.title) {
         formData.append('title', data.title);
       }
+      if (data.privacy) {
+        formData.append('privacy', data.privacy);
+      }
 
       const memory = await ApiService.uploadFormData<Memory>(
         '/api/memories/photo',
@@ -245,8 +272,9 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
         accessToken
       );
 
-      // Add to local state
+      // Add to local state (both memories and mapMemories for map sync)
       setMemories(prev => [memory, ...prev]);
+      setMapMemories(prev => [memory, ...prev]);
       setUploadState('success');
 
       // Reset to idle after a short delay
@@ -275,12 +303,31 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     }
   }, [accessToken]);
 
+  const updateMemory = useCallback(async (id: string, data: {
+    title?: string;
+    privacy?: 'private' | 'friends' | 'public';
+    feeling?: Feeling;
+  }): Promise<Memory | null> => {
+    if (!accessToken) return null;
+    try {
+      const updated = await ApiService.patch<any, Memory>(`/api/memories/${id}`, data, accessToken);
+      setMemories(prev => prev.map(m => m.id === id ? updated : m));
+      setMapMemories(prev => prev.map(m => m.id === id ? updated : m));
+      return updated;
+    } catch (err: any) {
+      console.error('Failed to update memory:', err);
+      setError(err.message || 'Failed to update memory');
+      return null;
+    }
+  }, [accessToken]);
+
   const uploadFeelingPin = useCallback(async (data: {
     latitude: number;
     longitude: number;
     feeling: Feeling;
     title?: string;
     voiceUri?: string;
+    privacy?: 'private' | 'friends' | 'public';
   }): Promise<Memory | null> => {
     if (!accessToken) {
       setError('Not authenticated');
@@ -314,6 +361,9 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
       if (data.title) {
         formData.append('title', data.title);
       }
+      if (data.privacy) {
+        formData.append('privacy', data.privacy);
+      }
 
       const memory = await ApiService.uploadFormData<Memory>(
         '/api/memories/feeling-pin',
@@ -321,8 +371,9 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
         accessToken
       );
 
-      // Add to local state
+      // Add to local state (both memories and mapMemories for map sync)
       setMemories(prev => [memory, ...prev]);
+      setMapMemories(prev => [memory, ...prev]);
       setUploadState('success');
 
       // Reset to idle after a short delay
@@ -349,6 +400,7 @@ export function MemoriesProvider({ children }: MemoriesProviderProps) {
     fetchMemories,
     fetchMemoriesByBoundingBox,
     deleteMemory,
+    updateMemory,
     setUploadState,
     clearError,
   };

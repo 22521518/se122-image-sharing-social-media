@@ -29,16 +29,16 @@ export class CreateVoiceMemoryDto {
   longitude: number;
 
   @ApiPropertyOptional({
-    description: 'Duration of the voice recording in seconds (1-6)',
+    description: 'Duration of voice recording in seconds (1-6.5, buffer for JS timing jitter)',
     example: 3.5,
     minimum: 1,
-    maximum: 6,
+    maximum: 6.5,
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  @Max(6)
+  @Max(6.5)
   duration?: number;
 
   @ApiPropertyOptional({

@@ -43,6 +43,7 @@ export class UsersService {
         googleId: data.googleId,
         defaultPrivacy: data.defaultPrivacy,
         privacySettings: data.privacySettings ?? {},
+        role: data.role,
       } as any, // Using any for partial match transitional safety, but better to be strict
     });
   }
@@ -82,6 +83,15 @@ export class UsersService {
   async deleteRefreshTokensForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.deleteMany({
       where: { userId },
+    });
+  }
+
+  /**
+   * Get post count for a user
+   */
+  async getPostCount(userId: string): Promise<number> {
+    return this.prisma.post.count({
+      where: { authorId: userId },
     });
   }
 }

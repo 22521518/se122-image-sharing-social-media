@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthCoreService, AuthTokens, GoogleUserData, TokenPayload } from '../auth-core';
 import { User } from '@prisma/client';
@@ -43,6 +44,10 @@ export class AuthUserService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.isLocked) {
+      throw new ForbiddenException('Account is locked');
+    }
+
     // Reactivation logic for soft-deleted accounts
     if (user.deletedAt) {
       const daysSinceDeleted = Math.floor(
@@ -55,7 +60,10 @@ export class AuthUserService {
       }
     }
 
-    const tokens = this.authCore.generateTokens({ sub: user.id, email: user.email });
+    const tokens = this.authCore.generateTokens(
+      { sub: user.id, email: user.email },
+      user.tokenVersion
+    );
     await this.authCore.storeRefreshToken(user.id, tokens.refreshToken);
     return tokens;
   }
@@ -94,7 +102,14 @@ export class AuthUserService {
       }
     }
 
-    const tokens = this.authCore.generateTokens({ sub: user.id, email: user.email });
+    if (user.isLocked) {
+      throw new ForbiddenException('Account is locked');
+    }
+
+    const tokens = this.authCore.generateTokens(
+      { sub: user.id, email: user.email },
+      user.tokenVersion
+    );
     await this.authCore.storeRefreshToken(user.id, tokens.refreshToken);
     return tokens;
   }
@@ -105,5 +120,9 @@ export class AuthUserService {
 
   async validateUser(payload: TokenPayload) {
     return this.authCore.validateUser(payload);
+  }
+
+  async getUserByEmail(email: string) {
+    return this.authCore.findUserByEmail(email);
   }
 }

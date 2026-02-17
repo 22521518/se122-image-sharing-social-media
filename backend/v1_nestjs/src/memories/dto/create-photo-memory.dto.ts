@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, IsEnum, Min, Max } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsEnum, Min, Max, Matches } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { PrivacyLevel } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -47,10 +47,13 @@ export class CreatePhotoMemoryDto {
   privacy?: PrivacyLevel;
 
   @ApiPropertyOptional({
-    description: 'EXIF DateTimeOriginal from the photo',
+    description: 'EXIF DateTimeOriginal from the photo (format: YYYY:MM:DD HH:MM:SS)',
     example: '2025:12:21 14:30:00',
   })
   @IsOptional()
   @IsString()
+  @Matches(/^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}$/, {
+    message: 'timestamp must be in EXIF format: YYYY:MM:DD HH:MM:SS',
+  })
   timestamp?: string;
 }

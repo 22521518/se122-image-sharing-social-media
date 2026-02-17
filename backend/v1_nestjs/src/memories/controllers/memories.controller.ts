@@ -12,11 +12,13 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth-core/guards/jwt-auth.guard';
 import { MemoriesService } from '../services/memories.service';
-import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto } from '../dto';
+import { CreateVoiceMemoryDto, CreatePhotoMemoryDto, CreateFeelingPinDto, MapBoundingBoxQueryDto, CheckDuplicatesDto, RandomMemoryQueryDto } from '../dto';
+import { UpdateMemoryDto } from '../dto/update-memory.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -256,7 +258,7 @@ export class MemoriesController {
     @Request() req: any,
     @Query() query: MapBoundingBoxQueryDto,
   ) {
-    return this.memoriesService.getMemoriesByBoundingBox(
+    const memories = await this.memoriesService.getMemoriesByBoundingBox(
       req.user.id,
       query.minLat,
       query.minLng,
@@ -264,6 +266,49 @@ export class MemoriesController {
       query.maxLng,
       query.limit || 50,
     );
+
+    // Map liked status
+    return memories.map((m: any) => ({
+      ...m,
+      liked: m.likes?.length > 0,
+      likes: undefined, // Check if this should be removed from payload size
+    }));
+  }
+
+  @Post('check-duplicates')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check for duplicate files',
+    description: 'Check if files with given content hashes already exist in the user\'s memories. Used during bulk import to detect duplicates before upload.',
+  })
+  @ApiBody({
+    description: 'Array of file content hashes to check',
+    type: CheckDuplicatesDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of duplicate hashes found',
+    schema: {
+      type: 'object',
+      properties: {
+        duplicates: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Hashes that already exist in the database',
+        },
+        count: {
+          type: 'number',
+          description: 'Number of duplicates found',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async checkDuplicates(
+    @Request() req: any,
+    @Body() dto: CheckDuplicatesDto,
+  ) {
+    return this.memoriesService.checkDuplicates(req.user.id, dto.hashes);
   }
 
   @Get()
@@ -273,8 +318,69 @@ export class MemoriesController {
   })
   @ApiResponse({ status: 200, description: 'List of memories' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getMyMemories(@Request() req: any) {
-    return this.memoriesService.getMemoriesByUser(req.user.id);
+  async getMyMemories(@Request() req: any, @Query('scope') scope?: string) {
+    // If scope is specifically 'mine', return only my memories
+    if (scope === 'mine') {
+      return this.memoriesService.getMemoriesByUser(req.user.id);
+    }
+
+    // Default (scope='all' or undefined): Return the social feed (Self + Friends + Followed)
+    return this.memoriesService.getMemoriesFeed(req.user.id);
+  }
+
+  @Get('user/:userId')
+  @ApiOperation({
+    summary: 'Get memories by user ID',
+    description: 'Retrieve public memories for a specific user, filtered by privacy settings.',
+  })
+  @ApiParam({ name: 'userId', description: 'Target user ID' })
+  @ApiResponse({ status: 200, description: 'List of visible memories' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMemoriesByUserId(
+    @Request() req: any,
+    @Param('userId') userId: string,
+  ) {
+    return this.memoriesService.getPublicMemoriesByUser(userId, req.user.id);
+  }
+
+  @Get('random')
+  @ApiOperation({
+    summary: 'Get a random memory for teleport',
+    description: 'Returns a random memory for the "Teleport" feature. Excludes recently shown memories (passed as query param) to avoid immediate repeats. If user has ≤5 memories, allows repeats but still randomizes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Random memory for teleport',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Memory UUID' },
+        latitude: { type: 'number', description: 'GPS latitude' },
+        longitude: { type: 'number', description: 'GPS longitude' },
+        voiceUrl: { type: 'string', nullable: true, description: 'Audio URL for voice memories' },
+        imageUrl: { type: 'string', nullable: true, description: 'Image URL for photo memories' },
+        feeling: { type: 'string', nullable: true, enum: ['JOY', 'MELANCHOLY', 'ENERGETIC', 'CALM', 'INSPIRED'] },
+        title: { type: 'string', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 204, description: 'No memories found - user should create first memory' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getRandomMemory(
+    @Request() req: any,
+    @Query() query: RandomMemoryQueryDto,
+  ) {
+    const memory = await this.memoriesService.getRandomMemory(
+      req.user.id,
+      query.exclude || [],
+    );
+
+    if (!memory) {
+      // Return 204 No Content to indicate no memories (client will show empty state modal)
+      return null;
+    }
+
+    return memory;
   }
 
   @Get(':id')
@@ -302,5 +408,17 @@ export class MemoriesController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async deleteMemory(@Request() req: any, @Param('id') id: string) {
     return this.memoriesService.deleteMemory(id, req.user.id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update memory details' })
+  @ApiResponse({ status: 200, description: 'Memory updated successfully' })
+  @ApiResponse({ status: 404, description: 'Memory not found' })
+  async updateMemory(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateMemoryDto,
+  ) {
+    return this.memoriesService.updateMemory(id, req.user.id, dto);
   }
 }
